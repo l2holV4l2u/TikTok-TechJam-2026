@@ -82,6 +82,10 @@ NUMERIC_USER: tuple[str, ...] = ("follow_user_num", "fans_user_num", "friend_use
 NUMERIC_VIDEO_STAT: tuple[str, ...] = (
     "counts", "show_cnt", "show_user_num", "play_cnt", "play_user_num", "play_duration",
     "complete_play_cnt", "valid_play_cnt", "long_time_play_cnt", "short_time_play_cnt",
+    # unique-viewer counts, not event counts. Measured as standalone rankers on validation,
+    # long_time_play_user_num/show_cnt reaches 0.5811 -- above every column exposed before it --
+    # while the other 31 unexposed statistics sit at ~0.50, i.e. random.
+    "complete_play_user_num", "valid_play_user_num", "long_time_play_user_num",
     "play_progress", "like_cnt", "comment_cnt", "follow_cnt", "share_cnt", "collect_cnt",
     "download_cnt",
 )

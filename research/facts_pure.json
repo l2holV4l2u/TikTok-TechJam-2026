@@ -26,8 +26,8 @@
   "baseline_lr": 0.001,
   "baseline_source": "organizer-provided",
   "baseline_noise_note": "  (mean of 5 seeds, std 0.0008)",
-  "n_numeric": 22,
-  "numeric_names": "collect_cnt, comment_cnt, complete_play_cnt, counts, download_cnt, duration_ms, fans_user_num, follow_cnt, follow_user_num, friend_user_num, like_cnt, long_time_play_cnt, play_cnt, play_duration, play_progress, play_user_num, register_days, share_cnt, short_time_play_cnt, show_cnt, show_user_num, valid_play_cnt",
+  "n_numeric": 25,
+  "numeric_names": "collect_cnt, comment_cnt, complete_play_cnt, complete_play_user_num, counts, download_cnt, duration_ms, fans_user_num, follow_cnt, follow_user_num, friend_user_num, like_cnt, long_time_play_cnt, long_time_play_user_num, play_cnt, play_duration, play_progress, play_user_num, register_days, share_cnt, short_time_play_cnt, show_cnt, show_user_num, valid_play_cnt, valid_play_user_num",
   "train_rows_m": 1.141112,
   "variant": "KuaiRand-Pure"
 }
