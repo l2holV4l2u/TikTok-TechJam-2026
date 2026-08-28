@@ -246,16 +246,16 @@ versions is the same: **every defect was in the scaffolding, not in the model's 
 
 Official baseline (organizer-provided FM, k=16): validation primary 0.6016, hidden test 0.5946.
 
-Our submitted run (`runs/r35`, full log in `RUN_REPORT.md`):
+Our submitted run (`runs/r59`, full log in `RUN_REPORT.md`):
 
 | | GAUC | nDCG@5 | primary |
 |---|---|---|---|
-| validation, agent's best iteration | 0.6711 | 0.5387 | 0.6049 |
+| validation, agent's best iteration | 0.6726 | 0.5386 | 0.6056 |
 | official baseline, validation | 0.6674 | 0.5357 | 0.6016 |
-| **hidden test, this submission** | **0.6657** | **0.5312** | **0.5985** |
+| **hidden test, this submission** | **0.6665** | **0.5313** | **0.5989** |
 | official baseline, hidden test | 0.6610 | 0.5282 | 0.5946 |
 
-**Absolute delta on hidden test: GAUC +0.0047, nDCG@5 +0.0030, mean +0.0039.**
+**Absolute delta on hidden test: GAUC +0.0055, nDCG@5 +0.0031, mean +0.0043.**
 
 We later produced higher-looking r39/r41/r43/r44 numbers after exposing
 `video_features_statistic_pure.csv`. An integrity review rejected those runs: the dataset
@@ -263,11 +263,11 @@ documentation defines those item outcome statistics as averages over the full mo
 overlaps this repository's validation and test dates. They are useful measurements, but they
 are future-window information under the fixed date split and are not eligible for model
 selection or submission. The harness now excludes them and provides equivalent aggregates fit
-only on training rows. r35 is the strongest validation-selected run before that exposure.
+only on training rows. r59 is the strongest validation-selected run under that contract.
 
-Resources for the submitted run (`r35`): **8 iterations of 50**, **35.1 minutes** of agent
-wall-clock, **91,852 tokens**, CPU only, **0 failures**, **0 manual
-interventions**, and **48 candidate solutions compared inside those 8 iterations**.
+Resources for the submitted run (`r59`): **6 iterations of 50**, **15.2 minutes** of agent
+wall-clock, **84,834 tokens**, CPU only, **0 failures**, **0 manual
+interventions**, and **161 candidate solutions compared inside those 6 iterations**.
 
 A later run did lose 6 iterations to an expired API key. That is an outage rather than the agent
 failing an experiment, and `report_run.py` now separates the two rather than reporting "6
@@ -383,7 +383,7 @@ catch. We submit the validation-best run under the organizers' rule and report t
 
 r37 is the concrete case. It scored **+0.0041 on the hidden test, the best of any eligible run**
 — and we do not submit it, because its validation score (0.6037) is not the best and selecting
-it would mean choosing on the test set. r35 (validation 0.6049, test +0.0039) is the submission,
+it would mean choosing on the test set. r59 (validation 0.6056, test +0.0043) is the submission,
 selected the same way.
 
 What is *not* ambiguous is the mechanism, and the clearest single example is r33, where broaden
@@ -402,12 +402,12 @@ counter by 0.0001 (0.6044 against a 0.6045 threshold), a fair illustration of ho
 Both mechanisms are auditable in the run logs. In r33's `llm_calls.jsonl` the search mode goes
 `refine → broaden → broaden` across the three improve iterations while the belief set carries
 1 → 2 → 3 claims into successive prompts, so each proposal is conditioned on a revised reading
-of everything before it rather than on a raw score history. The submitted run, r35, traces
-0.6020 → 0.6036 → 0.6036 → 0.6040 → 0.6047 → 0.6049 across its scored iterations: the baseline
-reproduction, then five experiments each conditioned on a revised reading of the ones before.
+of everything before it rather than on a raw score history. The submitted run, r59, traces
+0.6016 → 0.6049 → 0.6051 → 0.6053 → 0.6056 across its scored iterations: the baseline
+reproduction, then four experiments each conditioned on a revised reading of the ones before.
 
-The submitted run is chosen on **validation** — r35 is the validation-best of all *eligible*
-no-priors runs (0.6049, against r33's 0.6044 and r34's 0.6043). Runs that scored higher did so
+The submitted run is chosen on **validation** — r59 is the validation-best of all *eligible*
+converged runs (0.6056, against r35's 0.6049 and r33's 0.6044). Runs that scored higher did so
 using the supplied full-month video aggregates and are excluded entirely.
 We never used the hidden-test column to choose between runs; it is shown only because we hold
 the public test labels and would rather report it than hide it.
