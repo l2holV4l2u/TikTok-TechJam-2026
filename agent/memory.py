@@ -36,6 +36,22 @@ def _entries(runs_dir: Path, exclude: str | None, require_marker: bool,
                     continue
 
 
+def _run_models(runs_dir: Path) -> dict:
+    """Which model wrote each run.
+
+    Results from three models sit in these ledgers (sol, luna, mini). A weak score from a
+    weak proposer is evidence about the proposer, not about the method it named, and without
+    the label the next run reads them as the same kind of fact.
+    """
+    out = {}
+    for meta in runs_dir.glob("*/run_meta.json"):
+        try:
+            out[meta.parent.name] = json.loads(meta.read_text(encoding="utf-8")).get("model")
+        except (json.JSONDecodeError, OSError):
+            continue
+    return out
+
+
 def _unsafe_runs(runs_dir: Path, exclude: str | None) -> set[str]:
     """Runs exposed to the dataset's full-month video aggregates cannot seed future search."""
     out = set()
@@ -86,6 +102,7 @@ def distil(runs_dir="runs", exclude: str | None = None, baseline: float = 0.6016
         return ""
     scored, crashes = [], {}
     unsafe_runs = _unsafe_runs(runs_dir, exclude)
+    models = _run_models(runs_dir)
     for run, e in _entries(runs_dir, exclude, require_marker, unsafe_runs):
         if e.get("status") == "rejected":
             continue
@@ -100,7 +117,8 @@ def distil(runs_dir="runs", exclude: str | None = None, baseline: float = 0.6016
             # so the first real experiment of a run is step 1.
             is_improve = e.get("phase", "improve") == "improve"
             depth = (sum(1 for x in scored if x[2] == run and x[4]) + 1) if is_improve else 0
-            scored.append((p, e.get("hypothesis", "")[:100], run, depth, is_improve))
+            scored.append((p, e.get("hypothesis", "")[:100], run, depth, is_improve,
+                           models.get(run) or "unknown"))
         elif e.get("status") in ("failed", "blacklisted"):
             first = (e.get("error") or "").strip().splitlines()
             key = next((ln.strip()[:90] for ln in reversed(first) if ln.strip()), "")
@@ -123,11 +141,11 @@ def distil(runs_dir="runs", exclude: str | None = None, baseline: float = 0.6016
            f"{len({s[2] for s in scored})} runs). Baseline is {baseline:.4f}; a gap under "
            f"{NOISE} is noise."]
     if wins:
-        out.append("\nBeat baseline by more than noise. The step number matters: a result from "
+        out.append("\nBeat baseline by more than noise. Each line names the step it was reached at and the model that proposed it; a weak score from a weak proposer is evidence about the proposer, not about the method. A result from "
                    "step 5 was reached by a script that already carried four earlier changes, so "
                    "repeating its hypothesis against a fresh baseline is a different experiment "
                    "and usually a much weaker one.")
-        out += [f"  {p:.4f}  (step {d} of its run)  {h}" for p, h, _, d, _ in wins]
+        out += [f"  {p:.4f}  (step {d}, {mo})  {h}" for p, h, _, d, _, mo in wins]
     # The first experiment decides how long a run lives. Under the convergence rule a run gets
     # three attempts and earns more only by clearing epsilon, so an opening that gains nothing
     # costs the run. What earlier openings actually returned is a fact from their own ledgers --
@@ -136,15 +154,15 @@ def distil(runs_dir="runs", exclude: str | None = None, baseline: float = 0.6016
     if len(openers) >= 3:
         out.append("\nWhat the FIRST experiment of a run has returned, across every prior run. "
                    "This is the move that decides whether a run gets three attempts or six:")
-        out += [f"  {p:.4f}  {h}" for p, h, _, _, _ in openers[:MAX_WINS]]
+        out += [f"  {p:.4f}  ({mo})  {h}" for p, h, _, _, _, mo in openers[:MAX_WINS]]
 
     if flat:
         out.append("\nTried and landed INSIDE noise -- these moved nothing, so repeating them "
                    "costs an iteration and returns no information:")
-        out += [f"  {p:.4f}  (step {d})  {h}" for p, h, _, d, _ in flat]
+        out += [f"  {p:.4f}  (step {d}, {mo})  {h}" for p, h, _, d, _, mo in flat]
     if dead:
         out.append("\nLost to baseline by more than noise (do not simply repeat these):")
-        out += [f"  {p:.4f}  (step {d})  {h}" for p, h, _, d, _ in reversed(dead)]
+        out += [f"  {p:.4f}  (step {d}, {mo})  {h}" for p, h, _, d, _, mo in reversed(dead)]
     if crashes:
         top = sorted(crashes.items(), key=lambda kv: -kv[1])[:MAX_CRASH]
         out.append("\nMost frequent crashes in earlier runs:")
@@ -187,6 +205,11 @@ def demo() -> None:
         assert distil(root) == "", "a run with no run_meta.json marker is not this agent's"
         (root / "r1" / "run_meta.json").write_text("{}", encoding="utf-8")
         assert "rank blend" in distil(root), "a marked run does count"
+        (root / "r1" / "run_meta.json").write_text(
+            json.dumps({"model": "some-small-model"}), encoding="utf-8")
+        assert "some-small-model" in distil(root), (
+            "a remembered result must name the model that produced it: a weak score from "
+            "a weak proposer is evidence about the proposer, not about the method")
         assert "noise-level" not in distil(root), "r2 has no marker, so it is excluded"
 
         p = root / "r3" / "ledger.jsonl"
