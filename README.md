@@ -10,6 +10,27 @@ try next — searching over a tree of solution scripts until validation converge
 Nothing in the agent's prompt tells it what works on this dataset. That is the point: what to
 try, and why, has to come from the agent, or the Autonomy and Innovation claims are not real.
 
+## Result
+
+`submission_best.csv` is the submission. It is `runs/r41/submission.csv`, written by the harness
+from that run's validation-best iteration (#4) — no human rebuilt it, and selection never looked
+at the test split.
+
+| | GAUC | nDCG@5 | primary |
+|---|---|---|---|
+| official baseline, hidden test | 0.6610 | 0.5282 | 0.5946 |
+| **this submission, hidden test** | **0.6677** | **0.5316** | **0.5996** |
+| delta | +0.0067 | +0.0034 | **+0.0050** |
+
+Validation 0.6059 against the baseline's 0.6016. Test always runs below validation on this
+benchmark — a later date window — and the baseline shows the same drop.
+
+`python -m research.verify_claims` re-derives every score cited in DEVPOST.md from the run
+records and exits non-zero on any disagreement.
+
+Bonus benchmark: on KuaiRand-1K the same agent reached **+0.0422** over a reference we measured
+ourselves, since no official baseline exists for it (`research/transfer-1k.md`).
+
 ## The loop
 
 ```
