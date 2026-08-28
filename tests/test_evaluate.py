@@ -2,6 +2,7 @@
 import math
 
 import numpy as np
+from pathlib import Path
 
 import pipeline.evaluate as ev
 from pipeline.evaluate import evaluate
@@ -242,6 +243,42 @@ def test_closed_form_binary_idcg_matches_the_sorting_path():
     # a graded label set must fall back to the sorting path, not the shortcut
     assert ev._is_binary(np.array([0.0, 1.0, 1.0]))
     assert not ev._is_binary(np.array([0.0, 1.0, 2.0]))
+
+
+def test_matches_the_official_starter_kit_evaluate():
+    """Our evaluate() must agree with the organizers' own script to the last bit.
+
+    README calls this out as a property of the repo, and evaluate() has since been rewritten for
+    speed -- so the claim needs a test rather than a sentence. The official script is pure Python
+    over lists and uses arbitrary-precision ints; passing it numpy arrays overflows its
+    `npos * nneg` on Windows, which is why everything is converted explicitly here.
+
+    Skips when the starter kit is absent (it is gitignored, being organizer-provided).
+    """
+    import importlib.util
+    kit = Path(__file__).resolve().parent.parent / "starter" / "kuairand-starter-kit" / "evaluate.py"
+    if not kit.exists():
+        return "skip (starter kit not present)"
+    spec = importlib.util.spec_from_file_location("official_evaluate", kit)
+    official = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(official)
+
+    rng = np.random.default_rng(11)
+    for n_users, n_per in ((60, 4), (30, 11), (15, 37)):
+        users = [int(v) for v in np.repeat(np.arange(n_users), n_per)]
+        labels = [int(v) for v in rng.integers(0, 2, len(users))]
+        # the coarse case is the one that matters: with only a few distinct scores there are
+        # many ties, and that is the only input where losing the original-row-order tiebreak
+        # changes the result. Continuous scores have no ties, and an all-equal array survives
+        # even an unstable sort -- verified by mutation, both miss the bug.
+        for scores in ([float(v) for v in rng.random(len(users))],
+                       [0.0] * len(users),
+                       [float(v) for v in rng.integers(0, 3, len(users))],
+                       [float(v) for v in labels]):
+            a = official.evaluate(users, labels, scores)
+            b = evaluate(users, labels, scores)
+            for ka, kb in (("GAUC", "gauc"), ("nDCG@5", "ndcg@5"), ("primary", "primary")):
+                assert abs(a[ka] - b[kb]) < 1e-12, (n_users, n_per, ka, a[ka], b[kb])
 
 
 if __name__ == "__main__":

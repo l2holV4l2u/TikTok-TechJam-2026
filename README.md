@@ -60,12 +60,23 @@ agent/       the product. dataset-agnostic.
   recovery.py    retry <=2 then retire the idea; failures never reach a human
   ledger.py      append-only JSONL, one record per iteration (graded deliverable)
   executor.py    sandboxed subprocess with timeout and process-tree kill
+  facts.py       measures the brief's dataset facts from the cache, never hand-written
+  diagnose.py    per-segment error profile fed back so proposals target a measured weakness
 pipeline/    the sandbox the agent works in.
   data.py        KuaiRand-Pure loader, organizer-fixed date splits, train-only vocabs
   evaluate.py    GAUC / nDCG@5, verified bit-identical to the official evaluate.py
   baseline_fm.py numpy Factorization Machine — the official baseline, for reference
   submit.py      submission writer + validator
-kb/papers.json   25 methods with expected effects, retrieved to ground proposals
+  models.py      reference FM/DeepFM/DCNv2/DIN — human-side only, never named to the agent
+  train.py       manual trainer for those reference models
+  synth.py       synthetic cache so the tests run without the real data
+kb/papers.json   methods with literature-only descriptions, retrieved to ground proposals
+research/    human analysis, clearly off the submission path.
+  baseline_reference.py  runs the organizers' recipe on any variant to anchor a run
+  ceiling_probe.py       in-sample vs validation probe behind the generalisation ceiling
+  verify_claims.py       re-checks every DEVPOST score against the run records
+run_agent.py     drives a run
+report_run.py    renders the Run & Iteration Logs deliverable
 runs/            per-run ledger, scripts, EDA report, belief set, search tree, candidates
 ```
 
