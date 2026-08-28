@@ -16,7 +16,7 @@ def test_credentials_never_reach_a_generated_script():
     needed to train a model, and a model-written script is exactly the wrong thing to trust
     with a GitHub token."""
     env = {
-        "OPENAI_API_KEY": "sk-proj-secret", "OPENAI_API_KEYS": "sk-a,sk-b",
+        "OPENAI_API_KEY": "FAKE-KEY-FOR-TEST", "OPENAI_API_KEYS": "FAKE-A,FAKE-B",
         "GITHUB_PACKAGE_TOKEN": "ghp_secret", "CLAUDE_CODE_MESSAGING_TOKEN": "tok",
         "AWS_SECRET_ACCESS_KEY": "x", "DB_PASSWORD": "y", "MY_AUTH_HEADER": "z",
         "PATH": "/usr/bin", "SystemRoot": r"C:\Windows", "TEMP": "/tmp",
@@ -34,11 +34,11 @@ def test_credentials_never_reach_a_generated_script():
 
 def test_a_script_really_cannot_see_them_end_to_end():
     """The unit check above tests the filter; this tests the path a real iteration takes."""
-    os.environ["OPENAI_API_KEYS"] = "sk-proj-canary-value"
+    os.environ["OPENAI_API_KEYS"] = "FAKE-CANARY-NOT-A-KEY"
     try:
         d = Path(tempfile.mkdtemp())
         s = d / "probe.py"
-        s.write_text("import os\nprint('SEEN', 'sk-proj-canary-value' in "
+        s.write_text("import os\nprint('SEEN', 'FAKE-CANARY-NOT-A-KEY' in "
                      "''.join(os.environ.values()))\n", encoding="utf-8")
         r = run_script(s, timeout=60)
         assert "SEEN False" in r.stdout, r.stdout + r.stderr
