@@ -3,6 +3,7 @@ import math
 
 import numpy as np
 
+import pipeline.evaluate as ev
 from pipeline.evaluate import evaluate
 
 LOG2_2 = math.log2(2.0)
@@ -213,6 +214,34 @@ def test_per_user_is_off_by_default_so_the_scored_path_is_unchanged():
     users = np.array([1, 1, 2, 2])
     out = evaluate(users, np.array([1, 0, 0, 1]), np.array([0.9, 0.1, 0.2, 0.8]))
     assert "per_user" not in out
+
+
+def test_closed_form_binary_idcg_matches_the_sorting_path():
+    """The 0/1 shortcut must agree with the general sort-based IDCG, or nDCG silently drifts.
+
+    evaluate() skips a full sort of the labels when every label is 0 or 1, computing IDCG@k
+    from each user's positive count instead. That is only safe while the two agree exactly,
+    including users with more positives than k and users with none.
+    """
+    rng = np.random.default_rng(7)
+    for n_users, n_per in ((40, 3), (25, 12), (10, 60)):
+        users = np.repeat(np.arange(n_users), n_per)
+        labels = rng.integers(0, 2, users.size)
+        scores = rng.random(users.size)
+        idx = np.arange(users.size)
+
+        order, gid, _rank1, n_groups = ev._group_by_user(users, scores, idx)
+        n_pos = np.bincount(gid, weights=labels[order].astype(np.float64), minlength=n_groups)
+
+        o_ideal, gid_ideal, rank_ideal, _ng = ev._group_by_user(users, labels.astype(np.float64), idx)
+        for k in (5, 10):
+            by_sort = ev._dcg_sum(labels[o_ideal].astype(np.float64), rank_ideal, gid_ideal, n_groups, k)
+            closed = ev._idcg_binary(n_pos, k)
+            assert np.allclose(by_sort, closed, rtol=0, atol=0), (n_per, k, by_sort[:5], closed[:5])
+
+    # a graded label set must fall back to the sorting path, not the shortcut
+    assert ev._is_binary(np.array([0.0, 1.0, 1.0]))
+    assert not ev._is_binary(np.array([0.0, 1.0, 2.0]))
 
 
 if __name__ == "__main__":

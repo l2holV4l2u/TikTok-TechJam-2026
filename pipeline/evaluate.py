@@ -23,6 +23,18 @@ Tie-break rules (documented, deterministic):
 import numpy as np
 
 
+def _sorted_by_user(user_ids: np.ndarray, key: np.ndarray) -> np.ndarray:
+    """Row order: user_id ascending, then `key` ascending, ties by original row order.
+
+    Identical to np.lexsort((arange(n), key, user_ids)) but ~3x faster on millions of rows: a
+    stable sort on `key` leaves equal keys in original order, and a second stable sort on the
+    user preserves that ordering inside each user block. lexsort's n-key path is the single
+    biggest cost in evaluate(), which the agent's scripts now call once per training epoch.
+    """
+    o = np.argsort(key, kind="stable")
+    return o[np.argsort(user_ids[o], kind="stable")]
+
+
 def _new_group_mask(sorted_keys: np.ndarray) -> np.ndarray:
     n = sorted_keys.size
     mask = np.empty(n, dtype=bool)
@@ -35,7 +47,7 @@ def _new_group_mask(sorted_keys: np.ndarray) -> np.ndarray:
 def _group_by_user(user_ids: np.ndarray, rank_key: np.ndarray, idx: np.ndarray):
     """Sort rows into per-user blocks ordered by rank_key descending, idx (original row order) as tiebreak.
     Returns (order, group_id, rank1, n_groups). group_id numbering = ascending user_id order, stable across calls."""
-    order = np.lexsort((idx, -rank_key, user_ids))
+    order = _sorted_by_user(user_ids, -rank_key)
     u = user_ids[order]
     new_user = _new_group_mask(u)
     group_id = np.cumsum(new_user) - 1
@@ -48,7 +60,7 @@ def _group_by_user(user_ids: np.ndarray, rank_key: np.ndarray, idx: np.ndarray):
 def _gauc(user_ids: np.ndarray, labels: np.ndarray, scores: np.ndarray, idx: np.ndarray,
           per_user: bool = False):
     n = user_ids.size
-    order = np.lexsort((idx, scores, user_ids))  # ascending score within user; tie order irrelevant (averaged)
+    order = _sorted_by_user(user_ids, scores)  # ascending score within user; tie order irrelevant (averaged)
     u = user_ids[order]
     s = scores[order]
     y = labels[order]
@@ -88,11 +100,32 @@ def _gauc(user_ids: np.ndarray, labels: np.ndarray, scores: np.ndarray, idx: np.
     return overall, full
 
 
+def _is_binary(labels: np.ndarray) -> bool:
+    """True when every label is 0 or 1, which is the case for the scored `long_view` column."""
+    return bool(np.all((labels == 0.0) | (labels == 1.0)))
+
+
+def _idcg_binary(n_pos: np.ndarray, k: int) -> np.ndarray:
+    """IDCG@k for 0/1 labels, without sorting.
+
+    The ideal ranking puts every positive first, so the top-k gains are 1 for the first
+    min(k, n_pos) ranks and 0 after -- IDCG@k is a prefix sum of 1/log2(r+1) indexed by the
+    user's positive count. Sorting several million rows to rediscover that is the third of
+    evaluate()'s three sorts, and this removes it.
+    """
+    prefix = np.concatenate(([0.0], np.cumsum(1.0 / np.log2(np.arange(1, k + 1) + 1.0))))
+    return prefix[np.minimum(n_pos, k).astype(np.int64)]
+
+
 def _dcg_sum(labels_sorted: np.ndarray, rank1: np.ndarray, group_id: np.ndarray, n_groups: int, k: int) -> np.ndarray:
-    gain = 2.0 ** labels_sorted - 1.0  # spec: nDCG gain = 2^rel - 1
-    discount = 1.0 / np.log2(rank1.astype(np.float64) + 1.0)
-    contrib = np.where(rank1 <= k, gain * discount, 0.0)
-    return np.bincount(group_id, weights=contrib, minlength=n_groups)
+    # only the top-k rows per user contribute; computing 2**x and log2 over every row to then
+    # discard 99.8% of them is the second largest cost. k=5 over ~1000 users is ~5000 rows.
+    sel = rank1 <= k
+    if not sel.any():
+        return np.zeros(n_groups)
+    gain = 2.0 ** labels_sorted[sel] - 1.0  # spec: nDCG gain = 2^rel - 1
+    discount = 1.0 / np.log2(rank1[sel].astype(np.float64) + 1.0)
+    return np.bincount(group_id[sel], weights=gain * discount, minlength=n_groups)
 
 
 def evaluate(user_ids, labels, scores, per_user: bool = False) -> dict:
@@ -119,18 +152,23 @@ def evaluate(user_ids, labels, scores, per_user: bool = False) -> dict:
     gauc, auc_per_user = gauc_out if per_user else (gauc_out, None)
 
     order_pred, group_id, rank1_pred, n_groups = _group_by_user(user_ids, scores, idx)
-    order_ideal, group_id_ideal, rank1_ideal, _ = _group_by_user(user_ids, labels, idx)
     # group_id and group_id_ideal share the same user<->index mapping: both lexsorts use
     # user_ids as the primary key, so group order is always ascending user_id regardless
     # of the secondary ranking key.
 
     labels_pred_sorted = labels[order_pred]
-    labels_ideal_sorted = labels[order_ideal]
+    n_pos_group = np.bincount(group_id, weights=labels_pred_sorted, minlength=n_groups)
 
     dcg5 = _dcg_sum(labels_pred_sorted, rank1_pred, group_id, n_groups, 5)
-    idcg5 = _dcg_sum(labels_ideal_sorted, rank1_ideal, group_id_ideal, n_groups, 5)
     dcg10 = _dcg_sum(labels_pred_sorted, rank1_pred, group_id, n_groups, 10)
-    idcg10 = _dcg_sum(labels_ideal_sorted, rank1_ideal, group_id_ideal, n_groups, 10)
+    if _is_binary(labels):
+        idcg5 = _idcg_binary(n_pos_group, 5)
+        idcg10 = _idcg_binary(n_pos_group, 10)
+    else:
+        order_ideal, group_id_ideal, rank1_ideal, _ = _group_by_user(user_ids, labels, idx)
+        labels_ideal_sorted = labels[order_ideal]
+        idcg5 = _dcg_sum(labels_ideal_sorted, rank1_ideal, group_id_ideal, n_groups, 5)
+        idcg10 = _dcg_sum(labels_ideal_sorted, rank1_ideal, group_id_ideal, n_groups, 10)
 
     ndcg5 = np.zeros(n_groups)
     mask5 = idcg5 > 0
@@ -140,7 +178,7 @@ def evaluate(user_ids, labels, scores, per_user: bool = False) -> dict:
     mask10 = idcg10 > 0
     ndcg10[mask10] = dcg10[mask10] / idcg10[mask10]
 
-    total_pos = np.bincount(group_id, weights=labels_pred_sorted, minlength=n_groups)
+    total_pos = n_pos_group
     hits50 = np.bincount(group_id, weights=np.where(rank1_pred <= 50, labels_pred_sorted, 0.0), minlength=n_groups)
     has_pos = total_pos > 0
     recall50 = float(np.mean(hits50[has_pos] / total_pos[has_pos])) if np.any(has_pos) else float("nan")
