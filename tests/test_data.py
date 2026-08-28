@@ -278,8 +278,14 @@ def test_numeric_channel_is_present_and_carries_no_post_click_signal():
         assert a.dtype == np.float32, (name, a.dtype)
         assert len(a) == len(tr.y), name
         assert not np.isinf(a).any(), f"{name} has infinities"
-    # a numeric feature must actually vary, or it is a wasted channel
-    assert np.nanstd(np.asarray(tr.num["duration_ms"])) > 0
+    # A column that is entirely NaN is a silently dead channel: it costs cache, appears in the
+    # brief as an available feature, and carries nothing. Three of these shipped that way --
+    # NUMERIC_USER named raw counts that _load_user_features never read off the CSV, and only
+    # the agent's own EDA (reporting m1.00 missing) surfaced it.
+    dead = [n for n, a in tr.num.items() if np.isnan(np.asarray(a)).all()]
+    assert not dead, f"numeric features are 100% NaN: {dead}"
+    flat = [n for n, a in tr.num.items() if np.nanstd(np.asarray(a)) == 0]
+    assert not flat, f"numeric features are constant: {flat}"
 
 
 if __name__ == "__main__":

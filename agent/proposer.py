@@ -94,6 +94,11 @@ PIPELINE API -- import these, do not reimplement them:
   reconstructible from them (GAUC is the positive-count-weighted mean of auc; nDCG@5 is the
   plain mean over every user). Use it if you want to know which users a score comes from.
   This is the organizers' own scoring code, verified bit-identical to theirs.
+  from agent.diagnose import segment_report
+  segment_report(user_ids, labels, scores) -> a text table of YOUR model's nDCG@5 against the
+  per-user ceiling, bucketed by how many impressions each user has, with each bucket's share of
+  the total gap and its GAUC. It answers "where is this model losing" rather than "how much".
+  Printing it costs one call and the aggregate score alone cannot tell you the same thing.
 
 RULES:
   - Fit on "train" only. Report on "valid". Never fit or select anything on "test",

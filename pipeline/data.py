@@ -218,6 +218,12 @@ def _load_user_features(path: Path) -> dict[int, dict[str, str]]:
                    ("user_active_degree", "is_lowactive_period", "is_live_streamer", "is_video_author",
                     "follow_user_num_range", "fans_user_num_range", "friend_user_num_range", "register_days_range")}
             rec["register_days"] = row[idx["register_days"]]  # numeric, kept raw for quantile bucketing
+            # the raw counts behind the *_range buckets. Without these NUMERIC_USER resolves to
+            # "" and lands in Split.num as 100% NaN -- which is exactly what the agent's own EDA
+            # reported (m1.00) on the first run after the numeric channel was added.
+            for c in ("follow_user_num", "fans_user_num", "friend_user_num"):
+                if c in idx:
+                    rec[c] = row[idx[c]]
             for c in onehot_cols:
                 rec[c] = row[idx[c]]
             users[uid] = rec
