@@ -244,14 +244,20 @@ def test_rate_limit_exhaustion_fails_over_to_another_key():
         assert c("prompt") == ("ok", 11, 7)
         assert calls == ["Bearer k1", "Bearer k2"], calls
 
-        # when no key is left, the original exhaustion is the honest error to surface
-        c2, _ = _client([llm.LLMRetryExhausted("429")] * 2)
+        # A transient limit on every key is waited out, not given up on -- but only for a
+        # bounded number of passes, after which the original exhaustion is the honest error.
+        saved_waits, saved_interval = llm.MAX_TRANSIENT_WAITS, llm.MIN_REQUEST_INTERVAL_S
+        llm.MAX_TRANSIENT_WAITS, llm.MIN_REQUEST_INTERVAL_S = 1, 0.0
         try:
-            c2("prompt")
-        except llm.LLMRetryExhausted:
-            pass
-        else:
-            raise AssertionError("must raise once every key is exhausted")
+            c2, _ = _client([llm.LLMRetryExhausted("429")] * 12)
+            try:
+                c2("prompt")
+            except llm.LLMRetryExhausted:
+                pass
+            else:
+                raise AssertionError("must eventually raise if every key stays limited")
+        finally:
+            llm.MAX_TRANSIENT_WAITS, llm.MIN_REQUEST_INTERVAL_S = saved_waits, saved_interval
     finally:
         llm._post_json = real
 
@@ -291,6 +297,28 @@ def test_requests_are_spaced_to_stay_under_the_per_minute_limit():
         llm.MIN_REQUEST_INTERVAL_S = saved
 
 
+def test_a_transient_rate_limit_does_not_retire_a_good_key():
+    """RPM clears in seconds; a daily cap does not. Conflating them kills runs.
+
+    The first failover fix marked a key exhausted on any LLMRetryExhausted. One momentary
+    per-minute 429 then retired the only key with quota, sent the call to keys that were
+    genuinely capped for the day, and ended the run -- observed twice, with the good key idle.
+    """
+    real = llm._post_json
+    try:
+        c, calls = _client([llm.LLMRetryExhausted("HTTP 429: RPM"), _reply("ok")])
+        assert c("prompt") == ("ok", 11, 7)
+        assert calls == ["Bearer k1", "Bearer k2"], calls
+        assert not c.exhausted, f"a transient limit must not retire a key: {c.exhausted}"
+
+        # a daily cap, by contrast, must retire it
+        c2, _ = _client([llm.LLMDailyLimit(DAILY), _reply("ok")])
+        c2("prompt")
+        assert c2.exhausted, "a daily cap must retire the key for the process"
+    finally:
+        llm._post_json = real
+
+
 if __name__ == "__main__":
     for t in (test_daily_cap_body_is_recognised,
               test_failover_to_the_second_key_on_a_daily_cap,
@@ -304,7 +332,8 @@ if __name__ == "__main__":
               test_a_call_gives_up_instead_of_wedging_the_run,
               test_a_revoked_key_fails_over_instead_of_killing_the_run,
               test_rate_limit_exhaustion_fails_over_to_another_key,
-              test_requests_are_spaced_to_stay_under_the_per_minute_limit):
+              test_requests_are_spaced_to_stay_under_the_per_minute_limit,
+              test_a_transient_rate_limit_does_not_retire_a_good_key):
         t()
         print(f"ok  {t.__name__}")
     print("all passed")

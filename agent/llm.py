@@ -29,6 +29,7 @@ TOTAL_DEADLINE_S = 420.0
 # lost 2-5 iterations that way. Waiting our turn is strictly cheaper than retrying into a wall:
 # a 21s spacing costs ~40s per iteration, while one lost iteration costs the whole experiment.
 MIN_REQUEST_INTERVAL_S = float(os.environ.get("LLM_MIN_INTERVAL_S", "21"))
+MAX_TRANSIENT_WAITS = 4  # a per-minute limit is worth waiting out; a daily cap is not
 _last_request_at = 0.0
 
 
@@ -214,6 +215,21 @@ class OpenAICompatComplete:
     def api_key(self) -> str:
         return self.api_keys[self.key_index]
 
+    def _rotate_transient(self) -> bool:
+        """Move to the next key WITHOUT retiring the current one.
+
+        A per-minute limit clears in seconds; a daily cap does not. Treating them alike retired
+        a perfectly good key on one momentary 429, sent the call to keys that were genuinely
+        capped, and killed the run while the good key sat idle -- observed twice.
+        """
+        n = len(self.api_keys)
+        for offset in range(1, n + 1):
+            cand = (self.key_index + offset) % n
+            if cand not in self.exhausted:
+                self.key_index = cand
+                return True
+        return False
+
     def _next_key(self) -> bool:
         """Move to a key that is still usable. False when none are.
 
@@ -236,6 +252,8 @@ class OpenAICompatComplete:
         # gpt-5.x rejects max_tokens and requires max_completion_tokens
         key = "max_completion_tokens" if self.model.startswith(("gpt-5", "o1", "o3", "o4")) else "max_tokens"
         body[key] = self.max_tokens
+        transient_rotations = 0
+        transient_waits = 0
         while True:
             headers = {
                 "Content-Type": "application/json",
@@ -248,12 +266,18 @@ class OpenAICompatComplete:
                 if not self._next_key():
                     raise
             except LLMRetryExhausted:
-                # A per-minute rate limit exhausts the backoff ladder without ever raising
-                # LLMDailyLimit, so failover never fired and a run died while other keys sat
-                # idle with quota. Observed on the free tier: RPM is 3, and two concurrent runs
-                # exceed it. Try the remaining keys before giving up; if none is left, the
-                # original exhaustion is the honest error.
-                if not self._next_key():
+                # A per-minute limit exhausts the backoff ladder without raising LLMDailyLimit.
+                # Rotate to another key, but do NOT retire this one: the limit is transient and
+                # this key is usable again within a minute. After one full pass over the keys,
+                # wait out the window and try again rather than giving up on a run.
+                transient_rotations += 1
+                if transient_rotations > len(self.api_keys):
+                    if transient_waits >= MAX_TRANSIENT_WAITS:
+                        raise
+                    transient_waits += 1
+                    transient_rotations = 0
+                    time.sleep(MIN_REQUEST_INTERVAL_S * 3)
+                elif not self._rotate_transient():
                     raise
         choice = (resp.get("choices") or [{}])[0]
         text = (choice.get("message") or {}).get("content") or ""
