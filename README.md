@@ -106,6 +106,13 @@ rule (ε = 0.002 over N = 3 iterations). A 6-hour wall-clock backstop is enforce
 
 `python run_agent.py --dry-run` exercises the whole loop with a canned LLM and no network.
 
+Other flags: `--epsilon` and `--patience` set the convergence rule (organizer values are the
+defaults), `--wall-clock-s` the 6-hour backstop, `--max-retries` how often a failed script is
+retried before its idea is retired, `--max-misses` how many non-improving children retire a
+search node, and `--revision-model` routes belief revision to a second model — rate limits are
+per-model and revision is ~37% of a run's requests, so a second model both halves the pressure
+on the proposer's quota and costs less for a summarising task.
+
 `--replay runs/rN/llm_calls.jsonl` re-runs a previous run against its recorded responses: no
 network, no tokens, deterministic. Replaying r30 reproduces its ledger to the last decimal at
 every iteration in 2.9 minutes against the original 6.3. It tests the loop, the parsers, the

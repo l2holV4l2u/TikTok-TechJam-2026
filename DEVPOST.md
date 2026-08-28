@@ -270,12 +270,16 @@ that, and the submission was written by the harness's own validation-best select
 by hand. The incident is also why `agent/llm.py` now bounds the total time of a single call: a
 run must not be able to hang on one dead socket.
 
-Resources to reach the converged result: **8 iterations of 50**, **35.1 minutes** of agent
-wall-clock, **91,852 tokens**, **0 GPU-hours** (CPU only), **0 failures**, **0 manual
-interventions**, and **48 candidate solutions compared inside those 8 iterations**.
+Resources for the submitted run (`r41`): **11 iterations of 50**, **7.1 minutes** of script
+time, **54,029 tokens** over 8 model calls, **0 GPU-hours** (CPU only), **0 manual
+interventions**, and **0 failures of its own code**.
 
-The agent did all of it: it wrote its own EDA script, reproduced the official baseline to 0.6020
-on the first attempt, proposed and coded six further experiments, and emitted the test
+It did lose 6 iterations to an expired API key — an outage, not the agent failing an experiment,
+and `report_run.py` now separates the two rather than reporting "6 failures" against the agent.
+The best iteration (#4) was reached before the key died.
+
+The agent did all of it: it wrote its own EDA script, reproduced the official baseline to 0.6015
+on the first attempt, proposed and coded further experiments, and emitted the test
 predictions that became the submission.
 
 ### The result that matters most
