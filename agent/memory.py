@@ -91,7 +91,16 @@ def distil(runs_dir="runs", exclude: str | None = None, baseline: float = 0.6016
             continue
         p = (e.get("metrics") or {}).get("primary")
         if isinstance(p, (int, float)):
-            scored.append((p, e.get("hypothesis", "")[:100], run))
+            # Depth matters as much as the score. r35's best hypothesis was its SIXTH
+            # iteration, standing on a DeepFM + bagging + cross-model ensemble. Reported as a
+            # bare line it read as "this works", and five later runs opened with it against a
+            # plain five-field FM, gained nothing, and spent the attempt that decides whether a
+            # run earns more. A hypothesis without what it was built on is not a finding.
+            # depth counts EXPERIMENTS, not ledger rows: the baseline reproduction is step 0,
+            # so the first real experiment of a run is step 1.
+            is_improve = e.get("phase", "improve") == "improve"
+            depth = (sum(1 for x in scored if x[2] == run and x[4]) + 1) if is_improve else 0
+            scored.append((p, e.get("hypothesis", "")[:100], run, depth, is_improve))
         elif e.get("status") in ("failed", "blacklisted"):
             first = (e.get("error") or "").strip().splitlines()
             key = next((ln.strip()[:90] for ln in reversed(first) if ln.strip()), "")
@@ -114,15 +123,28 @@ def distil(runs_dir="runs", exclude: str | None = None, baseline: float = 0.6016
            f"{len({s[2] for s in scored})} runs). Baseline is {baseline:.4f}; a gap under "
            f"{NOISE} is noise."]
     if wins:
-        out.append("\nBeat baseline by more than noise:")
-        out += [f"  {p:.4f}  {h}" for p, h, _ in wins]
+        out.append("\nBeat baseline by more than noise. The step number matters: a result from "
+                   "step 5 was reached by a script that already carried four earlier changes, so "
+                   "repeating its hypothesis against a fresh baseline is a different experiment "
+                   "and usually a much weaker one.")
+        out += [f"  {p:.4f}  (step {d} of its run)  {h}" for p, h, _, d, _ in wins]
+    # The first experiment decides how long a run lives. Under the convergence rule a run gets
+    # three attempts and earns more only by clearing epsilon, so an opening that gains nothing
+    # costs the run. What earlier openings actually returned is a fact from their own ledgers --
+    # reported so the agent can weigh it, not a recommendation about what to try.
+    openers = sorted((x for x in scored if x[4] and x[3] == 1), reverse=True)
+    if len(openers) >= 3:
+        out.append("\nWhat the FIRST experiment of a run has returned, across every prior run. "
+                   "This is the move that decides whether a run gets three attempts or six:")
+        out += [f"  {p:.4f}  {h}" for p, h, _, _, _ in openers[:MAX_WINS]]
+
     if flat:
         out.append("\nTried and landed INSIDE noise -- these moved nothing, so repeating them "
                    "costs an iteration and returns no information:")
-        out += [f"  {p:.4f}  {h}" for p, h, _ in flat]
+        out += [f"  {p:.4f}  (step {d})  {h}" for p, h, _, d, _ in flat]
     if dead:
         out.append("\nLost to baseline by more than noise (do not simply repeat these):")
-        out += [f"  {p:.4f}  {h}" for p, h, _ in reversed(dead)]
+        out += [f"  {p:.4f}  (step {d})  {h}" for p, h, _, d, _ in reversed(dead)]
     if crashes:
         top = sorted(crashes.items(), key=lambda kv: -kv[1])[:MAX_CRASH]
         out.append("\nMost frequent crashes in earlier runs:")
