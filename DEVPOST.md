@@ -562,6 +562,36 @@ One caveat on causation: `s.num` arrived alongside a knowledge-base gap being fi
 to exposure alone. The process mechanisms had contracts in the brief from the start and no
 comparable retrieval support, which may be part of why they lagged.
 
+## The GPU does not help this benchmark
+
+An RTX 4050 was available and unused, so we measured what it was worth rather than assuming.
+
+| | result |
+|---|---|
+| raw 4096² matmul ×20 | **16.2× faster** on GPU (0.74 s vs 11.90 s) |
+| the organizers' FM recipe, end to end | **60 s on GPU vs 56 s on CPU** |
+| a real agent iteration, CUDA runtime merely *present* | **131.5 s vs 108.1 s**, bit-identical output |
+
+The benchmark is not matmul-limited. These models are small and embedding-lookup bound, and the
+CUDA runtime costs about 20 seconds per script to load — which a 100-second script cannot earn
+back. Simply having the CUDA build on the path made an unchanged script 22% slower while
+producing exactly the same metric, because the script never moved anything to the device.
+
+Two consequences we acted on:
+
+- The brief now states the device and **the load cost**, so the agent can judge whether moving
+  work earns it back instead of assuming a GPU is free. It does use it: the first two scored
+  iterations of the following run wrote CUDA code.
+- `research/baseline_reference.py` is **pinned to CPU**. The same recipe returns valid 0.6020 /
+  test 0.5947 on GPU against 0.6022 / 0.5957 on CPU — a 0.0010 shift on test, at the edge of the
+  0.0008 seed-noise band. A reference number that moves with whichever device happens to be
+  installed is not a reference, and this one anchors both the ablation table and the entire
+  KuaiRand-1K experiment.
+
+The organizers note that compute is deliberately not the binding constraint here — their
+baseline runs in about 40 s on one CPU core. Our measurements agree: there is nothing for a GPU
+to win on this task.
+
 ## Harness engineering
 
 Four changes that are not model work but decide whether the agent gets a fair run.
