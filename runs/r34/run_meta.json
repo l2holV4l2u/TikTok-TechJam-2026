@@ -26,5 +26,13 @@
     "test_ndcg@5": 0.5309258706766224,
     "test_delta": 0.003327802241100297,
     "hypothesis": "Target the feature-interaction representation stage by upgrading the FM to a DeepFM over informative user, item, and context fields, allowing nonlinear higher-order crosses such as user\u00d7content\u00d7tab while retaining the reliable pairwise FM signal."
-  }
+  },
+  "api_surface": [
+    "s.X",
+    "s.aux",
+    "s.date",
+    "s.user_id",
+    "s.video_id",
+    "s.y"
+  ]
 }

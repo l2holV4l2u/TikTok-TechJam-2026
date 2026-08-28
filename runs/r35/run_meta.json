@@ -26,5 +26,13 @@
     "test_ndcg@5": 0.5312114450946944,
     "test_delta": 0.003873934670091894,
     "hypothesis": "Target the training-objective stage with metric-aligned per-user loss weighting; reducing domination by the unusually long training histories and assigning each user a mixture of equal-user and positive-count mass should better match validation GAUC/nDCG aggregation, while blending with the incumbent heterogeneous ensemble preserves its interaction signal."
-  }
+  },
+  "api_surface": [
+    "s.X",
+    "s.aux",
+    "s.date",
+    "s.user_id",
+    "s.video_id",
+    "s.y"
+  ]
 }

@@ -24,5 +24,12 @@
     "test_ndcg@5": 0.5290816114658312,
     "test_delta": 0.0012939299479606259,
     "hypothesis": "Replace the exhausted residual-tree stage with a two-layer heterogeneous LightGCN trained by BPR on train-only positive user\u2013video/user\u2013author edges versus logged negatives; higher-order neighborhood propagation should recover collaborative affinities absent from the FM, while validation-selected blending preserves the strong baseline."
-  }
+  },
+  "api_surface": [
+    "s.X",
+    "s.aux",
+    "s.user_id",
+    "s.video_id",
+    "s.y"
+  ]
 }

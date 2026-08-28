@@ -38,6 +38,10 @@ class LLMDailyLimit(Exception):
     """A per-day request cap. Backing off cannot clear it; only another key or tomorrow can."""
 
 
+class LLMKeyRejected(Exception):
+    """The key itself was refused: revoked, disabled, or out of quota. Retrying cannot help."""
+
+
 def _is_daily_cap(body: str) -> bool:
     low = (body or "").lower()
     return "per day" in low or "requests per day" in low or "rpd" in low
@@ -100,6 +104,12 @@ def _post_json(url: str, headers: dict, body: dict, timeout: float = DEFAULT_TIM
                 # retries here costs ~12 minutes and still fails. Surface it at once so the
                 # caller can switch to another key instead.
                 raise LLMDailyLimit(err_body) from e
+            if e.code in (401, 403):
+                # a revoked or disabled key. Failover already exists for daily caps; without
+                # this a key cancelled mid-run raises a plain LLMError and burns the loop's
+                # proposer-error budget instead of moving to the next key. This is not
+                # hypothetical -- one of the keys in rotation was revoked after a leak.
+                raise LLMKeyRejected(f"HTTP {e.code}: {err_body[:200]}") from e
             if e.code == 429 or e.code >= 500:
                 attempt += 1
                 if attempt > MAX_RETRIES:
@@ -186,7 +196,11 @@ class OpenAICompatComplete:
         return self.api_keys[self.key_index]
 
     def _next_key(self) -> bool:
-        """Move to a key that has not hit its daily cap. False when they all have."""
+        """Move to a key that is still usable. False when none are.
+
+        Retires the current key for the rest of the process, whether it hit a daily cap or was
+        rejected outright -- in both cases retrying it costs a request and cannot succeed.
+        """
         self.exhausted.add(self.key_index)
         for offset in range(1, len(self.api_keys) + 1):
             cand = (self.key_index + offset) % len(self.api_keys)
@@ -211,7 +225,7 @@ class OpenAICompatComplete:
             try:
                 resp = _post_json(f"{self.base_url}/chat/completions", headers, body)
                 break
-            except LLMDailyLimit:
+            except (LLMDailyLimit, LLMKeyRejected):
                 if not self._next_key():
                     raise
         choice = (resp.get("choices") or [{}])[0]

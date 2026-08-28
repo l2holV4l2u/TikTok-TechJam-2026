@@ -26,5 +26,12 @@
     "test_ndcg@5": 0.5310980526862378,
     "test_delta": 0.003485593478047777,
     "hypothesis": "Target the feature-interaction representation stage with a DeepFM over informative user, item, context, and content fields; its nonlinear deep branch can learn higher-order user\u2013content compatibility beyond the baseline FM\u2019s pairwise inner products, while validation-selected blending with its FM branch protects against harmful nonlinear overfitting."
-  }
+  },
+  "api_surface": [
+    "s.X",
+    "s.aux",
+    "s.user_id",
+    "s.video_id",
+    "s.y"
+  ]
 }

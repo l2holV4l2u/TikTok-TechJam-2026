@@ -28,5 +28,13 @@
     "test_ndcg@5": 0.5313748653641576,
     "test_delta": 0.0041357515119860855,
     "hypothesis": "Target the supervision stage with an MMoE residual over the reliable five-field FM: train-only click, like, and follow outcomes provide denser preference signals, while task-specific gates isolate conflicting behavior and should improve long-view within-user ranking."
-  }
+  },
+  "api_surface": [
+    "s.X",
+    "s.aux",
+    "s.date",
+    "s.user_id",
+    "s.video_id",
+    "s.y"
+  ]
 }

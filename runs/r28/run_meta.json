@@ -24,5 +24,12 @@
     "test_ndcg@5": 0.5299568061990084,
     "test_delta": 0.0013425328584922847,
     "hypothesis": "Target the training-loss stage by replacing pointwise BCE with positive-weighted within-user BPR sampling, directly optimizing positive\u2013negative score order in the same logged impression groups used by GAUC while retaining the validated five-field FM representation."
-  }
+  },
+  "api_surface": [
+    "s.X",
+    "s.aux",
+    "s.user_id",
+    "s.video_id",
+    "s.y"
+  ]
 }

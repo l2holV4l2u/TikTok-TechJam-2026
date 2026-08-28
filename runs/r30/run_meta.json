@@ -19,5 +19,12 @@
   "submission": {
     "iter_id": 3,
     "valid_primary": 0.6030435091743649
-  }
+  },
+  "api_surface": [
+    "s.X",
+    "s.aux",
+    "s.user_id",
+    "s.video_id",
+    "s.y"
+  ]
 }

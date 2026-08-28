@@ -203,6 +203,34 @@ def test_a_call_gives_up_instead_of_wedging_the_run():
         llm.urllib.request.urlopen = real
 
 
+def test_a_revoked_key_fails_over_instead_of_killing_the_run():
+    """A key can be cancelled mid-run; that must cost one request, not the whole run.
+
+    Failover previously triggered only on a daily-cap 429. A revoked key answers 401, which fell
+    through to a plain LLMError, spending the loop's proposer-error budget while a perfectly good
+    second key sat unused. One of the keys in rotation here was revoked after a leak, which is
+    how this was found.
+    """
+    real = llm._post_json
+    try:
+        c, calls = _client([llm.LLMKeyRejected("HTTP 401: revoked"), _reply("ok")])
+        assert c("prompt") == ("ok", 11, 7)
+        assert calls == ["Bearer k1", "Bearer k2"], calls
+        assert c.api_key == "k2", "the working key stays selected"
+
+        # and when every key is refused it must raise, not spin
+        c2, calls2 = _client([llm.LLMKeyRejected("401")] * 2)
+        try:
+            c2("prompt")
+        except llm.LLMKeyRejected:
+            pass
+        else:
+            raise AssertionError("all keys refused must raise")
+        assert calls2 == ["Bearer k1", "Bearer k2"], calls2
+    finally:
+        llm._post_json = real
+
+
 if __name__ == "__main__":
     for t in (test_daily_cap_body_is_recognised,
               test_failover_to_the_second_key_on_a_daily_cap,
@@ -213,7 +241,8 @@ if __name__ == "__main__":
               test_recording_wrapper_exposes_the_model_for_the_run_log,
               test_key_is_never_placed_in_the_body,
               test_replay_returns_recorded_responses_and_refuses_to_overrun,
-              test_a_call_gives_up_instead_of_wedging_the_run):
+              test_a_call_gives_up_instead_of_wedging_the_run,
+              test_a_revoked_key_fails_over_instead_of_killing_the_run):
         t()
         print(f"ok  {t.__name__}")
     print("all passed")
