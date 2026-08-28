@@ -65,6 +65,10 @@ def measure(baseline: dict, seed: int = 0) -> dict:
                     if _t.cuda.is_available() else "none")
     except Exception:
         f["torch_version"], f["gpu"] = "unavailable", "none"
+    from pipeline.data import FEATURE_CARDINALITIES
+    cats = sorted(FEATURE_CARDINALITIES)
+    f["n_categorical"] = len(cats)
+    f["categorical_names"] = ", ".join(cats)
     f["train_rows_m"] = f["train_rows"] / 1e6
     return f
 

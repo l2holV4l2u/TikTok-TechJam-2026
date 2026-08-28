@@ -63,7 +63,8 @@ HOW THE RUN ENDS -- read this before choosing an experiment:
 PIPELINE API -- import these, do not reimplement them:
   from pipeline.data import load, FEATURE_CARDINALITIES
   s = load("train")     # or "valid" or "test"
-  s.X        dict[str, int64 array] -- 37 categorical features, contiguous ids, 0 = unseen
+  s.X        dict[str, int64 array] -- {n_categorical} categorical features, contiguous ids, 0 = unseen.
+             Names, because guessing one costs an iteration: {categorical_names}
   s.y        int8 array -- long_view, the scored label
   s.user_id  int64 array      s.video_id  int64 array
   s.date     int32 array -- YYYYMMDD of each impression. train covers {train_days} days ({train_lo}-{train_hi}),
