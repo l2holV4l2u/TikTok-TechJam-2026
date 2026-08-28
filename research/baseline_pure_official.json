@@ -1,0 +1,12 @@
+{
+  "source": "organizer-provided",
+  "valid_gauc": 0.6674,
+  "valid_ndcg@5": 0.5357,
+  "valid_primary": 0.6016,
+  "test_gauc": 0.661,
+  "test_ndcg@5": 0.5282,
+  "test_primary": 0.5946,
+  "seed_std": 0.0008,
+  "k": 16,
+  "lr": 0.001
+}

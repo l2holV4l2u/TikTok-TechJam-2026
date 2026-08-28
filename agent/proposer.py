@@ -7,7 +7,9 @@ reproducing the official baseline (BASELINE phase), and then reading its own res
 revising its own belief set. That is what makes Requirement 1 and Innovation honest:
 what gets tried, and why, has to come from the agent.
 """
+import json
 import re
+from pathlib import Path
 from typing import Callable
 
 from .kb import index, retrieve
@@ -28,11 +30,11 @@ MAX_EDA_CHARS = 4000
 # ---------------------------------------------------------------- task specification only
 
 TASK_BRIEF = """You are the proposer inside an autonomous ML research agent competing on the
-KuaiRand-Pure benchmark. You write complete Python scripts; a harness runs them and returns
+{variant} benchmark. You write complete Python scripts; a harness runs them and returns
 the result. Nobody edits your code and nobody advises you: what to try, and why, is your call.
 
-DATA: Kuaishou short-video feed, date-split. train 1,141,112 rows (20220408-0421),
-validation 124,909 (20220422-0428), hidden test 170,588 (20220429-0508).
+DATA: Kuaishou short-video feed, date-split. train {train_rows:,} rows ({train_lo}-{train_hi}),
+validation {valid_rows:,} ({valid_lo}-{valid_hi}), hidden test {test_rows:,} ({test_lo}-{test_hi}).
 The scored relevance label is the native column `long_view` (0/1), fixed by the organizers.
 
 METRIC: primary = mean(GAUC, nDCG@5), ranking within each user's logged impressions
@@ -40,16 +42,16 @@ METRIC: primary = mean(GAUC, nDCG@5), ranking within each user's logged impressi
   GAUC: per-user AUC, counting only users with 0 < positives < impressions, weighted by
         each user's positive count.
   nDCG@5: gain = 2^rel - 1; users with zero positives score 0 and ARE included in the mean.
-OFFICIAL BASELINE (organizer-provided, this is what you must beat):
-  validation GAUC 0.6674 / nDCG@5 0.5357 / primary 0.6016
-  hidden test  GAUC 0.6610 / nDCG@5 0.5282 / primary 0.5946  (mean of 5 seeds, std 0.0008)
-  It is a Factorization Machine, k=16, lr=0.001, over 5 categorical fields.
-Harness self-check rungs published by the organizers: random scoring primary 0.4753,
-item popularity primary 0.5715 (on test).
+BASELINE ({baseline_source}, this is what you must beat):
+  validation GAUC {baseline_valid_gauc:.4f} / nDCG@5 {baseline_valid_ndcg5:.4f} / primary {baseline_valid_primary:.4f}
+  hidden test  GAUC {baseline_test_gauc:.4f} / nDCG@5 {baseline_test_ndcg5:.4f} / primary {baseline_test_primary:.4f}{baseline_noise_note}
+  It is a Factorization Machine, k={baseline_k:.0f}, lr={baseline_lr}, over 5 categorical fields.
+Harness self-check rungs, measured on this dataset: random scoring primary {random_primary:.4f},
+item popularity primary {itempop_primary:.4f} (on test).
 A validation difference smaller than 0.002 is inside seed noise and is NOT evidence. That
 0.002 is also the organizers' convergence epsilon.
-Perfect ranking on test reaches only primary 0.8645, because 27.1% of test users have no
-positive label at all. Judge headroom against 0.8645, not 1.0.
+Perfect ranking on test reaches only primary {ceiling:.4f}, because {zero_pos_user_pct:.1f}% of test
+users have no positive label at all. Judge headroom against {ceiling:.4f}, not 1.0.
 
 HOW THE RUN ENDS -- read this before choosing an experiment:
   The run stops at whichever comes first: 50 iterations, 6 hours, or the organizers'
@@ -64,7 +66,7 @@ PIPELINE API -- import these, do not reimplement them:
   s.X        dict[str, int64 array] -- 37 categorical features, contiguous ids, 0 = unseen
   s.y        int8 array -- long_view, the scored label
   s.user_id  int64 array      s.video_id  int64 array
-  s.date     int32 array -- YYYYMMDD of each impression. train covers 13 days (20220409-0421),
+  s.date     int32 array -- YYYYMMDD of each impression. train covers {train_days} days ({train_lo}-{train_hi}),
              validation the 7 days after it, test the 10 days after that. The splits are
              defined by this column, and it is an ordinary array you may use however you like.
   s.aux      dict of other logged signals (is_click, is_like, play_time_ms, ...)
@@ -95,7 +97,8 @@ ENVIRONMENT:
         preds = m.predict(X, num_iteration=m.best_iteration)
     Set verbosity as `"verbose": -1` inside params.
   - HARD LIMIT: {timeout:.0f} seconds per script, killed at the limit and scored as a failure.
-    1.14M rows: vectorize in numpy/torch. A Python loop over rows, users or pairs will time out.
+    {train_rows_m:.2f}M rows: vectorize in numpy/torch. A Python loop over rows, users or pairs
+    will time out.
 
 WHAT ONE ITERATION IS: one script, executed once, reporting one METRICS line. Within that
 script you may do as much as fits the time budget -- one iteration is one script, not one model
@@ -242,12 +245,17 @@ class LLMProposer:
 
     def __init__(self, complete: CompleteFn, kb_papers: list[dict] | None = None,
                  max_history: int = MAX_HISTORY, timeout: float = 300.0,
-                 baseline: float = 0.6016):
+                 baseline: float = 0.6016, facts: dict | None = None):
         self.complete = complete
         self.kb_papers = kb_papers
         self.max_history = max_history
         self.timeout = timeout
         self.baseline = baseline
+        # dataset facts are measured by agent.facts, not written into the brief by hand, so
+        # pointing the harness at another KuaiRand variant does not feed the agent false premises
+        self.facts = facts if facts is not None else json.loads(
+            (Path(__file__).resolve().parent.parent / "research" / "facts_pure.json")
+            .read_text(encoding="utf-8"))
         self._seen_papers: set[str] = set()   # so retrieval widens instead of repeating
 
     def propose(self, *, phase: str = "improve", history=None, blacklist=None,
@@ -275,7 +283,7 @@ class LLMProposer:
         return None
 
     def _build_prompt(self, phase, history, blacklist, feedback, parent, context, note) -> str:
-        blocks = [TASK_BRIEF.format(timeout=self.timeout)]
+        blocks = [TASK_BRIEF.format(timeout=self.timeout, **self.facts)]
 
         if phase == "eda":
             blocks.append(_EDA_TASK.format(max_eda=MAX_EDA_CHARS))

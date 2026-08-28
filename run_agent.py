@@ -93,6 +93,8 @@ def main() -> None:
                     help="validation score the agent must reproduce; measure it with research.baseline_reference on a non-Pure variant")
     ap.add_argument("--baseline-test", type=float, default=BASELINE_TEST,
                     help="test score the reported delta is taken against")
+    ap.add_argument("--facts", default="research/facts_pure.json",
+                    help="dataset facts for the brief, produced by agent.facts")
     ap.add_argument("--no-memory", action="store_true", help="ignore this agent's prior runs")
     ap.add_argument("--dry-run", action="store_true", help="use a canned LLM, no network")
     args = ap.parse_args()
@@ -128,8 +130,11 @@ def main() -> None:
     if memory:
         print(f"cross-run memory: {len(memory.splitlines())} lines from this agent's prior runs")
 
+    facts = json.loads(Path(args.facts).read_text(encoding="utf-8"))
+    print(f"dataset: {facts.get('variant', '?')}  "
+          f"train {facts['train_rows']:,} / valid {facts['valid_rows']:,} / test {facts['test_rows']:,}")
     proposer = LLMProposer(complete, kb_papers=load_papers(), timeout=args.timeout,
-                           baseline=args.baseline_valid)
+                           baseline=args.baseline_valid, facts=facts)
     ledger = Ledger(run_dir / "ledger.jsonl")
     knowledge = Knowledge()
 
@@ -165,6 +170,7 @@ def main() -> None:
     t = ledger.totals()
     meta = {
         "model": getattr(complete, "model", "unknown"),
+        "dataset": facts.get("variant", "unknown"),
         "provider": ("dry-run" if args.dry_run
                      else __import__("os").environ.get("LLM_PROVIDER", "anthropic")),
         "stop_reason": r.stop_reason,
