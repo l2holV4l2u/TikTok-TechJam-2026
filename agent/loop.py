@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Protocol
 
 from .executor import RunResult, run_script
+from .ensemble import retain_or_blend
 from .ledger import Entry, Ledger
 from .recovery import RETRY, Recovery
 from .critic import review as critic_review
@@ -25,7 +26,7 @@ from .tree import Node, Tree
 METRIC_PREFIX = "METRICS "
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SIX_HOURS = 6 * 3600.0
-BASELINE_TOLERANCE = 0.01   # reproduce means "within noise of", not "exactly"
+BASELINE_TOLERANCE = 0.002  # organizer epsilon ~= 2.5 times Pure's reported 5-seed std
 MAX_BASELINE_ATTEMPTS = 4
 MAX_EDA_ATTEMPTS = 2
 
@@ -59,13 +60,13 @@ class Proposer(Protocol):
 
 
 class Evaluator(Protocol):
-    def evaluate(self, result: RunResult) -> dict | None: ...
+    def evaluate(self, result: RunResult, iter_out: Path | None = None) -> dict | None: ...
 
 
 class StdoutJsonEvaluator:
     """Reads the last `METRICS {...}` line the generated script printed."""
 
-    def evaluate(self, result: RunResult) -> dict | None:
+    def evaluate(self, result: RunResult, iter_out: Path | None = None) -> dict | None:
         for line in reversed(result.stdout.splitlines()):
             if line.startswith(METRIC_PREFIX):
                 try:
@@ -73,6 +74,83 @@ class StdoutJsonEvaluator:
                 except json.JSONDecodeError:
                     return None
         return None
+
+
+class SavedScoresEvaluator(StdoutJsonEvaluator):
+    """Recompute metrics from saved predictions instead of trusting generated stdout.
+
+    The generated script is part of the search space, not part of the trusted evaluator.  Its
+    METRICS line is checked for drift, while the arrays retained here are also used for
+    automatic diagnosis and incumbent reuse by the controller.
+    """
+
+    def __init__(self, tolerance: float = 1e-9, require_test: bool = True):
+        self.tolerance = tolerance
+        self.require_test = require_test
+        self.last_error: str | None = None
+        self.last_scores = None
+        self.last_test_scores = None
+
+    @staticmethod
+    def _load_scores(path: Path, expected: int, name: str):
+        import numpy as np
+
+        if not path.exists():
+            raise ValueError(f"Missing {name}. Save it under $ITER_OUT before METRICS.")
+        scores = np.asarray(np.load(path, allow_pickle=False), dtype=np.float64)
+        if scores.ndim != 1:
+            raise ValueError(f"{name} must be 1-D, got shape {scores.shape}.")
+        if len(scores) != expected:
+            raise ValueError(f"{name} has {len(scores)} rows; expected {expected}.")
+        if not np.isfinite(scores).all():
+            raise ValueError(f"{name} contains NaN or Inf.")
+        return scores
+
+    def evaluate(self, result: RunResult, iter_out: Path | None = None) -> dict | None:
+        import math
+
+        self.last_error = None
+        self.last_scores = self.last_test_scores = None
+        reported = super().evaluate(result, iter_out)
+        if reported is None:
+            self.last_error = "The METRICS line is missing or is not valid JSON."
+            return None
+        if iter_out is None:
+            self.last_error = "The harness did not provide the iteration output directory."
+            return None
+
+        try:
+            from pipeline.data import load
+            from pipeline.evaluate import evaluate
+
+            valid = load("valid")
+            self.last_scores = self._load_scores(
+                Path(iter_out) / "scores_valid.npy", len(valid.y), "scores_valid.npy")
+            if self.require_test:
+                test = load("test")
+                self.last_test_scores = self._load_scores(
+                    Path(iter_out) / "scores_test.npy", len(test.y), "scores_test.npy")
+            verified = evaluate(valid.user_id, valid.y, self.last_scores)
+        except (OSError, ValueError, TypeError) as exc:
+            self.last_error = str(exc)
+            self.last_scores = self.last_test_scores = None
+            return None
+
+        for key in ("primary", "gauc", "ndcg@5"):
+            claimed = reported.get(key)
+            actual = verified[key]
+            if (not isinstance(claimed, (int, float)) or not math.isfinite(float(claimed))
+                    or abs(float(claimed) - actual) > self.tolerance):
+                self.last_error = (f"Self-reported {key}={claimed!r} does not match the trusted "
+                                   f"evaluator's {actual:.12g}. Save and evaluate the same "
+                                   "validation score array.")
+                self.last_scores = self.last_test_scores = None
+                return None
+        if isinstance(reported.get("gpu_seconds"), (int, float)):
+            verified["gpu_seconds"] = float(reported["gpu_seconds"])
+        if reported.get("device") in {"cpu", "cuda"}:
+            verified["device"] = reported["device"]
+        return verified
 
 
 CANDIDATE_PREFIX = "CANDIDATES "
@@ -121,6 +199,38 @@ def _failure_text(res: RunResult, timeout: float, primary: str) -> str:
     return f"The script ran but printed no `{primary}` in a METRICS line."
 
 
+def _publish_incumbent(evaluator, artifacts: Path, run_dir: Path, iter_id: int,
+                       score: float) -> str:
+    """Persist trusted predictions and derive the diagnosis the proposer rarely requests.
+
+    Concrete, fixed filenames turn RUN_ARTIFACTS from an optional convention into a usable
+    controller guarantee: the next iteration can blend against the incumbent without
+    retraining it.  Only arrays verified by SavedScoresEvaluator reach this path.
+    """
+    import numpy as np
+
+    valid_scores = getattr(evaluator, "last_scores", None)
+    test_scores = getattr(evaluator, "last_test_scores", None)
+    if valid_scores is None or test_scores is None:
+        return ""
+    np.save(artifacts / "incumbent_valid_scores.npy", valid_scores)
+    np.save(artifacts / "incumbent_test_scores.npy", test_scores)
+    (artifacts / "incumbent.json").write_text(json.dumps({
+        "iter_id": iter_id, "valid_primary": score,
+        "valid_scores": "incumbent_valid_scores.npy",
+        "test_scores": "incumbent_test_scores.npy",
+    }, indent=2), encoding="utf-8")
+
+    from pipeline.data import load
+    from .diagnose import segment_report
+    valid = load("valid")
+    diagnosis = segment_report(valid.user_id, valid.y, valid_scores)
+    with (run_dir / "diagnostics.jsonl").open("a", encoding="utf-8") as f:
+        f.write(json.dumps({"iter_id": iter_id, "valid_primary": score,
+                            "report": diagnosis}) + "\n")
+    return diagnosis
+
+
 def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
              workdir, primary: str = "primary", epsilon: float = 0.002,
              patience: int = 3, max_iters: int = 50, timeout: float = 300,
@@ -128,6 +238,7 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
              tree: Tree | None = None, recovery: Recovery | None = None,
              knowledge: Knowledge | None = None, revise_fn=None,
              memory: str = "", baseline: float = 0.6016, ceiling: float | None = None,
+             baseline_tolerance: float = BASELINE_TOLERANCE,
              max_instant_failures: int = 5, max_proposer_errors: int = 6) -> LoopResult:
     tree = tree if tree is not None else Tree(epsilon=epsilon)
     recovery = recovery or Recovery()
@@ -139,6 +250,7 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
     spent = 0.0
     stale = 0
     best = float("-inf")
+    selection_best = float("-inf")
     feedback: str | None = None
     knowledge = knowledge if knowledge is not None else Knowledge()
     out.knowledge = knowledge
@@ -221,7 +333,11 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         artifacts.mkdir(parents=True, exist_ok=True)
         res = run_script(script, timeout=timeout, cwd=None, pythonpath=_PROJECT_ROOT,
                          extra_env={"ITER_OUT": str(iter_out),
-                                    "RUN_ARTIFACTS": str(artifacts)})
+                                    "RUN_ARTIFACTS": str(artifacts),
+                                    # Generated code never needs hidden-test labels. The loader
+                                    # still exposes len/shape for allocation, but array access
+                                    # fails instead of silently enabling test selection.
+                                    "AGENT_HIDE_TEST_LABELS": "1"})
         spent += res.seconds
         parent_id = parent.iter_id if parent is not None else None
         findings = parse_findings(res.stdout)
@@ -242,12 +358,12 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
                                     p.tokens_in, p.tokens_out, "failed", feedback[:2000], "eda"))
             continue
 
-        metrics = evaluator.evaluate(res) if res.ok else None
+        metrics = evaluator.evaluate(res, iter_out) if res.ok else None
         scored = metrics is not None and primary in metrics
 
         # ---- a run that produced nothing at all: retry, or declare the box broken
         if not scored:
-            why = _failure_text(res, timeout, primary)
+            why = getattr(evaluator, "last_error", None) or _failure_text(res, timeout, primary)
             action, feedback = recovery.on_failure(p.hypothesis, why)
             if phase == "baseline":
                 baseline_attempts += 1
@@ -270,19 +386,15 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
             continue
 
         instant_failures = 0
+        if phase == "improve":
+            metrics = retain_or_blend(metrics, evaluator, artifacts, workdir.parent, i)
         score = metrics[primary]
-        recovery.on_success(p.hypothesis)
-
         cands = parse_candidates(res.stdout)
-        if cands:
-            out.candidates_evaluated += len(cands)
-            with (workdir.parent / "candidates.jsonl").open("a", encoding="utf-8") as f:
-                f.write(json.dumps({"iter_id": i, "phase": phase, "candidates": cands}) + "\n")
 
         # ---- baseline reproduction is checked against the organizers' published number
         if phase == "baseline":
             baseline_attempts += 1
-            if abs(score - baseline) <= BASELINE_TOLERANCE:
+            if abs(score - baseline) <= baseline_tolerance:
                 out.baseline_primary = score
                 feedback = None
                 status = "ok"
@@ -298,16 +410,19 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
                                "is long_view.")
                             + " Fix the pipeline and reproduce it again.")
                 status = "reverted"
-                if baseline_attempts >= MAX_BASELINE_ATTEMPTS:
-                    # out of attempts: take the working pipeline as the search root anyway,
-                    # rather than stalling the whole run on an exact match
-                    out.baseline_primary = score
-                    feedback = None
             ledger.append(Entry(i, None, 0, p.hypothesis, p.code, metrics, res.seconds,
                                 p.tokens_in, p.tokens_out, status, feedback, "baseline"))
             if out.baseline_primary is not None:
                 tree.add(Node(i, None, p.hypothesis, p.code, score))
                 best, stale = score, 0
+                if status == "ok" and score > selection_best:
+                    selection_best = score
+                    context["diagnosis"] = _publish_incumbent(
+                        evaluator, artifacts, workdir.parent, i, score)
+                    context["incumbent_ready"] = getattr(evaluator, "last_scores", None) is not None
+            if out.baseline_primary is None and baseline_attempts >= MAX_BASELINE_ATTEMPTS:
+                _revise(revise_fn, ledger, out, context, knowledge, findings, stale, patience)
+                return finish("baseline_not_reproduced")
             _revise(revise_fn, ledger, out, context, knowledge, findings, stale, patience)
             continue
 
@@ -315,20 +430,31 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         # Arbor (arXiv:2606.12563) ablates its critic and reports the largest drop of any
         # component. Ours had none for improve iterations: the leakage warning fires only during
         # baseline reproduction, so an iteration that scored 0.95 by reading the label would have
-        # been accepted as the leader. The critic flags rather than rejects -- a breakthrough and
-        # a leak look alike from outside, and discarding the first is worse.
-        flags = critic_review(p.code, score, best, ceiling)
+        # been accepted as the leader. Rejection is recoverable: the proposer receives the exact
+        # reason and may re-run a genuine breakthrough without the unsafe access pattern.
+        # Judge the generated candidate itself, before a safe incumbent blend can damp an
+        # implausible or leaky raw score enough to hide it from the integrity thresholds.
+        critic_score = metrics.get("raw_candidate_primary", score)
+        flags = critic_review(p.code, critic_score, best, ceiling)
         if flags:
             feedback = ("This result was not accepted as-is. " + " ".join(flags)
                         + " Re-run the check yourself and either show the result survives it or "
                           "propose something else.")
             ledger.append(Entry(i, parent_id, 0, p.hypothesis, p.code, metrics, res.seconds,
-                                p.tokens_in, p.tokens_out, "reverted", feedback, "improve"))
-            tree.add(Node(i, parent_id, p.hypothesis, p.code, score))
-            tree.record_child(parent_id, score, res.seconds)
+                                p.tokens_in, p.tokens_out, "rejected", feedback, "improve"))
+            # A rejected score is neither a search node nor a submission candidate. Count the
+            # attempt against its parent so integrity failures cannot create an immortal branch.
+            tree.record_child(parent_id, float("-inf"), res.seconds)
             stale += 1
-            _revise(revise_fn, ledger, out, context, knowledge, findings, stale, patience)
+            _revise(revise_fn, ledger, out, context, knowledge, "", stale, patience)
             continue
+
+        recovery.on_success(p.hypothesis)
+
+        if cands:
+            out.candidates_evaluated += len(cands)
+            with (workdir.parent / "candidates.jsonl").open("a", encoding="utf-8") as f:
+                f.write(json.dumps({"iter_id": i, "phase": phase, "candidates": cands}) + "\n")
 
         improved = score > best + epsilon
         ledger.append(Entry(i, parent_id, 0, p.hypothesis, p.code, metrics, res.seconds,
@@ -338,9 +464,16 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         tree.add(Node(i, parent_id, p.hypothesis, p.code, score))
         tree.record_child(parent_id, score, res.seconds)
 
+        if score > selection_best:
+            selection_best = score
+            context["diagnosis"] = _publish_incumbent(
+                evaluator, artifacts, workdir.parent, i, score)
+            context["incumbent_ready"] = getattr(evaluator, "last_scores", None) is not None
+
         # retire an idea only when it is clearly worse; a result that ties or sets a record is
         # not evidence the idea is a dead end
-        if score < best - 2 * epsilon:
+        idea_score = metrics.get("raw_candidate_primary", score)
+        if idea_score < best - 2 * epsilon:
             recovery.on_underperform(p.hypothesis)
 
         if improved:

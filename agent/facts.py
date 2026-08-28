@@ -53,10 +53,13 @@ def measure(baseline: dict, seed: int = 0) -> dict:
     f["baseline_source"] = baseline.get("source", "our reproduction of the organizers' recipe")
     std = baseline.get("seed_std")
     f["baseline_noise_note"] = f"  (mean of 5 seeds, std {std})" if std else ""
-    from pipeline.data import NUMERIC_FEATURES
+    from pipeline.data import FEATURE_CARDINALITIES, NUMERIC_FEATURES
     present = sorted(tr.num) if tr.num else []
     f["n_numeric"] = len(present)
     f["numeric_names"] = ", ".join(present) if present else "(none cached)"
+    categorical = sorted(FEATURE_CARDINALITIES)
+    f["n_categorical"] = len(categorical)
+    f["categorical_names"] = ", ".join(categorical)
     f["train_rows_m"] = f["train_rows"] / 1e6
     return f
 

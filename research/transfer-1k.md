@@ -147,5 +147,14 @@ collapse to the same tie-broken ordering. Screening the four raw user counts and
 useless, evidence the screen cannot see them. They reach the model only through interactions
 with item-side features, which is what the FM is for.
 
-The screen was therefore used only where it is valid: `video_features_statistic` (item-level,
-three columns promoted on it) and the video metadata columns (item-level, all rejected on it).
+The screen was therefore used only for video metadata columns (item-level, all rejected on it).
+An earlier analysis also screened `video_features_statistic`, but those columns are now excluded:
+they average outcomes over the full evaluation month and violate the fixed chronological split.
+
+Every remaining raw column is accounted for. Standard-log identifiers, context, duration and
+timestamps are exposed; post-impression outcomes are targets only. User ranges, one-hot fields
+and raw counts are exposed. Basic video author/type/upload/music/tag/duration fields are exposed;
+upload date, aspect ratio and visibility measured at the random-ranking floor. `is_rand` is
+constant in the standard log, and minute-of-hour is constant within each user's impression
+list. Further valid data work therefore has to derive train-only features rather than expose
+another raw field; `pipeline.history` now supplies that mechanism for item and author histories.

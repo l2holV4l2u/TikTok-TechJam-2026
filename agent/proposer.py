@@ -12,6 +12,7 @@ import re
 from pathlib import Path
 from typing import Callable
 
+from .hardware import prompt_hardware_note, resolve_device
 from .kb import index, retrieve
 from .loop import Proposal
 
@@ -63,7 +64,8 @@ HOW THE RUN ENDS -- read this before choosing an experiment:
 PIPELINE API -- import these, do not reimplement them:
   from pipeline.data import load, FEATURE_CARDINALITIES
   s = load("train")     # or "valid" or "test"
-  s.X        dict[str, int64 array] -- 37 categorical features, contiguous ids, 0 = unseen
+  s.X        dict[str, int64 array] -- {n_categorical} categorical features, contiguous ids,
+             0 = unseen. Names, because guessing one costs an iteration: {categorical_names}
   s.y        int8 array -- long_view, the scored label
   s.user_id  int64 array      s.video_id  int64 array
   s.date     int32 array -- YYYYMMDD of each impression. train covers {train_days} days ({train_lo}-{train_hi}),
@@ -76,14 +78,15 @@ PIPELINE API -- import these, do not reimplement them:
              same feed batch can share a timestamp, so ties are ordered by row position.
   s.num      dict[str, float32 array] -- {n_numeric} CONTINUOUS features, NaN where unknown.
              s.X holds only categorical ids, so these are the numeric quantities: the raw video
-             length, the user's actual follower/following/friend counts and account age, and
-             per-video historical aggregates from the organizers' video_features_statistic file
-             (show/play/complete/long-time-play counts, play_progress, like/comment/follow/
-             share/collect/download counts, and `counts`, the number of daily records each
-             aggregate averages over). They are attributes of the user and the video, known
-             before the impression is served -- unlike s.aux. Scale varies by orders of
-             magnitude across them and NaN means absent, so handle both.
+             length and the user's actual follower/following/friend counts and account age.
+             Scale varies by orders of magnitude and NaN means absent, so handle both.
              Names: {numeric_names}
+  from pipeline.history import historical_features
+  historical_features(split_name, key="video_id" or "author_id") -> dict[str, float32 array]
+             train-only counts and smoothed long_view/feedback histories for the entity. Train
+             rows are leave-one-out; valid/test rows use the full train table. This is the safe
+             replacement for the dataset's full-month video statistics, which overlap the
+             evaluation window and are forbidden.
   s.aux      dict of other logged signals (is_click, is_like, play_time_ms, ...)
   FEATURE_CARDINALITIES[name] -> int, the number of ids for that field
   from pipeline.evaluate import evaluate
@@ -108,8 +111,9 @@ RULES:
   - No external datasets, and no pretrained weights trained on this benchmark's test labels.
 
 ENVIRONMENT:
-  - CPU only. torch is 2.12.0+cpu -- .cuda(), .to('cuda') and AMP all fail. numpy, torch,
-    lightgbm 4.7 and scipy are installed.
+  {hardware_note}
+  - Read os.environ["AGENT_DEVICE"] and select that device explicitly. A CPU run must remain
+    reproducible even on a CUDA host. numpy, torch, lightgbm 4.7 and scipy are installed.
   - lightgbm 4.7 removed `early_stopping_rounds` as a keyword everywhere; it raises TypeError.
     The supported form is a callback:
         m = lgb.train(params, dset, num_boost_round=600, valid_sets=[dvalid],
@@ -125,8 +129,18 @@ script you may do as much as fits the time budget -- one iteration is one script
 and not one idea. The METRICS line reports whatever you finally choose to evaluate.
 
 OUTPUT CONTRACT -- the harness reads stdout:
+  - Save the exact validation scores used for METRICS. The harness independently re-runs the
+    pinned evaluator; self-reported metrics are never trusted:
+
+        out = os.environ.get("ITER_OUT")
+        if out:
+            np.save(os.path.join(out, "scores_valid.npy"),
+                    np.asarray(valid_scores, dtype=np.float64))
+
   - The FINAL stdout line must be exactly:
-    METRICS {{"primary": <float>, "gauc": <float>, "ndcg@5": <float>, "gpu_seconds": <float>}}
+    METRICS {{"primary": <float>, "gauc": <float>, "ndcg@5": <float>,
+              "gpu_seconds": <float>, "device": "<cpu|cuda>"}}
+    `gpu_seconds` is CUDA execution time when device=cuda and script wall time otherwise.
   - The script must ALSO score the test split and save it, so that your best iteration can be
     submitted without a human rebuilding anything. After evaluating validation:
 
@@ -273,9 +287,14 @@ class LLMProposer:
         self.baseline = baseline
         # dataset facts are measured by agent.facts, not written into the brief by hand, so
         # pointing the harness at another KuaiRand variant does not feed the agent false premises
-        self.facts = facts if facts is not None else json.loads(
+        self.facts = dict(facts) if facts is not None else json.loads(
             (Path(__file__).resolve().parent.parent / "research" / "facts_pure.json")
             .read_text(encoding="utf-8"))
+        from pipeline.data import FEATURE_CARDINALITIES
+        categorical = sorted(FEATURE_CARDINALITIES)
+        self.facts.setdefault("n_categorical", len(categorical))
+        self.facts.setdefault("categorical_names", ", ".join(categorical))
+        self.facts.setdefault("hardware_note", prompt_hardware_note(resolve_device("auto")))
         self._seen_papers: set[str] = set()   # so retrieval widens instead of repeating
 
     def propose(self, *, phase: str = "improve", history=None, blacklist=None,
@@ -320,6 +339,17 @@ class LLMProposer:
             mem = context.get("memory")
             if mem:
                 blocks.append(mem)
+            diagnosis = context.get("diagnosis")
+            if diagnosis:
+                blocks.append("WHERE THE TRUSTED INCUMBENT LOSES ON VALIDATION (computed by the "
+                              "controller from its saved predictions):\n" + diagnosis)
+            if context.get("incumbent_ready"):
+                blocks.append(
+                    "REUSABLE TRUSTED INCUMBENT: RUN_ARTIFACTS contains "
+                    "incumbent_valid_scores.npy and incumbent_test_scores.npy plus "
+                    "incumbent.json. You may load and blend these exact predictions instead "
+                    "of retraining the incumbent; choose every blend weight on validation "
+                    "only and apply the same fixed weight to test.")
             blocks.append("EXPERIMENTS THIS RUN (oldest first):\n"
                           f"{_summarize_history(history, self.max_history)}")
             know = context.get("knowledge") or ""

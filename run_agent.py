@@ -4,14 +4,16 @@ python run_agent.py --run-dir runs/r27 --iters 50
 """
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
 
+from agent.hardware import prompt_hardware_note, resolve_device
 from agent.kb import load_papers
 from agent.ledger import Ledger
 from agent.llm import FakeComplete, RecordingComplete, ReplayComplete, make_complete
-from agent.loop import StdoutJsonEvaluator, run_loop
+from agent.loop import SavedScoresEvaluator, run_loop
 from agent.memory import distil
 from agent.proposer import LLMProposer
 from agent.recovery import Recovery
@@ -33,11 +35,26 @@ def _load_probe() -> list[str]:
     if s.time_ms is not None:
         names.append("s.time_ms")
     names += [f"s.num[{k}]" for k in (s.num or {})]
+    names.append("pipeline.history.historical_features")
     return names
 
 
 BASELINE_VALID = 0.6016
 BASELINE_TEST = 0.5946
+
+
+def _dry_run_baseline() -> float:
+    """Use the canned item's real validation score so dry-run tests plumbing, not the FM."""
+    import numpy as np
+    from pipeline.data import load
+    from pipeline.evaluate import evaluate
+
+    train, valid = load("train"), load("valid")
+    positives = np.bincount(train.X["video_id"], weights=np.asarray(train.y, dtype=float))
+    counts = np.maximum(np.bincount(train.X["video_id"]), 1)
+    rates = positives / counts
+    video = np.minimum(valid.X["video_id"], len(rates) - 1)
+    return float(evaluate(valid.user_id, valid.y, rates[video])["primary"])
 
 
 def _write_submission(run_dir: Path, ledger: Ledger, baseline_test: float) -> dict:
@@ -61,9 +78,12 @@ def _write_submission(run_dir: Path, ledger: Ledger, baseline_test: float) -> di
 
     from pipeline.data import load
     te = load("test")
-    scores = np.load(path)
-    if len(scores) != len(te.y):
-        print(f"score length {len(scores)} != test rows {len(te.y)}; refusing to write")
+    scores = np.asarray(np.load(path, allow_pickle=False), dtype=np.float64)
+    if scores.ndim != 1 or len(scores) != len(te.y):
+        print(f"score shape {scores.shape} != ({len(te.y)},); refusing to write")
+        return {}
+    if not np.isfinite(scores).all():
+        print("test scores contain NaN or Inf; refusing to write")
         return {}
 
     out = run_dir / "submission.csv"
@@ -109,6 +129,8 @@ def main() -> None:
                     help="validation score the agent must reproduce; measure it with research.baseline_reference on a non-Pure variant")
     ap.add_argument("--baseline-test", type=float, default=BASELINE_TEST,
                     help="test score the reported delta is taken against")
+    ap.add_argument("--baseline-tolerance", type=float, default=0.002,
+                    help="maximum absolute baseline reproduction error")
     ap.add_argument("--revision-model", default=None,
                     help="model for belief revision. Rate limits are per-model, and revision is "
                          "~37%% of a run's requests, so pointing it at a second model both halves "
@@ -117,11 +139,27 @@ def main() -> None:
                     help="dataset facts for the brief, produced by agent.facts")
     ap.add_argument("--no-memory", action="store_true", help="ignore this agent's prior runs")
     ap.add_argument("--dry-run", action="store_true", help="use a canned LLM, no network")
+    ap.add_argument("--device", choices=("auto", "cpu", "cuda"), default="cpu",
+                    help="execution device exposed to generated scripts (default: cpu)")
     ap.add_argument("--replay", default=None,
                     help="replay a previous run's llm_calls.jsonl: no network, no cost. Tests loop/parsing/reporting changes, NOT prompt changes")
     ap.add_argument("--replay-strict", action="store_true",
                     help="with --replay, fail if a prompt differs from the recording")
     args = ap.parse_args()
+
+    try:
+        hardware = resolve_device("cpu" if args.dry_run else args.device)
+    except RuntimeError as exc:
+        ap.error(str(exc))
+    os.environ["AGENT_DEVICE"] = hardware["device"]
+    print("execution device: " + (
+        f"cuda ({hardware['gpu_name']}, {hardware['gpu_memory_gb']:.2f} GiB)"
+        if hardware["device"] == "cuda" else "cpu"
+    ))
+
+    if args.dry_run:
+        args.baseline_valid = _dry_run_baseline()
+        print(f"dry-run control baseline: {args.baseline_valid:.4f} (item popularity)")
 
     run_dir = Path(args.run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -139,9 +177,16 @@ def main() -> None:
             "cnt=np.maximum(np.bincount(tr.X['video_id']),1)\n"
             "rate=pop/cnt\n"
             "vid=np.minimum(va.X['video_id'], len(rate)-1)\n"
-            "m=evaluate(va.user_id, va.y, rate[vid])\n"
+            "valid_scores=rate[vid]\n"
+            "m=evaluate(va.user_id, va.y, valid_scores)\n"
+            "import os\n"
+            "out=os.environ.get('ITER_OUT')\n"
+            "if out:\n"
+            " np.save(os.path.join(out,'scores_valid.npy'),valid_scores.astype(float))\n"
+            " te=load('test'); tvid=np.minimum(te.X['video_id'],len(rate)-1)\n"
+            " np.save(os.path.join(out,'scores_test.npy'),rate[tvid].astype(float))\n"
             "print('METRICS', json.dumps({'primary':m['primary'],'gauc':m['gauc'],"
-            "'ndcg@5':m['ndcg@5'],'gpu_seconds':time.perf_counter()-t0}))\n"
+            "'ndcg@5':m['ndcg@5'],'gpu_seconds':time.perf_counter()-t0,'device':'cpu'}))\n"
             "```", 900, 300)])
     elif args.replay:
         complete = ReplayComplete(args.replay, strict=args.replay_strict)
@@ -176,6 +221,7 @@ def main() -> None:
         print(f"cross-run memory: {len(memory.splitlines())} lines from this agent's prior runs")
 
     facts = json.loads(Path(args.facts).read_text(encoding="utf-8"))
+    facts["hardware_note"] = prompt_hardware_note(hardware)
     print(f"dataset: {facts.get('variant', '?')}  "
           f"train {facts['train_rows']:,} / valid {facts['valid_rows']:,} / test {facts['test_rows']:,}")
     proposer = LLMProposer(complete, kb_papers=load_papers(), timeout=args.timeout,
@@ -185,7 +231,7 @@ def main() -> None:
 
     t0 = time.perf_counter()
     r = run_loop(
-        proposer, StdoutJsonEvaluator(), ledger,
+        proposer, SavedScoresEvaluator(), ledger,
         workdir=run_dir / "scripts",
         primary="primary",
         epsilon=args.epsilon,
@@ -200,6 +246,7 @@ def main() -> None:
             revise_complete, entries, last, findings, stale, patience),
         memory=memory,
         baseline=args.baseline_valid,
+        baseline_tolerance=args.baseline_tolerance,
         # the perfect-ranking ceiling, measured by agent.facts. The critic needs it to
         # tell an extraordinary result from an impossible one.
         ceiling=facts.get("ceiling"),
@@ -220,6 +267,7 @@ def main() -> None:
         "model": getattr(complete, "model", "unknown"),
         "dataset": facts.get("variant", "unknown"),
         "api_surface": api_surface,
+        "data_contract": "train-only-v1",
         "provider": ("replay" if args.replay else "dry-run" if args.dry_run
                      else __import__("os").environ.get("LLM_PROVIDER", "anthropic")),
         "stop_reason": r.stop_reason,
@@ -228,7 +276,10 @@ def main() -> None:
         "wall_clock_s": wall,
         "wall_clock_h": wall / 3600.0,
         "script_seconds": r.script_seconds,
-        "gpu_hours": 0.0,  # CPU-only benchmark; reported because the deliverables ask for it
+        # Conservative allocation-time upper bound. A CUDA script may spend some of its wall
+        # time in CPU preprocessing, but this never understates allocated GPU time.
+        "gpu_hours": r.script_seconds / 3600.0 if hardware["device"] == "cuda" else 0.0,
+        "hardware": hardware,
         # the ledger counts proposer calls; r.llm_tokens_* also include knowledge revision
         "proposer_tokens_in": t["tokens_in"],
         "proposer_tokens_out": t["tokens_out"],
@@ -241,7 +292,8 @@ def main() -> None:
         "baseline_reproduced": r.baseline_primary,
         "baseline_target": args.baseline_valid,
         "manual_interventions": 0,
-        "failures": sum(1 for e in entries if e.status in ("failed", "blacklisted")),
+        "failures": sum(1 for e in entries if e.status in ("failed", "blacklisted", "rejected")),
+        "integrity_rejections": sum(1 for e in entries if e.status == "rejected"),
         "submission": sub,
     }
     (run_dir / "run_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")

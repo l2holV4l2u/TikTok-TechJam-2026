@@ -17,10 +17,10 @@ from pathlib import Path
 
 import numpy as np
 
-from pipeline.data import (NUMERIC_FEATURES, NUMERIC_LOG, NUMERIC_USER, NUMERIC_VIDEO_STAT,
+from pipeline.data import (NUMERIC_LOG, NUMERIC_USER,
                            _EXPECTED_ROWS, _TEST_RANGE, _TRAIN_RANGE, _VALID_RANGE,
-                           _TRAIN_LOG, _VALID_TEST_LOG, _USER_FEATURES_FILE, _VIDEO_STAT_FILE,
-                           _cache_root, _iter_log_rows, _load_user_features, _load_video_stats)
+                           _TRAIN_LOG, _VALID_TEST_LOG, _USER_FEATURES_FILE,
+                           _cache_root, _iter_log_rows, _load_user_features)
 
 NAN = float("nan")
 
@@ -32,11 +32,8 @@ def main() -> None:
     raw, cache = Path(args.raw), _cache_root()
 
     users = _load_user_features(raw / _USER_FEATURES_FILE)
-    stats = _load_video_stats(raw / _VIDEO_STAT_FILE)
-    print(f"user records {len(users):,} | videos with statistics {len(stats):,}"
-          f"{' -- statistics file absent, those columns skipped' if not stats else ''}")
-    names = NUMERIC_LOG + NUMERIC_USER + (NUMERIC_VIDEO_STAT if stats else ())
-    empty = tuple([NAN] * len(NUMERIC_VIDEO_STAT))
+    print(f"user records {len(users):,} | full-month video statistics deliberately excluded")
+    names = NUMERIC_LOG + NUMERIC_USER
 
     for split, log, rng in (("train", _TRAIN_LOG, _TRAIN_RANGE),
                             ("valid", _VALID_TEST_LOG, _VALID_RANGE),
@@ -61,10 +58,6 @@ def main() -> None:
                     num[f][i] = float(u.get(f, ""))
                 except ValueError:
                     num[f][i] = NAN
-            if stats:
-                st = stats.get(vid, empty)
-                for j, f in enumerate(NUMERIC_VIDEO_STAT):
-                    num[f][i] = st[j]
             i += 1
         if i != n:
             raise ValueError(f"{split}: wrote {i} rows, cache holds {n} -- row order diverged")

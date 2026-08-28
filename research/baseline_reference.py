@@ -46,11 +46,14 @@ def main():
     p.add_argument("--k", type=int, default=16)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", default=None, help="write the measured reference to this JSON path")
+    # Reference scores must not move when the active environment changes. CPU also measured
+    # slightly faster for this embedding-heavy baseline on the available RTX 4050.
+    p.add_argument("--device", default="cpu", choices=["cpu", "cuda"])
     args = p.parse_args()
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device(args.device)
     t0 = time.perf_counter()
 
     tr, va, te = load("train"), load("valid"), load("test")
