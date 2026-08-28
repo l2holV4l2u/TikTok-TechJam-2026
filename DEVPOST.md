@@ -557,6 +557,13 @@ counting only the scripts written in runs where each capability existed:
 | `RUN_ARTIFACTS` — cache between iterations | process | 1.0% (4/387) |
 | `evaluate(per_user=True)` — segment diagnosis | process | 0.8% (3/387) |
 
+The two top rows need a caveat. `s.num` and `s.time_ms` were measured in runs that also carried
+the supplied video statistics, later withdrawn as overlapping the evaluation window — so the
+63% figure describes a 56-field channel that no longer exists; the eligible channel is five
+fields. What the numbers support is the **behavioural** claim, which does not depend on a
+capability being eligible: the agent reaches for new data and largely ignores new protocol. The
+exact adoption rate of the withdrawn channel is not a result we stand behind.
+
 **Give the agent new data and it uses it; give it new process and it mostly does not.** Every
 data channel we exposed was picked up within an iteration or two of becoming available. Every optional protocol we invented
 sat near the floor, including two we were confident about: a per-user error breakdown it asked
