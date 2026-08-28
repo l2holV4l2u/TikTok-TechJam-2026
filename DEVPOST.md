@@ -138,6 +138,14 @@ later evidence can demote an earlier conclusion. We built this because our own l
 failure it prevents — one run recommended the same next experiment four times running, because
 an append-only reflection can never be overturned.
 
+How often revision actually fires is worth stating rather than implying: across 8 runs the agent
+formed **45 claims and revised 4** (3 invalidated, 1 qualified). That is not a weak reflect
+stage — it is the convergence rule. At a median of **4 improve iterations per run**, a claim
+formed at iteration #2 gets one or two chances to be contradicted before the run ends. The
+revisions that do happen are specific and evidence-cited, e.g. *"does not improve the k=16 FM;
+it scored 0.5998, which is 0.0026 below the unweighted reproduction and outside the stated
+seed-noise threshold"*, and one narrows a claim rather than deleting it.
+
 Two smaller consequences of the same reading:
 
 - **One iteration is one script, not one model.** A script may build and compare several
