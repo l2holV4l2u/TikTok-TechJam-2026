@@ -152,6 +152,14 @@ Two smaller consequences of the same reading:
   candidates within its time budget and report what it compared (`CANDIDATES`). The convergence
   rule charges an iteration per experiment, so searching *inside* an iteration buys comparisons
   the iteration budget cannot.
+
+  We checked whether searching harder inside an iteration actually pays, and it does not:
+  across nine Pure runs the candidate count ranges 0-96, and runs above the mean average 0.6046
+  best-validation against 0.6041 below it -- a 0.0005 gap on n=3 against n=6, inside the noise
+  floor. The run that compared the most candidates (96) scored *worst* of the recent set
+  (0.6036); the best run (0.6059) compared ten. The mechanism gives the agent room the
+  iteration budget denies it, and it is used, but we have no evidence it drives the result and
+  do not claim it does.
 - **Epistemic evidence rides along.** A script may print `FINDINGS` lines — a distribution, a
   correlation, an assumption checked — which feed the belief set whatever the score was. Iris
   scores diagnostic actions separately; our convergence rule cannot afford a purely diagnostic
