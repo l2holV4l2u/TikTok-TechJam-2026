@@ -369,5 +369,22 @@ def test_hidden_test_labels_explain_themselves_on_every_access():
             raise AssertionError(f"{name} was not blocked")
 
 
+def test_a_missing_feature_name_says_what_is_available():
+    """Generated scripts invent plausible field names; a bare KeyError teaches the retry
+    nothing. Four iterations across r43 and r46 died on duration_range, fans_user_num and
+    onehot_feat9. The error now names the near match and the full field list.
+    """
+    s = load("valid")
+    assert len(s) == len(s.y), "len(split) must be the row count"
+    try:
+        s.X["duration_range"]
+        raise AssertionError("a missing feature must raise")
+    except KeyError as exc:
+        msg = str(exc)
+        assert "duration_bucket" in msg, msg
+        assert "Available" in msg, msg
+    assert s.X["duration_bucket"] is not None, "a real field still works"
+
+
 if __name__ == "__main__":
     main()

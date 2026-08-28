@@ -127,6 +127,23 @@ if _VARIANT == "1k":
     FEATURE_CARDINALITIES["author_id"] = 150_000
 
 
+class Fields(dict):
+    """A feature dict whose KeyError says what IS available.
+
+    Generated scripts invent plausible field names -- duration_range, fans_user_num,
+    onehot_feat9 -- and a bare KeyError gives the retry nothing to correct against. Four
+    iterations across r43/r46 were lost this way.
+    """
+
+    def __missing__(self, key):
+        import difflib
+        near = difflib.get_close_matches(str(key), list(self), n=3)
+        hint = f" Did you mean: {', '.join(near)}?" if near else ""
+        raise KeyError(
+            f"no feature {key!r}.{hint} Available ({len(self)}): "
+            + ", ".join(sorted(self)))
+
+
 @dataclass
 class Split:
     user_id: np.ndarray               # int64, (n,) raw ids, for GAUC grouping and submission
@@ -137,6 +154,10 @@ class Split:
     date: np.ndarray | None = None    # int32 (n,), YYYYMMDD of the impression
     time_ms: np.ndarray | None = None # int64 (n,), epoch ms of the impression (pre-click, safe)
     num: dict[str, np.ndarray] | None = None  # float32 (n,), continuous features, NaN = unknown
+
+    def __len__(self) -> int:
+        """Rows. Generated scripts reach for len(split) before len(split.y)."""
+        return len(self.user_id)
 
 
 class HiddenTestLabels:
@@ -254,7 +275,7 @@ def load(split: str) -> Split:
         if path.exists():
             num[f] = np.load(path, mmap_mode="r")
     num = num or None
-    return Split(user_id=user_id, video_id=video_id, X=X, y=y, aux=aux, date=date,
+    return Split(user_id=user_id, video_id=video_id, X=Fields(X), y=y, aux=aux, date=date,
                  time_ms=time_ms, num=num)
 
 
