@@ -84,9 +84,10 @@ PIPELINE API -- import these, do not reimplement them:
   from pipeline.history import historical_features
   historical_features(split_name, key="video_id" or "author_id") -> dict[str, float32 array]
              train-only counts and smoothed long_view/feedback histories for the entity. Train
-             rows are leave-one-out; valid/test rows use the full train table. This is the safe
-             replacement for the dataset's full-month video statistics, which overlap the
-             evaluation window and are forbidden.
+             rows are leave-one-out; valid/test rows use the full train table. Available if you
+             want it; nothing here says feature work beats model work, and you have only a
+             handful of experiments before the run converges. (The dataset also ships full-month
+             video statistics. Those overlap the evaluation window and are not exposed.)
   s.aux      dict of other logged signals (is_click, is_like, play_time_ms, ...)
   FEATURE_CARDINALITIES[name] -> int, the number of ids for that field
   from pipeline.evaluate import evaluate
