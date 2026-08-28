@@ -213,19 +213,15 @@ def test_date_is_exposed_and_matches_the_official_windows():
 
 
 def main():
-    tests = [
-        test_missing_cache_raises,
-        test_date_is_exposed_and_matches_the_official_windows,
-        test_determinism_of_row_order,
-        test_no_leak_columns_in_X_synth_split,
-        test_no_leak_columns_in_feature_cardinalities,
-        test_vocab_built_from_train_only_unseen_maps_to_zero,
-        test_real_data_split_counts,
-    ]
+    # discovered, not listed: three separate tests in this repo were written, never added to a
+    # hand-maintained list, and silently never ran. A test that does not run is worse than no
+    # test, because it reads as coverage.
+    tests = [v for k, v in sorted(globals().items())
+             if k.startswith("test_") and callable(v)]
     for t in tests:
-        t()
-        print(f"ok: {t.__name__}")
-    print("all tests passed")
+        note = t()
+        print(f"ok: {t.__name__}" + (f" {note}" if note else ""))
+    print(f"{len(tests)} tests passed")
 
 
 def test_time_ms_is_exposed_and_orders_impressions():
@@ -256,6 +252,34 @@ def test_time_ms_is_exposed_and_orders_impressions():
 
     # it is a feature, never an outcome
     assert "time_ms" not in AUX_DTYPES
+
+
+def test_numeric_channel_is_present_and_carries_no_post_click_signal():
+    """Split.num is the continuous channel; it must never carry an outcome of the scored row.
+
+    Every numeric here is an attribute of the user or the video known before the impression is
+    served. The post-click signals (play_time_ms, is_click, stay times) stay in aux. Mixing them
+    would leak the label, and the leak would be invisible because both are float arrays.
+    """
+    from pipeline.data import NUMERIC_FEATURES, AUX_DTYPES
+    assert not (set(NUMERIC_FEATURES) & set(AUX_DTYPES)), "a post-click signal reached Split.num"
+    for banned in ("play_time_ms", "is_click", "long_view", "profile_stay_time",
+                   "comment_stay_time", "is_profile_enter", "is_like"):
+        assert banned not in NUMERIC_FEATURES, banned
+
+    try:
+        tr = load("train")
+    except FileNotFoundError:
+        return "skip (no real cache)"
+    if tr.num is None:
+        raise AssertionError("no numeric features cached -- rebuild the cache")
+    for name, arr in tr.num.items():
+        a = np.asarray(arr)
+        assert a.dtype == np.float32, (name, a.dtype)
+        assert len(a) == len(tr.y), name
+        assert not np.isinf(a).any(), f"{name} has infinities"
+    # a numeric feature must actually vary, or it is a wasted channel
+    assert np.nanstd(np.asarray(tr.num["duration_ms"])) > 0
 
 
 if __name__ == "__main__":

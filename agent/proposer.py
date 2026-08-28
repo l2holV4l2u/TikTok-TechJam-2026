@@ -69,6 +69,21 @@ PIPELINE API -- import these, do not reimplement them:
   s.date     int32 array -- YYYYMMDD of each impression. train covers {train_days} days ({train_lo}-{train_hi}),
              validation the 7 days after it, test the 10 days after that. The splits are
              defined by this column, and it is an ordinary array you may use however you like.
+  s.time_ms  int64 array -- epoch milliseconds of each impression. This is the only column that
+             orders a user's impressions: s.date separates days and the `hour` field is
+             time-of-day, neither of which can say which impression came first. Sorting by
+             (user_id, time_ms) gives each user's history in order. Impressions logged in the
+             same feed batch can share a timestamp, so ties are ordered by row position.
+  s.num      dict[str, float32 array] -- {n_numeric} CONTINUOUS features, NaN where unknown.
+             s.X holds only categorical ids, so these are the numeric quantities: the raw video
+             length, the user's actual follower/following/friend counts and account age, and
+             per-video historical aggregates from the organizers' video_features_statistic file
+             (show/play/complete/long-time-play counts, play_progress, like/comment/follow/
+             share/collect/download counts, and `counts`, the number of daily records each
+             aggregate averages over). They are attributes of the user and the video, known
+             before the impression is served -- unlike s.aux. Scale varies by orders of
+             magnitude across them and NaN means absent, so handle both.
+             Names: {numeric_names}
   s.aux      dict of other logged signals (is_click, is_like, play_time_ms, ...)
   FEATURE_CARDINALITIES[name] -> int, the number of ids for that field
   from pipeline.evaluate import evaluate
