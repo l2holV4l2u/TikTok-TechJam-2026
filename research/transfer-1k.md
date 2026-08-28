@@ -125,3 +125,27 @@ a user is a median 1.25-2.12 days, and it carries nothing.
 
 These are recorded so the question is not reopened. The columns that were worth exposing --
 `time_ms` and the 22 in `Split.num` -- earned it on the same measurement.
+
+## A limit on how we screened features
+
+Every feature above was screened the same way: score the validation split by that column alone
+and read the primary. That works for **item-level** columns and is meaningless for **user-level**
+ones, because the metric ranks within each user.
+
+Measured on KuaiRand-Pure validation:
+
+| score | primary |
+|---|---|
+| constant everywhere | 0.4837 |
+| `user_id` (constant within user) | 0.4837 |
+| random, constant within user | 0.4837 |
+| random per row | 0.4843 |
+
+A feature that does not vary inside a user's impression list cannot reorder it, so all three
+collapse to the same tie-broken ordering. Screening the four raw user counts and the eighteen
+`onehot_feat*` columns this way returned 0.4837 for all twenty-two -- not evidence they are
+useless, evidence the screen cannot see them. They reach the model only through interactions
+with item-side features, which is what the FM is for.
+
+The screen was therefore used only where it is valid: `video_features_statistic` (item-level,
+three columns promoted on it) and the video metadata columns (item-level, all rejected on it).
