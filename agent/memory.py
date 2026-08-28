@@ -32,8 +32,32 @@ def _entries(runs_dir: Path, exclude: str | None, require_marker: bool):
                     continue
 
 
+def _stale_capability_note(runs_dir: Path, exclude: str | None, current: list[str]) -> str:
+    """Name the API the prior runs could not reach, so their silence on it is not read as a verdict.
+
+    Memory ranks prior hypotheses by score, so a run that starts after the harness gains a new
+    column sees a leaderboard of ideas built without it and re-proposes the old winner. That is
+    exactly what happened the first time Split.num and Split.time_ms were added: the agent
+    inventoried both in EDA, then spent its first experiment re-deriving the previous run's best
+    idea. Absence of a capability from prior runs is not evidence against it.
+    """
+    seen: set[str] = set()
+    for meta in sorted(runs_dir.glob("*/run_meta.json")):
+        if exclude and meta.parent.name == exclude:
+            continue
+        try:
+            seen |= set(json.loads(meta.read_text(encoding="utf-8")).get("api_surface") or [])
+        except (json.JSONDecodeError, OSError):
+            continue
+    added = sorted(set(current) - seen) if seen else sorted(current)
+    if not added or not seen:
+        return ""
+    return ("\nNot available in any run above, so their results say nothing about it: "
+            + ", ".join(added) + ".")
+
+
 def distil(runs_dir="runs", exclude: str | None = None, baseline: float = 0.6016,
-           require_marker: bool = True) -> str:
+           require_marker: bool = True, api_surface: list[str] | None = None) -> str:
     """A compact record of prior runs: what scored, what lost, how things broke."""
     runs_dir = Path(runs_dir)
     if not runs_dir.exists():
@@ -50,6 +74,7 @@ def distil(runs_dir="runs", exclude: str | None = None, baseline: float = 0.6016
                 crashes[key] = crashes.get(key, 0) + 1
     if not scored:
         return ""
+    _note = _stale_capability_note(runs_dir, exclude, api_surface or [])
 
     scored.sort(reverse=True)
     wins = [s for s in scored if s[0] > baseline + NOISE][:MAX_WINS]
@@ -74,7 +99,7 @@ def distil(runs_dir="runs", exclude: str | None = None, baseline: float = 0.6016
         top = sorted(crashes.items(), key=lambda kv: -kv[1])[:MAX_CRASH]
         out.append("\nMost frequent crashes in earlier runs:")
         out += [f"  x{n}  {k}" for k, n in top]
-    return "\n".join(out)
+    return "\n".join(out) + _note
 
 
 def demo() -> None:

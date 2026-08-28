@@ -20,6 +20,22 @@ from agent.tree import Tree
 
 # KuaiRand-Pure's published baseline. Other variants have no published number, so a run on one
 # passes --baseline-valid/--baseline-test measured by research/baseline_reference.py.
+def _load_probe() -> list[str]:
+    """Names an agent script can reach on a Split, for the stale-capability diff in memory."""
+    from pipeline.data import load
+    try:
+        s = load("train")
+    except FileNotFoundError:
+        return []
+    names = ["s.X", "s.y", "s.user_id", "s.video_id", "s.aux"]
+    if s.date is not None:
+        names.append("s.date")
+    if s.time_ms is not None:
+        names.append("s.time_ms")
+    names += [f"s.num[{k}]" for k in (s.num or {})]
+    return names
+
+
 BASELINE_VALID = 0.6016
 BASELINE_TEST = 0.5946
 
@@ -132,8 +148,14 @@ def main() -> None:
     # every prompt/response lands in the run log -- it is a graded deliverable
     complete = RecordingComplete(complete, run_dir / "llm_calls.jsonl")
 
+    # what a run could reach. Recorded so a later run can tell which capabilities post-date the
+    # experiments in its memory, instead of reading their absence as evidence against them.
+    from pipeline.data import NUMERIC_FEATURES
+    _probe = _load_probe()
+    api_surface = sorted(_probe)
     memory = "" if args.no_memory else distil("runs", exclude=run_dir.name,
-                                              baseline=args.baseline_valid)
+                                              baseline=args.baseline_valid,
+                                              api_surface=api_surface)
     if memory:
         print(f"cross-run memory: {len(memory.splitlines())} lines from this agent's prior runs")
 
@@ -178,6 +200,7 @@ def main() -> None:
     meta = {
         "model": getattr(complete, "model", "unknown"),
         "dataset": facts.get("variant", "unknown"),
+        "api_surface": api_surface,
         "provider": ("replay" if args.replay else "dry-run" if args.dry_run
                      else __import__("os").environ.get("LLM_PROVIDER", "anthropic")),
         "stop_reason": r.stop_reason,
