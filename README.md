@@ -95,6 +95,13 @@ rule (ε = 0.002 over N = 3 iterations). A 6-hour wall-clock backstop is enforce
 
 `python run_agent.py --dry-run` exercises the whole loop with a canned LLM and no network.
 
+`--replay runs/rN/llm_calls.jsonl` re-runs a previous run against its recorded responses: no
+network, no tokens, deterministic. Replaying r30 reproduces its ledger to the last decimal at
+every iteration in 2.9 minutes against the original 6.3. It tests the loop, the parsers, the
+ledger and the reporting -- **not** prompts, since a changed prompt still receives the response
+recorded for the old one. `--replay-strict` fails the moment a prompt diverges, so that
+limitation cannot pass unnoticed.
+
 ### Running on another KuaiRand variant
 
 The dataset facts in the task brief -- row counts, date windows, the perfect-ranking ceiling,

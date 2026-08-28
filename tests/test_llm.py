@@ -138,6 +138,36 @@ def test_key_is_never_placed_in_the_body():
         llm._post_json = real
 
 
+def test_replay_returns_recorded_responses_and_refuses_to_overrun():
+    import json, tempfile, os
+    from agent.llm import ReplayComplete, LLMError
+    recs = [{"prompt": "P1", "response": "R1", "tokens_in": 10, "tokens_out": 3},
+            {"prompt": "P2", "response": "R2", "tokens_in": 20, "tokens_out": 4}]
+    fd, path = tempfile.mkstemp(suffix=".jsonl"); os.close(fd)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            for r in recs:
+                f.write(json.dumps(r) + "\n")
+
+        c = ReplayComplete(path)
+        assert c("P1") == ("R1", 10, 3)
+        assert c("anything at all") == ("R2", 20, 4)   # lenient: plumbing test, not a prompt test
+        try:
+            c("P3"); assert False, "should refuse to invent a third response"
+        except LLMError:
+            pass
+
+        # strict mode exists precisely so a changed prompt cannot pass silently
+        strict = ReplayComplete(path, strict=True)
+        assert strict("P1") == ("R1", 10, 3)
+        try:
+            strict("CHANGED"); assert False, "strict mode must reject a diverged prompt"
+        except LLMError:
+            pass
+    finally:
+        os.unlink(path)
+
+
 if __name__ == "__main__":
     for t in (test_daily_cap_body_is_recognised,
               test_failover_to_the_second_key_on_a_daily_cap,
@@ -146,7 +176,8 @@ if __name__ == "__main__":
               test_single_key_still_works_from_the_old_env_var,
               test_no_key_anywhere_is_an_explicit_error,
               test_recording_wrapper_exposes_the_model_for_the_run_log,
-              test_key_is_never_placed_in_the_body):
+              test_key_is_never_placed_in_the_body,
+              test_replay_returns_recorded_responses_and_refuses_to_overrun):
         t()
         print(f"ok  {t.__name__}")
     print("all passed")

@@ -235,6 +235,40 @@ class RecordingComplete:
         return text, tokens_in, tokens_out
 
 
+class ReplayComplete:
+    """Replays a previous run's recorded responses in order: no network, no cost, no waiting.
+
+    A full run costs ~30 minutes and real tokens, which makes it a terrible way to find out
+    whether a change to the loop, the parsers, the ledger or the reporting works. Replay turns
+    that into seconds, deterministically, against responses a real model actually produced.
+
+    It validates PLUMBING, not prompting. A changed prompt still receives the response recorded
+    for the old one, so replay can never tell you whether a prompt edit helps -- only that the
+    machinery around it still runs. `strict=True` refuses to hide that, failing as soon as the
+    prompt sent differs from the prompt recorded.
+    """
+
+    model = "replay"
+
+    def __init__(self, log_path, strict: bool = False):
+        self.records = [json.loads(line) for line in
+                        Path(log_path).read_text(encoding="utf-8").splitlines() if line.strip()]
+        if not self.records:
+            raise LLMError(f"no recorded calls in {log_path}")
+        self.strict = strict
+        self.n = 0
+
+    def __call__(self, prompt: str) -> tuple[str, int, int]:
+        if self.n >= len(self.records):
+            raise LLMError(f"replay log exhausted after {len(self.records)} calls; "
+                           "the run under replay asks for more than the recording holds")
+        rec = self.records[self.n]
+        self.n += 1
+        if self.strict and rec.get("prompt") != prompt:
+            raise LLMError(f"prompt diverged from the recording at call {self.n}")
+        return rec.get("response", ""), rec.get("tokens_in", 0), rec.get("tokens_out", 0)
+
+
 class FakeComplete:
     """Offline stand-in for tests: cycles canned (text, tokens_in, tokens_out) replies, records prompts seen."""
 

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from agent.kb import load_papers
 from agent.ledger import Ledger
-from agent.llm import FakeComplete, RecordingComplete, make_complete
+from agent.llm import FakeComplete, RecordingComplete, ReplayComplete, make_complete
 from agent.loop import StdoutJsonEvaluator, run_loop
 from agent.memory import distil
 from agent.proposer import LLMProposer
@@ -97,6 +97,10 @@ def main() -> None:
                     help="dataset facts for the brief, produced by agent.facts")
     ap.add_argument("--no-memory", action="store_true", help="ignore this agent's prior runs")
     ap.add_argument("--dry-run", action="store_true", help="use a canned LLM, no network")
+    ap.add_argument("--replay", default=None,
+                    help="replay a previous run's llm_calls.jsonl: no network, no cost. Tests loop/parsing/reporting changes, NOT prompt changes")
+    ap.add_argument("--replay-strict", action="store_true",
+                    help="with --replay, fail if a prompt differs from the recording")
     args = ap.parse_args()
 
     run_dir = Path(args.run_dir)
@@ -119,6 +123,9 @@ def main() -> None:
             "print('METRICS', json.dumps({'primary':m['primary'],'gauc':m['gauc'],"
             "'ndcg@5':m['ndcg@5'],'gpu_seconds':time.perf_counter()-t0}))\n"
             "```", 900, 300)])
+    elif args.replay:
+        complete = ReplayComplete(args.replay, strict=args.replay_strict)
+        print(f"REPLAY from {args.replay}: {len(complete.records)} recorded calls, no network")
     else:
         complete = make_complete()
 
@@ -171,7 +178,7 @@ def main() -> None:
     meta = {
         "model": getattr(complete, "model", "unknown"),
         "dataset": facts.get("variant", "unknown"),
-        "provider": ("dry-run" if args.dry_run
+        "provider": ("replay" if args.replay else "dry-run" if args.dry_run
                      else __import__("os").environ.get("LLM_PROVIDER", "anthropic")),
         "stop_reason": r.stop_reason,
         "iterations": len(entries),
