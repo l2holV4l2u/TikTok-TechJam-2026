@@ -426,6 +426,40 @@ Three consequences we act on:
 This probe is human analysis, clearly labelled and **not** on the submission path. It is context
 for reading the agent's delta, not one of the agent's findings.
 
+## Harness engineering
+
+Four changes that are not model work but decide whether the agent gets a fair run.
+
+**The provided models were mis-initialised.** `pipeline/models.py` built every embedding table
+with PyTorch's default `N(0,1)`. Summed across fields an FM's interaction term starts orders of
+magnitude too large and converges to a much worse optimum: measured on Pure, **0.5533 valid
+after 40 epochs against 0.6020 in under 15**. Fixed for all four architectures, with a
+regression test that asserts initial logit magnitude rather than running a slow convergence
+check. No run was affected -- 0 of 333 agent scripts import that module -- and we say so
+rather than claiming a score we did not lose.
+
+**The brief stated dataset facts as literals.** Row counts, the perfect-ranking ceiling, the
+random and item-popularity rungs were Pure constants typed in by hand, which would have fed the
+agent false premises the moment the harness pointed elsewhere. `agent/facts.py` measures them
+from the cache. It reproduces the organizers' published numbers -- ceiling 0.86446 vs 0.8645,
+zero-positive users 27.108% vs 27.1%, item-pop 0.5709 vs 0.5715 -- and corrected one error we
+had shipped: the train window starts 20220409, not the 20220408 implied by the filename.
+
+**`evaluate()` is 1.47x faster with bit-identical output.** The agent calls it once per training
+epoch, so it was ~26% of an iteration. Two exact rewrites: `lexsort` replaced by paired stable
+argsorts (equivalent by sort stability), and a closed-form IDCG for 0/1 labels that removes an
+entire sort of millions of rows -- the ideal ranking puts every positive first, so IDCG@k is a
+prefix sum indexed by positive count. Graded labels still take the sorting path. Verified
+identical on 11 cases across both datasets including all-tied scores, graded labels, degenerate
+users, and the submitted scores themselves.
+
+**`--replay` re-runs a recorded run with no network and no tokens.** A full run costs ~30
+minutes and real API spend, which makes it a poor way to find out whether a change to the loop,
+the parsers or the reporting works. Replaying r30 reproduced its ledger to the last decimal at
+every iteration in 2.9 minutes against the original 6.3. It tests plumbing, not prompting -- a
+changed prompt still receives the response recorded for the old one -- and `--replay-strict`
+fails the moment a prompt diverges so that limit cannot pass unnoticed.
+
 ## Development tools
 VS Code, Python 3.12 on Windows.
 
