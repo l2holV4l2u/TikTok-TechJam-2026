@@ -184,6 +184,9 @@ def main() -> None:
             complete, entries, last, findings, stale, patience),
         memory=memory,
         baseline=args.baseline_valid,
+        # the perfect-ranking ceiling, measured by agent.facts. The critic needs it to
+        # tell an extraordinary result from an impossible one.
+        ceiling=facts.get("ceiling"),
     )
     wall = time.perf_counter() - t0
 

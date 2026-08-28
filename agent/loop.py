@@ -18,6 +18,7 @@ from typing import Protocol
 from .executor import RunResult, run_script
 from .ledger import Entry, Ledger
 from .recovery import RETRY, Recovery
+from .critic import review as critic_review
 from .knowledge import Knowledge
 from .tree import Node, Tree
 
@@ -126,7 +127,7 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
              wall_clock_limit_s: float = SIX_HOURS, gpu_budget_s: float = float("inf"),
              tree: Tree | None = None, recovery: Recovery | None = None,
              knowledge: Knowledge | None = None, revise_fn=None,
-             memory: str = "", baseline: float = 0.6016,
+             memory: str = "", baseline: float = 0.6016, ceiling: float | None = None,
              max_instant_failures: int = 5, max_proposer_errors: int = 6) -> LoopResult:
     tree = tree if tree is not None else Tree(epsilon=epsilon)
     recovery = recovery or Recovery()
@@ -253,6 +254,11 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
             ledger.append(Entry(i, parent_id, 0, p.hypothesis, p.code, {}, res.seconds,
                                 p.tokens_in, p.tokens_out,
                                 "failed" if action == RETRY else "blacklisted", feedback, phase))
+            # a child that crashed is evidence against its parent, not a free retry. Without
+            # this, only scored children ever counted toward retirement, so a node producing
+            # nothing but crashes stayed selectable forever -- r38_1k #8 spent two children and
+            # 78 minutes that way, one of them timing out at 4,373s.
+            tree.record_failure(parent_id, res.seconds)
             # a script that dies instantly with no output never even started: the interpreter or
             # the machine is broken, not the code. Grinding on shreds the budget for nothing.
             if res.seconds < 1.0 and not res.stdout and not res.stderr.strip():
@@ -306,13 +312,31 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
             continue
 
         # ---- improve
+        # Arbor (arXiv:2606.12563) ablates its critic and reports the largest drop of any
+        # component. Ours had none for improve iterations: the leakage warning fires only during
+        # baseline reproduction, so an iteration that scored 0.95 by reading the label would have
+        # been accepted as the leader. The critic flags rather than rejects -- a breakthrough and
+        # a leak look alike from outside, and discarding the first is worse.
+        flags = critic_review(p.code, score, best, ceiling)
+        if flags:
+            feedback = ("This result was not accepted as-is. " + " ".join(flags)
+                        + " Re-run the check yourself and either show the result survives it or "
+                          "propose something else.")
+            ledger.append(Entry(i, parent_id, 0, p.hypothesis, p.code, metrics, res.seconds,
+                                p.tokens_in, p.tokens_out, "reverted", feedback, "improve"))
+            tree.add(Node(i, parent_id, p.hypothesis, p.code, score))
+            tree.record_child(parent_id, score, res.seconds)
+            stale += 1
+            _revise(revise_fn, ledger, out, context, knowledge, findings, stale, patience)
+            continue
+
         improved = score > best + epsilon
         ledger.append(Entry(i, parent_id, 0, p.hypothesis, p.code, metrics, res.seconds,
                             p.tokens_in, p.tokens_out, "ok" if improved else "reverted",
                             None, "improve"))
         feedback = None
         tree.add(Node(i, parent_id, p.hypothesis, p.code, score))
-        tree.record_child(parent_id, score)
+        tree.record_child(parent_id, score, res.seconds)
 
         # retire an idea only when it is clearly worse; a result that ties or sets a record is
         # not evidence the idea is a dead end
