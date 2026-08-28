@@ -69,6 +69,9 @@ def run_script(path: Path, timeout: float = 1800, cwd=None, pythonpath=None, ext
     )
     try:
         out, err = proc.communicate(timeout=timeout)
+        # normalise here too, not only on the timeout path: communicate can hand back None
+        # for a stream, and a None stdout killed a whole run inside parse_findings.
+        out, err = _text(out), _text(err)
         code, timed_out = proc.returncode, False
     except subprocess.TimeoutExpired:
         _kill_tree(proc)

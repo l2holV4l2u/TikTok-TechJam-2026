@@ -159,6 +159,21 @@ def test_convergence_uses_the_gain_across_the_window_not_each_single_step():
         "one big jump followed by three flat iterations is converged")
 
 
+def test_a_script_that_produced_no_stdout_does_not_kill_the_run():
+    """r61 died on iteration 4 with AttributeError: NoneType has no attribute splitlines.
+
+    subprocess.communicate can hand back None for a stream. The controller must survive
+    anything a model-written subprocess does or fails to do, including producing nothing.
+    """
+    from agent.executor import _text
+    from agent.loop import parse_findings
+
+    assert parse_findings(None) == ""
+    assert parse_findings("") == ""
+    assert _text(None) == "" and _text(b"ok") == "ok" and _text("ok") == "ok"
+    assert parse_findings("FINDINGS users with 1 impression cannot be reranked") != ""
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_") and callable(v)]
     for test in tests:

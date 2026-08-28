@@ -185,7 +185,7 @@ def parse_findings(stdout: str) -> str:
     so a purely diagnostic iteration is unaffordable; letting a scored script also report what
     it observed buys the same evidence without spending a life on it.
     """
-    lines = [ln[len(FINDINGS_PREFIX):].strip() for ln in stdout.splitlines()
+    lines = [ln[len(FINDINGS_PREFIX):].strip() for ln in (stdout or "").splitlines()
              if ln.startswith(FINDINGS_PREFIX)]
     return "\n".join(lines)[:MAX_FINDINGS_CHARS]
 
