@@ -228,6 +228,14 @@ class OpenAICompatComplete:
             except (LLMDailyLimit, LLMKeyRejected):
                 if not self._next_key():
                     raise
+            except LLMRetryExhausted:
+                # A per-minute rate limit exhausts the backoff ladder without ever raising
+                # LLMDailyLimit, so failover never fired and a run died while other keys sat
+                # idle with quota. Observed on the free tier: RPM is 3, and two concurrent runs
+                # exceed it. Try the remaining keys before giving up; if none is left, the
+                # original exhaustion is the honest error.
+                if not self._next_key():
+                    raise
         choice = (resp.get("choices") or [{}])[0]
         text = (choice.get("message") or {}).get("content") or ""
         usage = resp.get("usage") or {}

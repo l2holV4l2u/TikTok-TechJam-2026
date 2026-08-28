@@ -231,6 +231,31 @@ def test_a_revoked_key_fails_over_instead_of_killing_the_run():
         llm._post_json = real
 
 
+def test_rate_limit_exhaustion_fails_over_to_another_key():
+    """A per-minute cap must not kill a run while other keys sit idle with quota.
+
+    RPM exhaustion raises LLMRetryExhausted, not LLMDailyLimit, so the failover path never fired.
+    Observed live: the free tier allows 3 requests per minute, two concurrent runs exceed it, and
+    a run died with two of three keys still usable.
+    """
+    real = llm._post_json
+    try:
+        c, calls = _client([llm.LLMRetryExhausted("HTTP 429 after 8 retries: RPM"), _reply("ok")])
+        assert c("prompt") == ("ok", 11, 7)
+        assert calls == ["Bearer k1", "Bearer k2"], calls
+
+        # when no key is left, the original exhaustion is the honest error to surface
+        c2, _ = _client([llm.LLMRetryExhausted("429")] * 2)
+        try:
+            c2("prompt")
+        except llm.LLMRetryExhausted:
+            pass
+        else:
+            raise AssertionError("must raise once every key is exhausted")
+    finally:
+        llm._post_json = real
+
+
 if __name__ == "__main__":
     for t in (test_daily_cap_body_is_recognised,
               test_failover_to_the_second_key_on_a_daily_cap,
@@ -242,7 +267,8 @@ if __name__ == "__main__":
               test_key_is_never_placed_in_the_body,
               test_replay_returns_recorded_responses_and_refuses_to_overrun,
               test_a_call_gives_up_instead_of_wedging_the_run,
-              test_a_revoked_key_fails_over_instead_of_killing_the_run):
+              test_a_revoked_key_fails_over_instead_of_killing_the_run,
+              test_rate_limit_exhaustion_fails_over_to_another_key):
         t()
         print(f"ok  {t.__name__}")
     print("all passed")
