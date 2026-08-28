@@ -27,7 +27,10 @@ def test_prompt_note_distinguishes_cpu_and_gpu():
         "torch_version": "2.x+cu", "cuda_runtime": "13.0",
     })
     assert "AGENT_DEVICE=cpu" in cpu and "must not be used" in cpu
-    assert "AGENT_DEVICE=cuda" in gpu and "6.00 GiB" in gpu
+    assert "AGENT_DEVICE=cuda:0" in gpu and "6.00 GiB" in gpu, (
+        "the device must carry an index: torch.cuda.set_device('cuda') raises")
+    import torch
+    torch.device("cuda:0")  # the string handed to scripts must parse
 
 
 if __name__ == "__main__":

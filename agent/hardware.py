@@ -46,7 +46,7 @@ def prompt_hardware_note(hardware: dict) -> str:
         return (
             f"- CUDA is selected: {hardware['gpu_name']} with "
             f"{hardware['gpu_memory_gb']:.2f} GiB, PyTorch {hardware['torch_version']} "
-            f"(CUDA runtime {hardware['cuda_runtime']}). AGENT_DEVICE=cuda.\n"
+            f"(CUDA runtime {hardware['cuda_runtime']}). AGENT_DEVICE=cuda:0.\n"
             "  Use batched transfers and mixed precision where numerically safe. NumPy metrics "
             "and feature preparation remain CPU work. LightGBM remains CPU unless GPU support "
             "is explicitly verified."

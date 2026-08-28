@@ -151,7 +151,9 @@ def main() -> None:
         hardware = resolve_device("cpu" if args.dry_run else args.device)
     except RuntimeError as exc:
         ap.error(str(exc))
-    os.environ["AGENT_DEVICE"] = hardware["device"]
+    # index-qualified: torch.cuda.set_device("cuda") raises, "cuda:0" is accepted by
+    # set_device, torch.device() and .to() alike. r58 lost two iterations to the bare form.
+    os.environ["AGENT_DEVICE"] = "cuda:0" if hardware["device"] == "cuda" else "cpu"
     print("execution device: " + (
         f"cuda ({hardware['gpu_name']}, {hardware['gpu_memory_gb']:.2f} GiB)"
         if hardware["device"] == "cuda" else "cpu"
