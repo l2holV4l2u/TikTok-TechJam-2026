@@ -432,6 +432,74 @@ Three consequences we act on:
 This probe is human analysis, clearly labelled and **not** on the submission path. It is context
 for reading the agent's delta, not one of the agent's findings.
 
+## Bonus dataset: KuaiRand-1K
+
+We ran the same agent, unchanged, on KuaiRand-1K. The point was never to show our Pure model
+scores well there — it would not — but to ask whether **the agent** adapts when the problem
+changes underneath it.
+
+It does, and the problem changes a great deal. Measured before running anything:
+
+| | Pure | 1K |
+|---|---|---|
+| train rows | 1,141,112 | 5,055,984 |
+| distinct train videos | ~7,600 | 2,119,510 |
+| test users | 23,875 | 997 |
+| impressions per test user | 7.1 | 4,145 |
+| **test rows on a video never seen in train** | **0.01%** | **84.94%** |
+| perfect-ranking ceiling | 0.8645 | 0.9995 |
+| item-popularity lift over random | +0.098 | +0.055 |
+
+Same schema, same label, same calendar window — a different problem. Pure is dense on a small
+catalogue, so item identity is the dominant signal. 1K logs 1,000 users against the full
+catalogue at 2.4 impressions per video, so for five test rows in six the item embedding is an
+untrained row. Item popularity, the most dependable signal in the field, earns barely half as
+much.
+
+**Result.** Converged in 14 iterations, 2.7 h, 2 failures, **0 manual interventions**, 192,900
+tokens, 76 internally-evaluated candidates, 14 belief-set claims.
+
+| | GAUC | nDCG@5 | primary |
+|---|---|---|---|
+| reference (organizers' recipe, our run) | 0.6704 | 0.6006 | 0.6355 |
+| agent, iteration #8 | 0.6959 | 0.6595 | **0.6777** |
+| delta | +0.0255 | +0.0589 | **+0.0422** |
+
+**These numbers are not comparable to the Pure result and we do not present them as a bigger
+win.** 1K has a 0.9995 ceiling against Pure's 0.8645, a weaker anchor, and no published baseline
+at all — the reference is our own run of the organizers' recipe. What makes it trustworthy is
+that the same script reproduces Pure's published 0.6016/0.5946 as 0.6022/0.5957. Full protocol
+and the leakage reasoning are in `research/transfer-1k.md`.
+
+**What the agent actually did.** Its first improve iteration named the problem itself:
+
+> *"Expand the FM feature stage with tag, upload type, music type, and hour; these fields vary
+> within users and encode cold-video content and context, allowing user-content interactions and
+> direct effects to rank the 74% of validation impressions whose video IDs were unseen in
+> training."*
+
+It measured the cold-item rate in its own EDA (74% on validation; we measured 84.9% on test) and
+drew the right conclusion — when item identity is untrainable, substitute item content. That is
+a different architecture from the one it converged on for Pure, which was rank aggregation over
+redundant crosses. Neither was suggested to it.
+
+**Robustness, unscripted.** Iteration #9 died on a hard LightGBM limit — `Number of rows 13924
+exceeds upper limit of 10000 for a query` — a wall that only exists because 1K's users are dense
+enough to overflow a lambdarank query group; on Pure, at 7 impressions per user, it is
+unreachable. The agent recovered in one attempt by splitting oversized users into bounded
+chunks, and added its own invariants:
+
+```python
+if int(groups.sum()) != int(order.size):
+    raise RuntimeError("Ranking group construction is inconsistent")
+if int(groups.max(initial=0)) > MAX_QUERY_SIZE:
+    raise RuntimeError("A ranking query still exceeds the size limit")
+```
+
+Iteration #11 then hit the wall-clock timeout, and the harness distinguished that from a bug —
+telling it the approach was too slow rather than wrong, since re-running a slow script unchanged
+only times out again. Full log in `RUN_REPORT_1K.md`.
+
 ## Harness engineering
 
 Four changes that are not model work but decide whether the agent gets a fair run.

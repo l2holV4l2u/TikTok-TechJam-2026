@@ -15,5 +15,6 @@
   "k": 16,
   "lr": 0.001,
   "epochs": 10,
-  "wall_clock_s": 521.9662997999985
+  "wall_clock_s": 521.9662997999985,
+  "source": "our reproduction of the organizers recipe on KuaiRand-1K"
 }

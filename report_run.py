@@ -9,6 +9,11 @@ from pathlib import Path
 # KuaiRand-Pure's published baseline. A report on another variant must pass its own measured
 # reference, or every "vs baseline" column in the table is nonsense.
 BASE_VALID, BASE_TEST = 0.6016, 0.5946
+# the per-metric breakdown of that baseline. Hardcoding Pure's here made a 1K report cite Pure's
+# GAUC/nDCG and compute its deltas against the wrong reference entirely.
+BASE_VALID_GAUC, BASE_VALID_NDCG = 0.6674, 0.5357
+BASE_TEST_GAUC, BASE_TEST_NDCG = 0.6610, 0.5282
+BASE_LABEL = "official baseline"
 EPSILON = 0.002
 
 
@@ -119,13 +124,21 @@ def main() -> None:
         sys.stdout.reconfigure(encoding="utf-8")
     except AttributeError:
         pass
-    global BASE_VALID, BASE_TEST
+    global BASE_VALID, BASE_TEST, BASE_VALID_GAUC, BASE_VALID_NDCG
+    global BASE_TEST_GAUC, BASE_TEST_NDCG, BASE_LABEL
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     for a in sys.argv[1:]:
         if a.startswith("--baseline-valid="):
             BASE_VALID = float(a.split("=", 1)[1])
         elif a.startswith("--baseline-test="):
             BASE_TEST = float(a.split("=", 1)[1])
+        elif a.startswith("--baseline-json="):
+            import json as _json
+            ref = _json.loads(Path(a.split("=", 1)[1]).read_text(encoding="utf-8"))
+            BASE_VALID, BASE_TEST = ref["valid_primary"], ref["test_primary"]
+            BASE_VALID_GAUC, BASE_VALID_NDCG = ref["valid_gauc"], ref["valid_ndcg@5"]
+            BASE_TEST_GAUC, BASE_TEST_NDCG = ref["test_gauc"], ref["test_ndcg@5"]
+            BASE_LABEL = ref.get("source", "measured reference")
     run_dir = Path(args[0] if args else "runs/latest")
     rows = [json.loads(l) for l in (run_dir / "ledger.jsonl").open(encoding="utf-8") if l.strip()]
     meta_path = run_dir / "run_meta.json"
@@ -285,11 +298,13 @@ def main() -> None:
             vg = f"{bm['gauc']:.4f}" if "gauc" in bm else "-"
             vn = f"{bm['ndcg@5']:.4f}" if "ndcg@5" in bm else "-"
             print(f"| validation (best iteration) | {vg} | {vn} | {bm['primary']:.4f} |")
-            print(f"| official baseline (validation) | 0.6674 | 0.5357 | 0.6016 |")
+            print(f"| {BASE_LABEL} (validation) | {BASE_VALID_GAUC:.4f} | "
+                  f"{BASE_VALID_NDCG:.4f} | {BASE_VALID:.4f} |")
             print(f"| hidden test (this submission) | {rt['gauc']:.4f} | {rt['ndcg@5']:.4f} | "
                   f"**{rt['primary']:.4f}** |")
-            print("| official baseline (test) | 0.6610 | 0.5282 | 0.5946 |")
-            dg, dn = rt["gauc"] - 0.6610, rt["ndcg@5"] - 0.5282
+            print(f"| {BASE_LABEL} (test) | {BASE_TEST_GAUC:.4f} | "
+                  f"{BASE_TEST_NDCG:.4f} | {BASE_TEST:.4f} |")
+            dg, dn = rt["gauc"] - BASE_TEST_GAUC, rt["ndcg@5"] - BASE_TEST_NDCG
             print(f"\n**Absolute delta over baseline on hidden test: GAUC {dg:+.4f}, "
                   f"nDCG@5 {dn:+.4f}, mean {(dg + dn) / 2:+.4f}** "
                   f"(primary {rt['primary'] - BASE_TEST:+.4f}).")
