@@ -265,13 +265,13 @@ are future-window information under the fixed date split and are not eligible fo
 selection or submission. The harness now excludes them and provides equivalent aggregates fit
 only on training rows. r35 is the strongest validation-selected run before that exposure.
 
-Resources for the submitted run (`r41`): **11 iterations of 50**, **7.1 minutes** of script
-time, **54,029 tokens** over 8 model calls, **0 GPU-hours** (CPU only), **0 manual
-interventions**, and **0 failures of its own code**.
+Resources for the submitted run (`r35`): **8 iterations of 50**, **35.1 minutes** of agent
+wall-clock, **91,852 tokens**, **0 GPU-hours** (CPU only), **0 failures**, **0 manual
+interventions**, and **48 candidate solutions compared inside those 8 iterations**.
 
-It did lose 6 iterations to an expired API key — an outage, not the agent failing an experiment,
-and `report_run.py` now separates the two rather than reporting "6 failures" against the agent.
-The best iteration (#4) was reached before the key died.
+A later run did lose 6 iterations to an expired API key. That is an outage rather than the agent
+failing an experiment, and `report_run.py` now separates the two rather than reporting "6
+failures" against the agent.
 
 The agent did all of it: it wrote its own EDA script, reproduced the official baseline to 0.6015
 on the first attempt, proposed and coded further experiments, and emitted the test
@@ -402,12 +402,13 @@ counter by 0.0001 (0.6044 against a 0.6045 threshold), a fair illustration of ho
 Both mechanisms are auditable in the run logs. In r33's `llm_calls.jsonl` the search mode goes
 `refine → broaden → broaden` across the three improve iterations while the belief set carries
 1 → 2 → 3 claims into successive prompts, so each proposal is conditioned on a revised reading
-of everything before it rather than on a raw score history. The submitted run, r41, traces
-0.6015 → 0.6007 → 0.6053 → 0.6059 across its scored iterations: the baseline reproduction, one
-experiment that lost ground, then two that built on what the belief set had recorded.
+of everything before it rather than on a raw score history. The submitted run, r35, traces
+0.6020 → 0.6036 → 0.6036 → 0.6040 → 0.6047 → 0.6049 across its scored iterations: the baseline
+reproduction, then five experiments each conditioned on a revised reading of the ones before.
 
-The submitted run is chosen on **validation** — r41 is the validation-best of all no-priors runs
-(0.6059, against r39's 0.6053 and r35's 0.6049).
+The submitted run is chosen on **validation** — r35 is the validation-best of all *eligible*
+no-priors runs (0.6049, against r33's 0.6044 and r34's 0.6043). Runs that scored higher did so
+using the supplied full-month video aggregates and are excluded entirely.
 We never used the hidden-test column to choose between runs; it is shown only because we hold
 the public test labels and would rather report it than hide it.
 
