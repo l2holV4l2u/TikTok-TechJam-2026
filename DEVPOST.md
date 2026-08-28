@@ -231,16 +231,28 @@ versions is the same: **every defect was in the scaffolding, not in the model's 
 
 Official baseline (organizer-provided FM, k=16): validation primary 0.6016, hidden test 0.5946.
 
-Our submitted run (`runs/r35`, full log in `RUN_REPORT.md`):
+Our submitted run (`runs/r39`, full log in `RUN_REPORT.md`):
 
 | | GAUC | nDCG@5 | primary |
 |---|---|---|---|
-| validation, agent's best iteration | 0.6715 | 0.5383 | 0.6049 |
+| validation, agent's best iteration | 0.6720 | 0.5387 | 0.6053 |
 | official baseline, validation | 0.6674 | 0.5357 | 0.6016 |
-| **hidden test, this submission** | **0.6657** | **0.5312** | **0.5985** |
+| **hidden test, this submission** | **0.6671** | **0.5323** | **0.5997** |
 | official baseline, hidden test | 0.6610 | 0.5282 | 0.5946 |
 
-**Absolute delta on hidden test: GAUC +0.0047, nDCG@5 +0.0030, mean +0.0039.**
+**Absolute delta on hidden test: GAUC +0.0061, nDCG@5 +0.0041, mean +0.0051.**
+
+r39 is the first run to use two instruments the harness previously withheld -- impression
+timestamps and a continuous-feature channel -- and its winning iteration uses both. Before them
+the best run reached 0.6049 validation / +0.0039 test (`runs/r35`), and five runs had clustered
+there. Details in **Harness engineering** below.
+
+One thing stated plainly: r39 did not converge on its own. The machine it ran on was suspended
+mid-run, which left the proposer's HTTP socket dead, and we terminated the process during
+iteration #7. Iteration #6 -- the one selected -- had completed and been scored normally before
+that, and the submission was written by the harness's own validation-best selector, not rebuilt
+by hand. The incident is also why `agent/llm.py` now bounds the total time of a single call: a
+run must not be able to hang on one dead socket.
 
 Resources to reach the converged result: **8 iterations of 50**, **35.1 minutes** of agent
 wall-clock, **91,852 tokens**, **0 GPU-hours** (CPU only), **0 failures**, **0 manual
@@ -297,6 +309,7 @@ iterations with zero failures and zero interventions:
 | **r35** | **+ broaden anchors on the best node, not the earliest** | **0.6049** | **+0.0039** |
 | **r36** | **+ `evaluate(per_user=True)` for per-segment diagnosis** | **0.6037** | **+0.0036** |
 | **r37** | **+ `RUN_ARTIFACTS` cache directory (agent never used it)** | **0.6037** | **+0.0041** |
+| **r39** | **+ `s.time_ms` and `s.num`: impression order and 22 continuous features** | **0.6053** | **+0.0051** |
 
 r30's `run_meta.json` was destroyed by an encoding crash *after* it had written its submission
 (a hypothesis containing `×` met a cp874 stdout). Its row is therefore re-derived by scoring
@@ -314,6 +327,7 @@ r33–r37 carry the literature-driven changes, and the separation is clean on bo
 |---|---|---|
 | before (r27–r30) | 0.6023 – 0.6033 | +0.0006 – +0.0024 |
 | after (r33–r37) | **0.6037 – 0.6049** | **+0.0033 – +0.0041** |
+| with the new instruments (r39) | **0.6053** | **+0.0051** |
 
 **The worst run after beats the best run before, on both metrics, 5/5 against 4/4.** Five runs
 is still a small sample and we are reading a ~0.0015 effect against a 0.0008 noise floor, so we
@@ -344,7 +358,7 @@ catch. We submit the validation-best run under the organizers' rule and report t
 
 r37 is the concrete case. It scored **+0.0041 on the hidden test, the best of any run** — and we
 do not submit it, because its validation score (0.6037) is not the best and selecting it would
-mean choosing on the test set. r35 (validation 0.6049, test +0.0039) is the submission.
+mean choosing on the test set. r39 (validation 0.6053, test +0.0051) is the submission, selected the same way.
 
 What is *not* ambiguous is the mechanism, and the clearest single example is r33, where broaden
 fired for the first time at iteration #3 and that iteration is the one that won. Instead of

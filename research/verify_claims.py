@@ -45,11 +45,13 @@ def main() -> int:
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--runs-root", default=None,
-                    help="directory holding the run folders; defaults to ./runs. Submission CSVs "
-                         "are excluded from git, so verifying r30 needs a local archive.")
+                    help="comma-separated directories holding run folders; defaults to ./runs. "
+                         "Submission CSVs are gitignored, and runs made in a worktree live "
+                         "beside it, so a full check may need more than one archive.")
     args = ap.parse_args()
     root = Path(__file__).resolve().parent.parent
-    runs_root = Path(args.runs_root) if args.runs_root else root / "runs"
+    roots = ([Path(x) for x in args.runs_root.split(",") if x.strip()]
+             if args.runs_root else [root / "runs"])
     devpost = (root / "DEVPOST.md").read_text(encoding="utf-8")
     bad = 0
     checked = 0
@@ -58,8 +60,13 @@ def main() -> int:
         if not m:
             continue
         run, valid_claim, delta_claim = m.group(1), float(m.group(2)), float(m.group(3))
-        run_dir = runs_root / run
-        meta = run_dir / "run_meta.json"
+        # metadata and submission may live in different archives -- a worktree keeps the run
+        # it produced, while gitignored CSVs stay only where they were written. Resolve each
+        # independently rather than picking one directory and hoping it holds both.
+        meta = next((r / run / "run_meta.json" for r in roots
+                     if (r / run / "run_meta.json").exists()), roots[0] / run / "run_meta.json")
+        run_dir = next((r / run for r in roots if (r / run / "submission.csv").exists()),
+                       meta.parent)
         valid = delta = source = None
         if meta.exists():
             sub = (json.loads(meta.read_text(encoding="utf-8")).get("submission") or {})
