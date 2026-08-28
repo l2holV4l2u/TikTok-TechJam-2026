@@ -342,5 +342,32 @@ def test_numeric_names_do_not_collide_across_sources():
         f"cache and definition disagree: {sorted(set(NUMERIC_FEATURES) ^ set(tr.num))}")
 
 
+def test_hidden_test_labels_explain_themselves_on_every_access():
+    """A guard that blocks the wrong thing silently costs an iteration and teaches nothing.
+
+    Blocking __array__/__getitem__/__iter__ left `.astype()` falling through to a bare
+    AttributeError -- observed live, a run lost a baseline attempt to
+    "'HiddenTestLabels' object has no attribute 'astype'. Did you mean: 'dtype'?", which reads
+    as a harness bug rather than a rule. Length and dtype must still work, because legitimate
+    scoring code allocates by len(test.y).
+    """
+    from pipeline.data import HiddenTestLabels
+    h = HiddenTestLabels(50)
+    assert len(h) == 50 and h.shape == (50,) and h.dtype == np.int8
+
+    for name, call in (("astype", lambda: h.astype("float64")),
+                       ("mean", lambda: h.mean()),
+                       ("tolist", lambda: h.tolist()),
+                       ("getitem", lambda: h[0]),
+                       ("iter", lambda: list(h)),
+                       ("asarray", lambda: np.asarray(h))):
+        try:
+            call()
+        except RuntimeError as e:
+            assert "test labels are hidden" in str(e), (name, str(e))
+        else:
+            raise AssertionError(f"{name} was not blocked")
+
+
 if __name__ == "__main__":
     main()

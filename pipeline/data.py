@@ -171,6 +171,16 @@ class HiddenTestLabels:
     def __iter__(self):
         self._blocked()
 
+    def __getattr__(self, name):
+        # Any other array-like access -- .astype, .mean, .sum, .tolist -- must give the same
+        # actionable message. Without this it surfaced as a bare AttributeError
+        # ("'HiddenTestLabels' object has no attribute 'astype'. Did you mean: 'dtype'?"),
+        # which reads as a bug in the harness rather than a rule, and cost an iteration to
+        # a script that then had no idea what it had done wrong.
+        if name.startswith("_"):
+            raise AttributeError(name)
+        self._blocked()
+
 
 class HiddenTestOutcomes(Mapping):
     """Name-visible, value-hidden mapping for test-split post-impression outcomes."""
