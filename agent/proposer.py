@@ -108,8 +108,11 @@ RULES:
   - No external datasets, and no pretrained weights trained on this benchmark's test labels.
 
 ENVIRONMENT:
-  - CPU only. torch is 2.12.0+cpu -- .cuda(), .to('cuda') and AMP all fail. numpy, torch,
-    lightgbm 4.7 and scipy are installed.
+  - A CUDA GPU is available: {gpu}. torch is {torch_version}, so .to('cuda') and AMP work.
+    Moving a model there is optional and yours to judge -- a script that stays on CPU is not
+    penalised, and loading the CUDA runtime costs about 20s per script, so it only pays if the
+    work you move is large enough to earn that back. LightGBM here is the CPU build.
+    numpy, torch, lightgbm 4.7 and scipy are installed.
   - lightgbm 4.7 removed `early_stopping_rounds` as a keyword everywhere; it raises TypeError.
     The supported form is a callback:
         m = lgb.train(params, dset, num_boost_round=600, valid_sets=[dvalid],
