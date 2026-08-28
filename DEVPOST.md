@@ -298,6 +298,12 @@ iterations with zero failures and zero interventions:
 | **r36** | **+ `evaluate(per_user=True)` for per-segment diagnosis** | **0.6037** | **+0.0036** |
 | **r37** | **+ `RUN_ARTIFACTS` cache directory (agent never used it)** | **0.6037** | **+0.0041** |
 
+r30's `run_meta.json` was destroyed by an encoding crash *after* it had written its submission
+(a hypothesis containing `×` met a cp874 stdout). Its row is therefore re-derived by scoring
+that submission directly — test primary 0.5952, delta +0.0006 — rather than read from metadata.
+`research/verify_claims.py` re-checks every row in this table against the run records and exits
+non-zero on any disagreement.
+
 r27–r30 are the honest negative result: **none of those four scaffolding fixes moved the score**,
 and the spread across them (0.6023–0.6033) is the size of the baseline's own seed noise. We
 report that rather than quietly dropping it.
