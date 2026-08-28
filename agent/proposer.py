@@ -1,0 +1,359 @@
+"""The proposer: turns the run's accumulated state into the next script to execute.
+
+The brief below is deliberately limited to the task specification, the pipeline API, and the
+harness contract. It carries no findings about what works on this dataset. Everything the agent
+knows about KuaiRand it has to establish itself -- by inspecting the data (EDA phase),
+reproducing the official baseline (BASELINE phase), and then reading its own results through
+revising its own belief set. That is what makes Requirement 1 and Innovation honest:
+what gets tried, and why, has to come from the agent.
+"""
+import re
+from typing import Callable
+
+from .kb import index, retrieve
+from .loop import Proposal
+
+CompleteFn = Callable[[str], tuple[str, int, int]]
+
+_HYP_RE = re.compile(r"HYPOTHESIS:\s*(.+)")
+_CODE_RE = re.compile(r"```python\s*(.*?)```", re.DOTALL)
+
+MAX_HISTORY = 8
+MAX_FEEDBACK_CHARS = 1200
+MAX_KB = 3
+MAX_ATTEMPTS = 2
+MAX_CODE_CHARS = 14000     # a parent script is sent in full; truncating it produces bad edits
+MAX_EDA_CHARS = 4000
+
+# ---------------------------------------------------------------- task specification only
+
+TASK_BRIEF = """You are the proposer inside an autonomous ML research agent competing on the
+KuaiRand-Pure benchmark. You write complete Python scripts; a harness runs them and returns
+the result. Nobody edits your code and nobody advises you: what to try, and why, is your call.
+
+DATA: Kuaishou short-video feed, date-split. train 1,141,112 rows (20220408-0421),
+validation 124,909 (20220422-0428), hidden test 170,588 (20220429-0508).
+The scored relevance label is the native column `long_view` (0/1), fixed by the organizers.
+
+METRIC: primary = mean(GAUC, nDCG@5), ranking within each user's logged impressions
+(NOT full-catalog retrieval).
+  GAUC: per-user AUC, counting only users with 0 < positives < impressions, weighted by
+        each user's positive count.
+  nDCG@5: gain = 2^rel - 1; users with zero positives score 0 and ARE included in the mean.
+OFFICIAL BASELINE (organizer-provided, this is what you must beat):
+  validation GAUC 0.6674 / nDCG@5 0.5357 / primary 0.6016
+  hidden test  GAUC 0.6610 / nDCG@5 0.5282 / primary 0.5946  (mean of 5 seeds, std 0.0008)
+  It is a Factorization Machine, k=16, lr=0.001, over 5 categorical fields.
+Harness self-check rungs published by the organizers: random scoring primary 0.4753,
+item popularity primary 0.5715 (on test).
+A validation difference smaller than 0.002 is inside seed noise and is NOT evidence. That
+0.002 is also the organizers' convergence epsilon.
+Perfect ranking on test reaches only primary 0.8645, because 27.1% of test users have no
+positive label at all. Judge headroom against 0.8645, not 1.0.
+
+HOW THE RUN ENDS -- read this before choosing an experiment:
+  The run stops at whichever comes first: 50 iterations, 6 hours, or the organizers'
+  convergence rule -- the best validation primary failing to improve by more than 0.002 for
+  3 CONSECUTIVE iterations. Only the best validation score reached before that point is
+  scored. Three experiments in a row that do not beat the incumbent by 0.002 end the run,
+  whatever they taught you. Spend your iterations accordingly.
+
+PIPELINE API -- import these, do not reimplement them:
+  from pipeline.data import load, FEATURE_CARDINALITIES
+  s = load("train")     # or "valid" or "test"
+  s.X        dict[str, int64 array] -- 37 categorical features, contiguous ids, 0 = unseen
+  s.y        int8 array -- long_view, the scored label
+  s.user_id  int64 array      s.video_id  int64 array
+  s.date     int32 array -- YYYYMMDD of each impression. train covers 13 days (20220409-0421),
+             validation the 7 days after it, test the 10 days after that. The splits are
+             defined by this column, and it is an ordinary array you may use however you like.
+  s.aux      dict of other logged signals (is_click, is_like, play_time_ms, ...)
+  FEATURE_CARDINALITIES[name] -> int, the number of ids for that field
+  from pipeline.evaluate import evaluate
+  evaluate(user_ids, labels, scores) -> {{"primary","gauc","ndcg@5","ndcg@10","recall@50"}}
+  evaluate(..., per_user=True) additionally returns out["per_user"], a dict of parallel arrays
+  -- user_id, n_impressions, n_positives, auc (NaN where the user is excluded from GAUC),
+  "ndcg@5", "ndcg@10" -- one entry per user, in ascending user_id. Both aggregates are exactly
+  reconstructible from them (GAUC is the positive-count-weighted mean of auc; nDCG@5 is the
+  plain mean over every user). Use it if you want to know which users a score comes from.
+  This is the organizers' own scoring code, verified bit-identical to theirs.
+
+RULES:
+  - Fit on "train" only. Report on "valid". Never fit or select anything on "test",
+    and never read test labels.
+  - Everything in s.aux is an OUTCOME of the row being scored. Using any of it as an input
+    feature is label leakage and invalidates the result.
+  - No external datasets, and no pretrained weights trained on this benchmark's test labels.
+
+ENVIRONMENT:
+  - CPU only. torch is 2.12.0+cpu -- .cuda(), .to('cuda') and AMP all fail. numpy, torch,
+    lightgbm 4.7 and scipy are installed.
+  - lightgbm 4.7 removed `early_stopping_rounds` as a keyword everywhere; it raises TypeError.
+    The supported form is a callback:
+        m = lgb.train(params, dset, num_boost_round=600, valid_sets=[dvalid],
+                      callbacks=[lgb.early_stopping(40, verbose=False)])
+        preds = m.predict(X, num_iteration=m.best_iteration)
+    Set verbosity as `"verbose": -1` inside params.
+  - HARD LIMIT: {timeout:.0f} seconds per script, killed at the limit and scored as a failure.
+    1.14M rows: vectorize in numpy/torch. A Python loop over rows, users or pairs will time out.
+
+WHAT ONE ITERATION IS: one script, executed once, reporting one METRICS line. Within that
+script you may do as much as fits the time budget -- one iteration is one script, not one model
+and not one idea. The METRICS line reports whatever you finally choose to evaluate.
+
+OUTPUT CONTRACT -- the harness reads stdout:
+  - The FINAL stdout line must be exactly:
+    METRICS {{"primary": <float>, "gauc": <float>, "ndcg@5": <float>, "gpu_seconds": <float>}}
+  - The script must ALSO score the test split and save it, so that your best iteration can be
+    submitted without a human rebuilding anything. After evaluating validation:
+
+        import os
+        out = os.environ.get("ITER_OUT")
+        if out:
+            te = load("test")
+            te_scores = <your model's scores for te, exactly as you scored valid>
+            np.save(os.path.join(out, "scores_test.npy"),
+                    np.asarray(te_scores, dtype=np.float64))
+
+    Producing test SCORES is required. Fitting or selecting on test is forbidden.
+
+REUSING WORK BETWEEN ITERATIONS: os.environ["RUN_ARTIFACTS"] is a directory that persists for
+the whole run, shared by every iteration. $ITER_OUT is per-iteration; RUN_ARTIFACTS is not.
+Anything you save there -- fitted predictions, arrays, parameters -- is still there next
+iteration, and reloading is free where refitting is not. Name files so you can recognise them
+later, and check a file exists before trusting it: earlier iterations may have crashed.
+"""
+
+# ---------------------------------------------------------------- phase instructions
+
+_EDA_TASK = """PHASE: INSPECT DATA.
+
+You have never seen this dataset. Before modelling anything, write a script that interrogates
+it and PRINTS what you find. You get one shot, and whatever you print is the only thing you
+will carry into every later iteration -- so measure what would actually change a modelling
+decision, not what is merely easy to print.
+
+Consider: label balance overall and per user; how many rows and positives a typical user has;
+which of the 37 fields carry signal about `long_view` and which are near-constant; field
+cardinalities against how many ids actually appear in each split; how much of validation is
+users or videos unseen in train; whether s.X holds one scalar per row or any sequence; and the
+shape of anything you might want to build a feature from.
+
+Print compact, quantitative lines. Budget your output: at most ~60 lines, and it is truncated
+at {max_eda} characters. Do NOT train a model and do NOT print a METRICS line in this phase."""
+
+_BASELINE_TASK = """PHASE: REPRODUCE THE OFFICIAL BASELINE.
+
+Requirement 1 of this challenge: stand up a working end-to-end pipeline and confirm it reaches
+the official baseline's reported validation primary of {baseline:.4f}.
+
+Write that pipeline yourself: a Factorization Machine, k=16, lr=0.001, trained on the 5
+categorical fields the baseline uses (user identity, video identity, its author, the feed tab
+it was shown in, and a bucketed video duration -- pick the matching names from the field list
+you printed during EDA). Print the METRICS line and save test scores per the output contract.
+
+You are reproducing a reference, not beating it. Getting within noise of {baseline:.4f} is
+success; a much higher number means you have leaked something and a much lower one means the
+pipeline is wrong."""
+
+_IMPROVE_TASK = """PHASE: ITERATE.
+
+Propose the next experiment and write the complete script for it. Improvements may target ANY
+stage of the pipeline -- what features exist and how they are encoded, the model, the loss, the
+training procedure, how predictions are post-processed or combined -- not only the architecture.
+
+State in your hypothesis which stage you are targeting and the MECHANISM by which it should
+raise a within-user ranking metric. An experiment that swaps in another named architecture with
+no mechanism is worth little; one whose result is informative either way is worth a lot.
+Remember that anything under 0.002 on validation is noise, so prefer changes big enough to
+show above it.
+
+Your script is not limited to a single alternative. It may construct and evaluate several
+within its time budget and report whichever result you choose to stand behind -- the METRICS
+line is what the harness scores, and how you arrive at it is yours to decide. If you do
+evaluate more than one, print a line `CANDIDATES {{"name": score, ...}}` before the METRICS
+line so the run log records what you compared.
+
+The script may also measure things that are not its score -- a distribution, a correlation, a
+per-group breakdown, a check of an assumption. Print each such observation on its own line
+beginning `FINDINGS ` and it is carried into what the agent believes, whatever the score turns
+out to be. An iteration that scores badly but establishes a fact is not a wasted iteration."""
+
+_EDIT_PARENT = """You are editing an existing solution, not starting over.
+
+BEST SCRIPT SO FAR -- iteration #{iid}, validation primary {score:.4f}:
+hypothesis: {hyp}
+```python
+{code}
+```
+
+Make ONE targeted change to this script and return the COMPLETE modified script. Keep what is
+working. If you believe this line of attack is exhausted, say so in your hypothesis and write
+something structurally different instead."""
+
+_BROADEN_PARENT = """The last {stale} experiment(s) produced no gain above 0.002. Refining the
+same line of attack again is the most common way a run ends with nothing.
+
+Change DIRECTION, not detail. Target a different stage of the pipeline, or a different family
+of method, from everything listed below. A variation on an approach already in that list is not
+a new direction, however it is described.
+
+ALREADY TRIED THIS RUN:
+{tried}
+
+THE BEST SCRIPT SO FAR -- iteration #{iid}, validation primary {score:.4f}. Keep what makes it
+work and build the new direction on top of it; do not restart from something weaker just to be
+different. Changing direction means changing the method, not discarding the best result:
+```python
+{code}
+```
+
+Return the COMPLETE script."""
+
+_DRAFT = """No prior solution has survived, so write this script from scratch."""
+
+
+def _fmt_metrics(metrics: dict) -> str:
+    if not metrics:
+        return "-"
+    return ",".join(f"{k}={v:.4f}" if isinstance(v, float) else f"{k}={v}"
+                    for k, v in metrics.items())
+
+
+def _summarize_history(history, n: int) -> str:
+    lines = [f"#{e.iter_id} {e.status} {_fmt_metrics(e.metrics)} :: {e.hypothesis[:70]}"
+             for e in history[-n:]]
+    return "\n".join(lines) if lines else "none"
+
+
+def _kb_query(history, reflections, feedback: str | None) -> str:
+    """Retrieval is driven by what the agent is actually working on. Nothing is pinned:
+    a pinned entry is a human steering the search."""
+    words = ["click through rate", "ranking", "ndcg", "gauc", "short video recommendation"]
+    words += [e.hypothesis for e in history[-3:]]
+    words += reflections[-2:]
+    if feedback:
+        words.append(feedback[:200])
+    return " ".join(words)
+
+
+class LLMProposer:
+    """LLM-backed Proposer. `complete` is injected so this stays testable offline."""
+
+    def __init__(self, complete: CompleteFn, kb_papers: list[dict] | None = None,
+                 max_history: int = MAX_HISTORY, timeout: float = 300.0,
+                 baseline: float = 0.6016):
+        self.complete = complete
+        self.kb_papers = kb_papers
+        self.max_history = max_history
+        self.timeout = timeout
+        self.baseline = baseline
+        self._seen_papers: set[str] = set()   # so retrieval widens instead of repeating
+
+    def propose(self, *, phase: str = "improve", history=None, blacklist=None,
+                feedback: str | None = None, parent=None, context=None) -> Proposal | None:
+        history = history or []
+        blacklist = blacklist if blacklist is not None else set()
+        context = context or {}
+        note = None
+        tokens_in = tokens_out = 0
+        for _ in range(MAX_ATTEMPTS):
+            prompt = self._build_prompt(phase, history, blacklist, feedback, parent, context, note)
+            text, ti, to = self.complete(prompt)
+            tokens_in += ti
+            tokens_out += to
+            parsed = self._parse(text)
+            if parsed is None:
+                note = ("Your previous reply did not parse. Reply with exactly one "
+                        "'HYPOTHESIS: <one line>' followed by exactly one ```python fence.")
+                continue
+            hyp, code = parsed
+            if phase == "improve" and hyp in blacklist:
+                note = f'"{hyp}" is retired; propose a materially different experiment.'
+                continue
+            return Proposal(hyp, code, tokens_in, tokens_out)
+        return None
+
+    def _build_prompt(self, phase, history, blacklist, feedback, parent, context, note) -> str:
+        blocks = [TASK_BRIEF.format(timeout=self.timeout)]
+
+        if phase == "eda":
+            blocks.append(_EDA_TASK.format(max_eda=MAX_EDA_CHARS))
+        elif phase == "baseline":
+            blocks.append(_BASELINE_TASK.format(baseline=self.baseline))
+        else:
+            blocks.append(_IMPROVE_TASK)
+
+        eda = context.get("eda")
+        if eda:
+            blocks.append(f"WHAT YOU MEASURED WHEN YOU INSPECTED THE DATA:\n{eda[:MAX_EDA_CHARS]}")
+
+        if phase == "improve":
+            mem = context.get("memory")
+            if mem:
+                blocks.append(mem)
+            blocks.append("EXPERIMENTS THIS RUN (oldest first):\n"
+                          f"{_summarize_history(history, self.max_history)}")
+            know = context.get("knowledge") or ""
+            refl = [know] if know else []
+            if know and know != "nothing established yet":
+                blocks.append("WHAT YOU CURRENTLY BELIEVE ABOUT THIS TASK, established by your "
+                              "own results. A claim marked (invalidated) was contradicted by "
+                              "later evidence -- do not act on it again without a new "
+                              "mechanism:\n" + know)
+            bl = ", ".join(sorted(blacklist))
+            if bl:
+                blocks.append(f"RETIRED -- do not propose again: {bl}")
+            if parent is None:
+                blocks.append(_DRAFT)
+            elif context.get("mode") == "broaden":
+                tried = "\n".join(f"  - {e.hypothesis[:100]}" for e in history
+                                  if e.phase == "improve") or "  - nothing yet"
+                blocks.append(_BROADEN_PARENT.format(
+                    stale=context.get("stale", 1), tried=tried, iid=parent.iter_id,
+                    score=parent.score, code=parent.code[:MAX_CODE_CHARS]))
+            else:
+                blocks.append(_EDIT_PARENT.format(iid=parent.iter_id, score=parent.score,
+                                                  hyp=parent.hypothesis,
+                                                  code=parent.code[:MAX_CODE_CHARS]))
+            blocks.append(
+                "AVAILABLE LITERATURE -- the whole catalogue you can draw on. It lists every "
+                "method available, including ones that may not suit this data; deciding which "
+                "are relevant is your job:\n" + index(self.kb_papers))
+            kb = retrieve(_kb_query(history, refl, feedback), k=MAX_KB, papers=self.kb_papers,
+                          seen=self._seen_papers)
+            if kb:
+                self._seen_papers.update(p["id"] for p in kb)
+                blocks.append("DETAIL ON A FEW OF THEM (a retrieval hit is not a recommendation; "
+                              "judge for yourself whether the mechanism applies here):\n"
+                              + "\n".join(f"- {p['id']}: {p['title']} ({p['year']}) - "
+                                          f"{p['expected_effect']}" for p in kb))
+
+        if feedback:
+            fb = ("YOUR PREVIOUS ATTEMPT FAILED. Diagnose it from the output below, fix it, and "
+                  f"keep the same hypothesis.\n{feedback[:MAX_FEEDBACK_CHARS]}")
+            last_code = next((e.diff for e in reversed(history)
+                              if e.status in ("failed", "blacklisted") and e.diff), "")
+            if last_code and parent is None:
+                fb += f"\n\nThe script that failed:\n```python\n{last_code[:MAX_CODE_CHARS]}\n```"
+            blocks.append(fb)
+
+        if note:
+            blocks.append(f"NOTE: {note}")
+
+        blocks.append(
+            "Respond EXACTLY as:\n"
+            "HYPOTHESIS: <one line: what you are testing, which stage, and the mechanism>\n"
+            "```python\n"
+            "<complete runnable script>\n"
+            "```"
+        )
+        return "\n\n".join(blocks)
+
+    def _parse(self, text: str) -> tuple[str, str] | None:
+        hm = _HYP_RE.search(text)
+        cm = _CODE_RE.search(text)
+        if not hm or not cm:
+            return None
+        hyp, code = hm.group(1).strip(), cm.group(1).strip()
+        return (hyp, code) if hyp and code else None

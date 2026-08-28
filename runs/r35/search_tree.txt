@@ -1,0 +1,7 @@
+#1 0.6020  Reproduce the official baseline by training a k=16 five-field Factoriz
+  #2 0.6036  Target the feature-interaction representation stage by replacing the f
+    #3 0.6036  Target leakage-free historical feature construction and score fusion b
+    #4 0.6040  Target prediction aggregation with multi-seed bagging and within-user 
+      #5 0.6047  Target prediction aggregation by replacing two redundant DeepFM seeds 
+        #6 0.6049  Target the training-objective stage with metric-aligned per-user loss 
+          #7 0.6048  Target the supervision and representation-learning stage with MMoE mul

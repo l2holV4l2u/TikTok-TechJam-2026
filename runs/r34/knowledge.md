@@ -1,0 +1,7 @@
+# What the agent established
+
+- (active) The 16-factor five-field FM reproduces the official baseline within seed noise, scoring 0.6013 versus 0.6016, and is a valid reference implementation for subsequent experiments. [iters 1]
+- (active) Upgrading the five-field FM to a DeepFM over informative user, item, and context fields measurably improves the primary validation score by 0.0030, from 0.6013 to 0.6043. [iters 1,2]
+- (active) Adding train-only clipped log play-time prediction as an auxiliary task to the shared DeepFM representation produces no measurable primary-score change relative to DeepFM alone, scoring 0.6033 versus 0.6043. [iters 2,3]
+- (active) Blending train-only recency-weighted, Bayesian-smoothed video and author long-view residuals with DeepFM produces no measurable primary-score change; the tested alpha-0.35 blend scored 0.6034 versus 0.6043 for DeepFM alo [iters 2,4]
+- (active) Adding DIN-style candidate-aware pooling over strictly prior positive-video history produces no measurable primary-score change relative to DeepFM alone, scoring 0.6032 versus 0.6043, despite history being available for  [iters 2,5]

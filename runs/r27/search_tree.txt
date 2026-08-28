@@ -1,0 +1,4 @@
+#1 0.6028 [retired]  Reproduce the official five-field Factorization Machine baseline using
+  #2 0.6018  Expand the FM input stage from five fields to all 37 safe categorical 
+  #3 0.6008  Add only `tag` at the input-feature stage; its strong label-rate varia
+  #4 0.6033  Replace pointwise BCE at the training-objective stage with vectorized 

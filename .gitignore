@@ -1,0 +1,42 @@
+# data: 195MB download + ~450MB cache, fetched by the setup step in README
+data/
+starter/
+kuairand-starter-kit.zip
+
+# Run outputs. The per-iteration logs and the scripts the agent wrote are graded deliverables,
+# so runs from the current architecture are kept -- r27 onward, which are the runs whose brief
+# and knowledge base carry no human findings, and which the ablation table in DEVPOST cites.
+# Earlier runs (r1-r26) used the prior-laden prompt and are excluded; the prompt itself is kept
+# in archive/ instead. Score blobs (*.npy, ~1.4MB each) are excluded everywhere.
+runs/*
+!runs/r27/
+!runs/r28/
+!runs/r29/
+!runs/r30/
+!runs/r33/
+!runs/r34/
+!runs/r35/
+!runs/r36/
+!runs/r37/
+runs/*/scripts/*
+!runs/*/scripts/*.py
+*.npy
+# a submission CSV is 5.9MB; the run that produced the submitted one is identified
+# in RUN_REPORT.md, and the file itself is kept once at the repo root
+runs/*/submission.csv
+
+# 5.9MB of scores; the hand-tuned blend it came from is research/blend_model.py and the
+# number it scored is cited in DEVPOST -- the CSV itself adds nothing a reader can check
+research/*.csv
+# r26 predates the decontaminated prompt, is referenced nowhere, and the r1-r26 runs that
+# produced it are excluded above -- shipping its scores would contradict that
+submission_fallback_r26.csv
+
+blend/artifacts/
+checkpoints/
+components.npz
+
+__pycache__/
+*.pyc
+.env
+*.env

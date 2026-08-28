@@ -1,0 +1,4 @@
+#1 0.6021  Reproduce the official baseline stage by training a k=16 five-field Fa
+  #2 0.6006  Target the training-objective stage with inverse-square-root per-user 
+  #3 0.6025  Target the feature-interaction representation stage with a FiBiNET-sty
+    #4 0.6037  Target the supervision stage with an MMoE residual over the reliable f

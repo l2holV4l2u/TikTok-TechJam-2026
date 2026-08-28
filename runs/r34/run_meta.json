@@ -1,0 +1,30 @@
+{
+  "stop_reason": "converged",
+  "iterations": 6,
+  "iteration_cap": 50,
+  "wall_clock_s": 1040.1798825000005,
+  "wall_clock_h": 0.28893885625000015,
+  "script_seconds": 653.3357478999824,
+  "gpu_hours": 0.0,
+  "proposer_tokens_in": 29714,
+  "proposer_tokens_out": 22695,
+  "tokens_in": 33448,
+  "tokens_out": 24953,
+  "tokens_total": 58401,
+  "eda_completed": true,
+  "candidates_evaluated": 21,
+  "claims_established": 5,
+  "baseline_reproduced": 0.6012750512886527,
+  "baseline_target": 0.6016,
+  "manual_interventions": 0,
+  "failures": 0,
+  "submission": {
+    "iter_id": 2,
+    "valid_primary": 0.6042669438654732,
+    "test_primary": 0.5979278022411003,
+    "test_gauc": 0.6649297338055783,
+    "test_ndcg@5": 0.5309258706766224,
+    "test_delta": 0.003327802241100297,
+    "hypothesis": "Target the feature-interaction representation stage by upgrading the FM to a DeepFM over informative user, item, and context fields, allowing nonlinear higher-order crosses such as user\u00d7content\u00d7tab while retaining the reliable pairwise FM signal."
+  }
+}

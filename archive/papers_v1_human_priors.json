@@ -1,0 +1,429 @@
+[
+  {
+    "id": "fm_baseline",
+    "title": "Factorization Machines",
+    "year": 2010,
+    "url": "https://doi.org/10.1109/ICDM.2010.127",
+    "tags": [
+      "factorization-machine",
+      "baseline",
+      "feature-cross",
+      "linear-time",
+      "click"
+    ],
+    "summary": "Rendle's original FM: models all pairwise feature interactions via factorized (embedding-dot-product) parameters instead of dense weights per cross, computable in linear time, and robust under the extreme sparsity typical of one-hot categorical recommender data.",
+    "applies_to": "architecture",
+    "expected_effect": "THIS IS THE OFFICIAL BASELINE TO BEAT on KuaiRand-Pure: k=16, lr=0.001, 5 categorical fields, numpy-only, ~40s on one CPU core. Reported scores: validation primary 0.6016, hidden-test primary 0.5946 (primary = mean of GAUC and nDCG@5). It is deliberately weak -- never propose plain FM as an improvement; almost any reasonable modern method (deeper feature-cross model, GBDT, sequence model) should clear it given the dataset's rich side features and behavior logs."
+  },
+  {
+    "id": "deepfm",
+    "title": "DeepFM: A Factorization-Machine based Neural Network for CTR Prediction",
+    "year": 2017,
+    "url": "https://arxiv.org/abs/1703.04247",
+    "tags": [
+      "feature-cross",
+      "factorization-machine",
+      "embedding",
+      "click"
+    ],
+    "summary": "Shares a single embedding layer between an FM component (2nd-order interactions) and a DNN component (implicit higher-order interactions), trained end-to-end with no manual feature engineering.",
+    "applies_to": "architecture",
+    "expected_effect": "MEASURED HERE: 0.5897-0.6010, i.e. AT OR BELOW the 0.6016 FM baseline. The extra capacity does not pay off at ~43 rows/user. Useful only as a decorrelated blend component, not as a replacement for FM."
+  },
+  {
+    "id": "xdeepfm",
+    "title": "xDeepFM: Combining Explicit and Implicit Feature Interactions for Recommender Systems",
+    "year": 2018,
+    "url": "https://arxiv.org/abs/1803.05170",
+    "tags": [
+      "feature-cross",
+      "high-order-interaction",
+      "embedding",
+      "click"
+    ],
+    "summary": "Adds a Compressed Interaction Network (CIN) that produces explicit, vector-wise, bounded-degree feature crosses on top of the implicit DNN interactions used by DeepFM.",
+    "applies_to": "architecture",
+    "expected_effect": "Untested here, but DeepFM/NFM/DCN-v2 all landed at or below baseline, so expect the same. Propose only as a blend component."
+  },
+  {
+    "id": "dcn",
+    "title": "Deep & Cross Network for Ad Click Predictions",
+    "year": 2017,
+    "url": "https://arxiv.org/abs/1708.05123",
+    "tags": [
+      "feature-cross",
+      "bounded-degree",
+      "embedding",
+      "click"
+    ],
+    "summary": "Adds a cross network that applies explicit feature crossing at each layer with a bounded polynomial degree, run alongside a standard DNN, adding negligible extra parameters.",
+    "applies_to": "architecture",
+    "expected_effect": "MEASURED HERE: 0.6024-0.6032 standalone, marginally above the 0.6016 baseline and one of the stronger single models. A good blend component."
+  },
+  {
+    "id": "dcn_v2",
+    "title": "DCN V2: Improved Deep & Cross Network and Practical Lessons for Web-scale Learning to Rank Systems",
+    "year": 2021,
+    "url": "https://arxiv.org/abs/2008.13535",
+    "tags": [
+      "feature-cross",
+      "low-rank",
+      "web-scale",
+      "embedding",
+      "click"
+    ],
+    "summary": "Replaces DCN's cross vector with a more expressive low-rank matrix formulation (optionally a mixture of low-rank experts), addressing DCN v1's limited expressiveness at scale.",
+    "applies_to": "architecture",
+    "expected_effect": "MEASURED HERE: 0.5931 standalone, below baseline. DCN (v1) did better on this data."
+  },
+  {
+    "id": "autoint",
+    "title": "AutoInt: Automatic Feature Interaction Learning via Self-Attentive Neural Networks",
+    "year": 2019,
+    "url": "https://arxiv.org/abs/1810.11921",
+    "tags": [
+      "attention",
+      "feature-cross",
+      "embedding",
+      "click"
+    ],
+    "summary": "Maps features into a shared low-dimensional space and stacks multi-head self-attention layers with residual connections so each layer models increasingly higher-order feature combinations.",
+    "applies_to": "architecture",
+    "expected_effect": "Untested here. Same family as DeepFM/DCN, which all landed near or below baseline; capacity is not the bottleneck on this dataset."
+  },
+  {
+    "id": "fibinet",
+    "title": "FiBiNET: Combining Feature Importance and Bilinear feature Interaction for Click-Through Rate Prediction",
+    "year": 2019,
+    "url": "https://arxiv.org/abs/1905.09433",
+    "tags": [
+      "feature-importance",
+      "bilinear",
+      "senet",
+      "embedding",
+      "click"
+    ],
+    "summary": "Uses a Squeeze-and-Excitation network to dynamically re-weight feature embeddings by importance, then applies bilinear functions instead of inner/Hadamard product for interaction.",
+    "applies_to": "features",
+    "expected_effect": "MEASURED HERE: SENet re-weighting variants scored 0.5963-0.6001, below baseline."
+  },
+  {
+    "id": "pnn",
+    "title": "Product-based Neural Networks for User Response Prediction",
+    "year": 2016,
+    "url": "https://arxiv.org/abs/1611.00144",
+    "tags": [
+      "feature-cross",
+      "embedding",
+      "click"
+    ],
+    "summary": "Inserts a product layer between the embedding layer and the fully-connected layers to explicitly capture pairwise interactive patterns across feature fields before the DNN.",
+    "applies_to": "architecture",
+    "expected_effect": "Untested here; same capacity-adding family that has not paid off on this data."
+  },
+  {
+    "id": "nfm",
+    "title": "Neural Factorization Machines for Sparse Predictive Analytics",
+    "year": 2017,
+    "url": "https://arxiv.org/abs/1708.05027",
+    "tags": [
+      "factorization-machine",
+      "feature-cross",
+      "bilinear",
+      "click"
+    ],
+    "summary": "Introduces a Bilinear Interaction pooling layer that lets a single shallow hidden layer model second-order feature interactions, combining FM linearity with neural non-linearity.",
+    "applies_to": "architecture",
+    "expected_effect": "MEASURED HERE: 0.5598, far below the 0.6016 baseline. Do not propose as a standalone improvement."
+  },
+  {
+    "id": "wide_deep",
+    "title": "Wide & Deep Learning for Recommender Systems",
+    "year": 2016,
+    "url": "https://arxiv.org/abs/1606.07792",
+    "tags": [
+      "feature-cross",
+      "embedding",
+      "memorization",
+      "generalization",
+      "click"
+    ],
+    "summary": "Jointly trains a wide linear model over cross-product features with a deep neural network over embeddings, so the wide part memorizes frequent co-occurrences while the deep part generalizes to unseen combinations.",
+    "applies_to": "architecture",
+    "expected_effect": "Untested here; same capacity-adding family that has not paid off on this data."
+  },
+  {
+    "id": "din",
+    "title": "Deep Interest Network for Click-Through Rate Prediction",
+    "year": 2018,
+    "url": "https://arxiv.org/abs/1706.06978",
+    "tags": [
+      "attention",
+      "user-behavior-sequence",
+      "click"
+    ],
+    "summary": "Uses a local activation unit to adaptively attend over a user's historical behavior sequence with respect to a candidate item, instead of squashing history into one fixed vector.",
+    "applies_to": "architecture",
+    "expected_effect": "A strong, promising direction: KuaiRand-Pure's interaction logs let you build each user's watched-video history, and DIN-style target-attention over that history (attending to past videos by similarity to the candidate video's author/tag/category) should beat feature-cross-only models like DeepFM. Only use PAST interactions as history inputs -- never include the current row's post-click columns when building the sequence for that row."
+  },
+  {
+    "id": "dien",
+    "title": "Deep Interest Evolution Network for Click-Through Rate Prediction",
+    "year": 2019,
+    "url": "https://arxiv.org/abs/1809.03672",
+    "tags": [
+      "attention",
+      "user-behavior-sequence",
+      "gru",
+      "click"
+    ],
+    "summary": "Extends DIN with an interest extractor GRU layer and an attention-based interest evolving layer to model how user interest drifts over time relative to the target item.",
+    "applies_to": "architecture",
+    "expected_effect": "Higher potential ceiling than DIN by modeling interest drift, but heavier to implement and tune (auxiliary loss for the GRU, two-stage attention) -- reasonable only after a plain DIN has been tried and shown behavior-sequence modeling helps on this dataset."
+  },
+  {
+    "id": "bst",
+    "title": "Behavior Sequence Transformer for E-commerce Recommendation in Alibaba",
+    "year": 2019,
+    "url": "https://arxiv.org/abs/1905.06874",
+    "tags": [
+      "transformer",
+      "user-behavior-sequence",
+      "attention",
+      "click"
+    ],
+    "summary": "Applies a Transformer self-attention encoder over the user's behavior sequence to capture sequential signal, instead of just concatenating behavior features as prior CTR models did.",
+    "applies_to": "architecture",
+    "expected_effect": "Good middle ground between DIN and full sequential recommenders (SASRec): self-attention over each user's clicked-video history, then fused with the FM/DeepFM-style feature-cross tower for the final click score. On 27K users / 7.6K videos, sequences are short enough that a small Transformer trains fast."
+  },
+  {
+    "id": "sasrec",
+    "title": "Self-Attentive Sequential Recommendation",
+    "year": 2018,
+    "url": "https://arxiv.org/abs/1808.09781",
+    "tags": [
+      "transformer",
+      "sequential-recommendation",
+      "attention",
+      "next-item"
+    ],
+    "summary": "A two-layer self-attention (Transformer-style) sequence model that predicts the next item from a user's action history, capturing long-range dependencies like an RNN but attending directly to the relevant few past actions.",
+    "applies_to": "architecture",
+    "expected_effect": "Framed originally for next-item prediction rather than per-row click scoring; on KuaiRand-Pure it is best used as a user-history encoder feeding a click-scoring head rather than swapped in wholesale, since the task here is ranking candidate videos for is_click, not autoregressive next-item generation. Consider it after BST if sequence order (not just recency) matters."
+  },
+  {
+    "id": "gru4rec",
+    "title": "Session-based Recommendations with Recurrent Neural Networks",
+    "year": 2016,
+    "url": "https://arxiv.org/abs/1511.06939",
+    "tags": [
+      "rnn",
+      "gru",
+      "sequential-recommendation",
+      "session"
+    ],
+    "summary": "Models user sessions with a GRU-based RNN to predict the probability of the next event (e.g. item click) given the session so far; an early and still-common strong RNN baseline for sequential recommendation.",
+    "applies_to": "architecture",
+    "expected_effect": "Cheaper than a Transformer-based sequence encoder and a reasonable lightweight alternative to BST/SASRec for encoding per-user watch history on KuaiRand-Pure, but generally weaker than attention-based sequence models at this data scale -- try it mainly as a fast baseline for whether sequence modeling helps at all before investing in BST/DIEN."
+  },
+  {
+    "id": "mmoe",
+    "title": "Modeling Task Relationships in Multi-task Learning with Multi-gate Mixture-of-Experts",
+    "year": 2018,
+    "url": "https://dl.acm.org/doi/10.1145/3219819.3220007",
+    "tags": [
+      "multi-task",
+      "expert-routing",
+      "shared-bottom",
+      "auxiliary-signals"
+    ],
+    "summary": "Replaces a shared-bottom multi-task network with multiple expert subnetworks and a per-task gating network, letting each task learn its own weighting over shared experts.",
+    "applies_to": "architecture",
+    "expected_effect": "KuaiRand-Pure exposes 12 feedback signals (is_like, is_follow, is_comment, is_forward, long_view, play_time_ms, ...) but only is_click is scored. MMoE lets is_click share expert capacity with these auxiliary signals as extra training heads, which can regularize embeddings on this comparatively small (1.4M-row) dataset. Only the is_click head's output is used for GAUC/nDCG scoring; the auxiliary heads must never feed back post-click columns as *inputs* for predicting is_click on the same row (label leakage) -- they are outputs only."
+  },
+  {
+    "id": "ple",
+    "title": "Progressive Layered Extraction (PLE): A Novel Multi-Task Learning (MTL) Model for Personalized Recommendations",
+    "year": 2020,
+    "url": "https://dl.acm.org/doi/10.1145/3383313.3412236",
+    "tags": [
+      "multi-task",
+      "expert-routing",
+      "seesaw-effect",
+      "auxiliary-signals"
+    ],
+    "summary": "Separates task-shared experts from task-specific experts and stacks them with progressive routing layers, explicitly addressing negative transfer and the seesaw effect that MMoE still shows.",
+    "applies_to": "architecture",
+    "expected_effect": "A step up from MMoE for the same KuaiRand-Pure auxiliary-signal setup (click plus like/follow/comment/forward/long_view/etc.) if MMoE shows negative transfer (auxiliary tasks hurting the click head). More parameters and tuning surface than MMoE, so only justified once MMoE's seesaw effect is actually observed."
+  },
+  {
+    "id": "esmm",
+    "title": "Entire Space Multi-Task Model: An Effective Approach for Estimating Post-Click Conversion Rate",
+    "year": 2018,
+    "url": "https://arxiv.org/abs/1804.07931",
+    "tags": [
+      "multi-task",
+      "sample-selection-bias",
+      "sequential-dependence",
+      "auxiliary-signals"
+    ],
+    "summary": "Trains a post-click target jointly with the click target via the chain-rule identity P(click, post-click) = P(click) x P(post-click | click), estimated over the entire impression space, removing the sample-selection bias of training the post-click model on clicked-only rows.",
+    "applies_to": "loss",
+    "expected_effect": "Not directly about CVR here, but the underlying structure maps cleanly onto KuaiRand-Pure: several of the 12 feedback signals (long_view, is_like, is_comment, play_time_ms-derived signals) are only meaningful *after* a click, exactly like ESMM's conversion. Model P(click) x P(signal | click) over the whole impression space instead of training a signal-specific auxiliary head only on clicked rows, then use it only to shape shared embeddings -- the scored metric is still GAUC/nDCG on the click head alone."
+  },
+  {
+    "id": "bpr",
+    "title": "BPR: Bayesian Personalized Ranking from Implicit Feedback",
+    "year": 2009,
+    "url": "https://arxiv.org/abs/1205.2618",
+    "tags": [
+      "pairwise-loss",
+      "implicit-feedback",
+      "ranking",
+      "negative-sampling"
+    ],
+    "summary": "Derives a generic pairwise ranking criterion (BPR-Opt) from a Bayesian analysis of implicit feedback, optimizing that for a given user, observed (clicked) items should be ranked above unobserved ones, rather than optimizing pointwise classification accuracy.",
+    "applies_to": "loss",
+    "expected_effect": "MEASURED ON THIS TASK: plain within-user pairwise BPR scored 0.5935-0.5955 vs 0.6016 pointwise baseline -- worse. 33% positive rate means this is not sparse implicit feedback. Only worth revisiting as a calibration-preserving listwise objective blended with logloss."
+  },
+  {
+    "id": "lambdamart",
+    "title": "From RankNet to LambdaRank to LambdaMART: An Overview",
+    "year": 2010,
+    "url": "https://www.microsoft.com/en-us/research/wp-content/uploads/2016/02/MSR-TR-2010-82.pdf",
+    "tags": [
+      "listwise-loss",
+      "lambdarank",
+      "lambdamart",
+      "ranking",
+      "ndcg"
+    ],
+    "summary": "Overview of RankNet, LambdaRank, and LambdaMART -- LambdaRank optimizes a smoothed surrogate for ranking metrics like NDCG directly via gradients ('lambdas') weighted by the metric change from swapping a pair, and LambdaMART is its gradient-boosted-tree version.",
+    "applies_to": "loss",
+    "expected_effect": "MEASURED ON THIS TASK: plain within-user pairwise BPR scored 0.5935-0.5955 vs 0.6016 pointwise baseline -- worse. 33% positive rate means this is not sparse implicit feedback. Only worth revisiting as a calibration-preserving listwise objective blended with logloss."
+  },
+  {
+    "id": "sampled_softmax_inbatch",
+    "title": "Sampling-Bias-Corrected Neural Modeling for Large Corpus Item Recommendations",
+    "year": 2019,
+    "url": "https://dl.acm.org/doi/10.1145/3298689.3346996",
+    "tags": [
+      "negative-sampling",
+      "in-batch-negatives",
+      "sampled-softmax",
+      "training",
+      "candidate-generation"
+    ],
+    "summary": "Trains a two-tower retrieval model with in-batch negatives, and shows plain in-batch sampling is biased toward popular items unless corrected by an estimated item-sampling-probability term subtracted from the logits.",
+    "applies_to": "training",
+    "expected_effect": "Relevant mainly if the pipeline frames click prediction as scoring (user, video) pairs against in-batch negatives instead of pure pointwise BCE -- with only 7.6K videos, popularity skew is real and the sampling-bias correction is cheap to add; without it, in-batch negative training will over-penalize popular videos. Lower priority than BPR/LambdaMART for this task's per-row pointwise setup, but worth it if moving toward a two-tower or listwise formulation."
+  },
+  {
+    "id": "lightgbm",
+    "title": "LightGBM: A Highly Efficient Gradient Boosting Decision Tree",
+    "year": 2017,
+    "url": "https://proceedings.neurips.cc/paper/2017/hash/6449f44a102fde848669bdd9eb6b76fa-Abstract.html",
+    "tags": [
+      "gbdt",
+      "tabular",
+      "gradient-boosting",
+      "baseline"
+    ],
+    "summary": "A histogram-based, leaf-wise gradient boosted decision tree framework with gradient-based one-side sampling and exclusive feature bundling for speed and memory efficiency at large scale.",
+    "applies_to": "architecture",
+    "expected_effect": "Very strong, very cheap baseline-beater for KuaiRand-Pure: 1.4M rows with mostly categorical/count features is exactly GBDT's sweet spot, it needs no embedding tuning, trains in well under a minute on CPU, and LightGBM's built-in `lambdarank` objective (grouped by user) directly targets NDCG -- likely one of the best score-per-compute options in this whole KB for this dataset."
+  },
+  {
+    "id": "xgboost",
+    "title": "XGBoost: A Scalable Tree Boosting System",
+    "year": 2016,
+    "url": "https://arxiv.org/abs/1603.02754",
+    "tags": [
+      "gbdt",
+      "tabular",
+      "gradient-boosting",
+      "baseline"
+    ],
+    "summary": "A scalable, regularized gradient tree boosting system with a sparsity-aware split algorithm and weighted quantile sketch for approximate learning, widely used for tabular prediction tasks.",
+    "applies_to": "architecture",
+    "expected_effect": "Comparable to LightGBM as a cheap baseline-beater on this dataset's tabular categorical/count features; XGBoost's `rank:ndcg` / `rank:pairwise` objectives (grouped by user_id) give the same NDCG-targeting benefit as LightGBM's lambdarank -- pick either GBDT library, the choice matters less than actually grouping by user and using a ranking objective instead of plain binary logloss."
+  },
+  {
+    "id": "counterfactual_ips",
+    "title": "Doubly Robust Policy Evaluation and Learning",
+    "year": 2011,
+    "url": "https://arxiv.org/abs/1103.4601",
+    "tags": [
+      "off-policy",
+      "counterfactual",
+      "ips",
+      "doubly-robust",
+      "advanced"
+    ],
+    "summary": "For contextual-bandit-style logged data (context, action taken, reward observed, but not rewards for untaken actions), combines an inverse-propensity-weighted estimator with a reward model into a doubly-robust estimator with lower variance than either alone.",
+    "applies_to": "evaluation",
+    "expected_effect": "ADVANCED / OPTIONAL. KuaiRand-Pure's `log_random_*` files log interactions under fully random exposure, which is exactly the unbiased logging policy IPS/doubly-robust methods need as a comparison point -- they can be used to (a) sanity-check whether the main click model is biased toward popular/previously-shown videos, or (b) build a debiased evaluation signal alongside GAUC/nDCG. High effort for uncertain payoff relative to the primary metric; pursue only after the modeling directions above have been exhausted."
+  },
+  {
+    "id": "kuairand_dataset",
+    "title": "KuaiRand: An Unbiased Sequential Recommendation Dataset with Randomly Exposed Videos",
+    "year": 2022,
+    "url": "https://arxiv.org/abs/2208.08696",
+    "tags": [
+      "dataset",
+      "kuairand",
+      "random-exposure",
+      "side-features",
+      "label-leakage"
+    ],
+    "summary": "Introduces the KuaiRand family of datasets (of which KuaiRand-Pure is the smallest variant): short-video interaction logs from Kuaishou with rich user/video side features and, critically, a subset of interactions collected under fully random video exposure rather than the production ranking policy, enabling unbiased offline evaluation and debiasing research.",
+    "applies_to": "features",
+    "expected_effect": "The primary reference for what fields exist and mean on this task: user features (activity level, follower counts, register days, 18 onehot features) and video features (author_id, video_type, upload_type, music_id, tag, duration, statistics) are safe pre-click inputs; post-click columns (play_time_ms, long_view, profile_stay_time, and similar) must NEVER be used as inputs when predicting is_click on the same row -- that is direct label leakage, since they only exist because a click already happened. The `log_random_*` files are the source data for the counterfactual/IPS direction above."
+  },
+  {
+    "id": "rank_aggregation",
+    "title": "Rank Aggregation Methods for the Web",
+    "year": 2001,
+    "url": "https://doi.org/10.1145/371920.372165",
+    "tags": [
+      "rank-aggregation",
+      "borda-count",
+      "ensemble",
+      "blending",
+      "ranking"
+    ],
+    "summary": "Formalizes combining several ranked lists into one, comparing footrule- and Kendall-tau-based optimal aggregation against simple positional voting methods such as Borda count, originally for meta-search.",
+    "applies_to": "ensemble",
+    "expected_effect": "MEASURED ON THIS TASK: rank-averaging (Borda-count-style aggregation) of FM + LightGBM-binary + LightGBM-lambdarank, weighted 0.6/0.3/0.1, scored valid 0.6045 / test 0.5984 vs baseline 0.6016/0.5946 (+0.0038), even though each component alone LOST to baseline. Use np.argsort(np.argsort(scores)) per component before combining -- their raw scores are on incompatible scales."
+  },
+  {
+    "id": "bagging",
+    "title": "Bagging Predictors",
+    "year": 1996,
+    "url": "https://doi.org/10.1007/BF00058655",
+    "tags": [
+      "bagging",
+      "bootstrap",
+      "ensemble",
+      "variance-reduction"
+    ],
+    "summary": "Trains multiple predictors on bootstrap resamples of the training set and averages (or votes over) their predictions, reducing variance for unstable base learners.",
+    "applies_to": "ensemble",
+    "expected_effect": "Weak version already measured here: 5-seed same-architecture averaging (reseeding, not bootstrap resampling) gave only +0.0007 (0.6020). The measured +0.0038 win instead came from blending DIFFERENT model families (FM + two LightGBM variants) -- true bootstrap bagging of one architecture is untested and would only help if resampling decorrelates its errors more than reseeding does."
+  },
+  {
+    "id": "stacked_generalization",
+    "title": "Stacked Generalization",
+    "year": 1992,
+    "url": "https://doi.org/10.1016/S0893-6080(05)80023-1",
+    "tags": [
+      "stacking",
+      "meta-learner",
+      "ensemble",
+      "blending"
+    ],
+    "summary": "Trains a meta-learner on the out-of-fold predictions of several base learners to combine them, correcting each base learner's bias instead of averaging naively.",
+    "applies_to": "ensemble",
+    "expected_effect": "The measured +0.0038 win here (FM + LightGBM-binary + LightGBM-lambdarank, rank-blended 0.6/0.3/0.1) used fixed, hand-picked weights -- a special case of stacking. A learned meta-combiner (e.g. logistic regression over the three components' per-user ranks) is the natural next step, untested here; watch for overfitting the blend weights with only 124,909 validation rows."
+  }
+]

@@ -1,0 +1,53 @@
+ROWS train=1141112 valid=124909 test=170588
+LABEL train_rate=0.33662 train_pos=384121 valid_rate=0.31328 valid_pos=39132
+USER train n=26210 zero=0.051 mixed=0.927 allpos=0.023
+UROWS train q0/25/50/75/90/99/max=1/13/31/59/97/207/809
+UPOS train q0/25/50/75/90/99/max=0/4/10/21/34/67/155
+USER valid n=22377 zero=0.303 mixed=0.578 allpos=0.119
+UROWS valid q0/25/50/75/90/99/max=1/2/4/7/12/26/74
+UPOS valid q0/25/50/75/90/99/max=0/0/1/2/4/9/24
+NEW user valid row=0.0159 entity=0.0189 uniq_train=26210 uniq_split=22377
+NEW video valid row=0.0001 entity=0.0012 uniq_train=7538 uniq_split=5951
+NEW user test row=0.0362 entity=0.0325 uniq_train=26210 uniq_split=23875
+NEW video test row=0.0001 entity=0.0015 uniq_train=7538 uniq_split=5982
+X fields=37 all_row_scalar=True exceptions=none
+AUX outcome_only keys=comment_stay_time,is_click,is_comment,is_follow,is_forward,is_hate,is_like,is_profile_enter,play_time_ms,profile_stay_time
+AUX train_shapes=(1141112,)
+FIELD name C Utr/Uva/Ute seenV/seenT z dom MIraw/MIadj_bits
+F user_id 30000 26210/21956/23099 0.984/0.964 0.000 0.001 0.12836/0.11179
+F video_id 8000 7538/5945/5974 1.000/1.000 0.000 0.008 0.09124/0.08647
+F tab 20 15/15/15 1.000/1.000 0.000 0.732 0.07064/0.07064
+F hour 32 24/24/24 1.000/1.000 0.000 0.078 0.00067/0.00065
+F user_active_degree 16 9/9/9 1.000/1.000 0.000 0.770 0.00256/0.00255
+F is_lowactive_period 4 1/1/1 1.000/1.000 0.000 1.000 0.00000/0.00000
+F is_live_streamer 4 2/2/2 1.000/1.000 0.000 0.771 0.00058/0.00058
+F is_video_author 4 2/2/2 1.000/1.000 0.000 0.854 0.00016/0.00015
+F follow_user_num_range 16 8/8/8 1.000/1.000 0.000 0.198 0.00030/0.00030
+F fans_user_num_range 16 9/9/9 1.000/1.000 0.000 0.379 0.00131/0.00130
+F friend_user_num_range 16 7/7/7 1.000/1.000 0.000 0.278 0.00068/0.00068
+F register_days_range 16 7/8/8 1.000/1.000 0.000 0.751 0.00193/0.00193
+F onehot_feat0 8 2/2/2 1.000/1.000 0.000 0.500 0.00158/0.00158
+F onehot_feat1 12 7/7/7 1.000/1.000 0.000 0.272 0.00315/0.00314
+F onehot_feat2 64 50/50/49 1.000/1.000 0.000 0.248 0.00085/0.00082
+F onehot_feat3 1600 1436/1330/1359 0.999/0.999 0.000 0.042 0.01190/0.01099
+F onehot_feat4 24 16/16/16 1.000/1.000 0.000 0.369 0.00021/0.00020
+F onehot_feat5 48 33/31/31 1.000/1.000 0.000 0.995 0.00018/0.00016
+F onehot_feat6 8 3/3/3 1.000/1.000 0.000 0.527 0.00083/0.00082
+F onehot_feat7 160 117/105/106 1.000/1.000 0.000 0.087 0.00270/0.00263
+F onehot_feat8 512 452/438/439 1.000/1.000 0.000 0.020 0.00611/0.00582
+F onehot_feat9 12 7/7/7 1.000/1.000 0.000 0.228 0.00046/0.00045
+F onehot_feat10 8 5/5/5 1.000/1.000 0.000 0.400 0.00013/0.00012
+F onehot_feat11 8 5/5/4 1.000/1.000 0.000 0.749 0.00099/0.00099
+F onehot_feat12 8 3/3/3 1.000/1.000 0.000 0.677 0.00134/0.00134
+F onehot_feat13 8 3/3/3 1.000/1.000 0.000 0.937 0.00008/0.00008
+F onehot_feat14 8 3/3/3 1.000/1.000 0.000 0.884 0.00009/0.00009
+F onehot_feat15 8 3/3/3 1.000/1.000 0.000 0.955 0.00012/0.00012
+F onehot_feat16 8 3/3/3 1.000/1.000 0.000 0.933 0.00031/0.00031
+F onehot_feat17 8 3/3/3 1.000/1.000 0.000 0.968 0.00000/0.00000
+F author_id 7000 6482/5311/5333 1.000/1.000 0.000 0.008 0.08818/0.08409
+F video_type 8 3/3/3 1.000/1.000 0.000 0.987 0.00007/0.00007
+F upload_type 20 14/11/12 1.000/1.000 0.000 0.430 0.00964/0.00963
+F music_type 12 6/6/6 1.000/1.000 0.000 0.881 0.00305/0.00305
+F tag 64 44/43/43 1.000/1.000 0.000 0.264 0.01969/0.01966
+F duration_bucket 12 10/10/10 1.000/1.000 0.000 0.103 0.00373/0.00373
+F register_days_bucket 12 10/10/10 1.000/1.000 0.000 0.100 0.00235/0.00234

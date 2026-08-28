@@ -1,0 +1,4 @@
+#1 0.6024 [retired]  Reproduce the official baseline by training a k=16 Factorization Machi
+  #2 0.5998  Target the training-objective stage with metric-aligned per-user BCE w
+  #3 0.6018  Target the feature-interaction representation stage by adding a field-
+  #4 0.6037  Target the feature-interaction representation stage with a DeepFM resi

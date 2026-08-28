@@ -1,0 +1,23 @@
+{
+  "stop_reason": "converged",
+  "iterations": 5,
+  "iteration_cap": 50,
+  "wall_clock_s": 375.6222421156126,
+  "wall_clock_h": 0.10433951169878128,
+  "wall_clock_derived_from_timestamps": true,
+  "note": "run_meta was reconstructed after a UnicodeEncodeError in the post-run print killed the harness; the loop itself completed and converged normally. Wall-clock is derived from ledger timestamps and is a lower bound (it omits the first proposer call).",
+  "script_seconds": 150.89297279997845,
+  "gpu_hours": 0.0,
+  "tokens_in": 24668,
+  "tokens_out": 18272,
+  "tokens_total": 42940,
+  "eda_completed": true,
+  "baseline_reproduced": 0.6029987620023213,
+  "baseline_target": 0.6016,
+  "manual_interventions": 0,
+  "failures": 0,
+  "submission": {
+    "iter_id": 3,
+    "valid_primary": 0.6030435091743649
+  }
+}

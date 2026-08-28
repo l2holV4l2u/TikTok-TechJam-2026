@@ -1,0 +1,33 @@
+[
+  {
+    "text": "A k=16 Factorization Machine trained with Adam at lr=0.001 on user_id, video_id, author_id, tab, and duration_bucket reproduces the official validation baseline within seed noise (0.6024 versus 0.6016); there is no measurable improvement over the official baseline.",
+    "status": "active",
+    "evidence": [
+      1
+    ]
+  },
+  {
+    "text": "The tested blend of equal-total-weight-per-user and positive-count-proportional user weighting does not improve the k=16 FM; it scored 0.5998, which is 0.0026 below the unweighted reproduction and outside the stated seed-noise threshold.",
+    "status": "invalidated",
+    "evidence": [
+      1,
+      2
+    ]
+  },
+  {
+    "text": "Adding the tested field-aware FM residual to the validated five-field FM does not measurably improve within-user ranking: validation selected epoch 1 with residual alpha 0.25, but its 0.6018 primary score differs from the 0.6024 FM reproduction by only 0.0006, inside seed noise.",
+    "status": "invalidated",
+    "evidence": [
+      1,
+      3
+    ]
+  },
+  {
+    "text": "Adding the tested DeepFM residual over high-information context fields does not measurably improve the validated five-field FM: despite selecting the full residual scale (alpha 1.0 at epoch 4) and learning a branch only moderately correlated with the FM score (0.759), its 0.6037 primary score is only 0.0013 above the 0.6024 FM reproductio",
+    "status": "invalidated",
+    "evidence": [
+      1,
+      4
+    ]
+  }
+]

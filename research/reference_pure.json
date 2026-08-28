@@ -1,0 +1,19 @@
+{
+  "valid_primary": 0.6021622962442165,
+  "valid_gauc": 0.6681849947519387,
+  "valid_ndcg@5": 0.5361395977364942,
+  "test_primary": 0.5957011199039087,
+  "test_gauc": 0.6624285855657411,
+  "test_ndcg@5": 0.5289736542420763,
+  "fields": [
+    "user_id",
+    "video_id",
+    "author_id",
+    "tab",
+    "duration_bucket"
+  ],
+  "k": 16,
+  "lr": 0.001,
+  "epochs": 15,
+  "wall_clock_s": 56.36762969999836
+}

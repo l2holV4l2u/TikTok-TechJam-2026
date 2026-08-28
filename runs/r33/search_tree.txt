@@ -1,0 +1,4 @@
+#1 0.6025 [retired]  Reproduce the official baseline stage by training a k=16 Factorization
+  #2 0.6004  Target the FM representation stage by increasing latent rank from 16 t
+  #3 0.6044  Target the feature-interaction representation stage with a DeepFM over
+  #4 0.6002  Target the training-objective stage with leakage-free multi-task super

@@ -1,0 +1,483 @@
+# Autonomous ML Research Agent — KuaiRand-Pure
+
+## How the solution addresses the problem statement
+
+We built an LLM-driven agent that runs the full MLE iteration loop of Figure 1 on KuaiRand-Pure
+without a human in it. It inspects the data, stands up an end-to-end pipeline and reproduces the
+official baseline, then repeatedly proposes a hypothesis, writes the code, trains, evaluates
+against the official metric, **revises what it believes**, and decides what to try
+next — searching over a tree of solution scripts until validation converges under the
+organizers' rule (ε = 0.002, N = 3).
+
+The agent is the product; the recommender is the sandbox it works in.
+
+### The loop
+
+```
+                 ┌──────────────────────────────────────────────────────┐
+                 ▼                                                      │
+ inspect data ─► reproduce baseline ─► select node ─► propose ─► execute ─► evaluate ─► revise
+   (agent's        (Requirement 1)     (adaptive:     (LLM edits  (sandbox,   (GAUC /   beliefs
+    own EDA)                            refine or      a script)   timeout)   nDCG@5)    (LLM)
+                                        broaden)                                           │
+                                            ▲                                              │
+                                            └────── belief set guides the next choice ──────┘
+```
+
+Every iteration appends one immutable record: phase, parent node, hypothesis, full code,
+metrics, seconds, input and output tokens, status, and any error plus how it was handled.
+
+### The design decision the whole project turns on
+
+**The agent's prompt contains no findings about this dataset.**
+
+It contains the task specification (the organizers' own numbers), the pipeline API, and the
+output contract. It does not contain a working model skeleton, a list of what has already been
+measured, or any suggestion of what to try. The agent has to establish all of that itself:
+
+1. **It inspects the data.** The first thing it does is write an exploratory script and print
+   what it finds. That output is the *only* dataset knowledge it ever gets, and it is carried
+   into every subsequent prompt.
+2. **It reproduces the baseline.** Requirement 1, done by the agent, checked against the
+   organizers' published 0.6016. The script it writes becomes the root of the search tree.
+3. **It revises what it believes.** After each experiment a separate call rewrites the agent's
+   belief set — claims with evidence and a status of active / qualified / invalidated. That set,
+   not a human-authored brief, is where the run's knowledge lives.
+
+We did this because of how Innovation and Autonomy are actually scored. Innovation is judged on
+"what the agent identified as worth trying and why." If we write *"ensembling is the proven
+direction, here is the pattern"* into the prompt, then we identified it, not the agent — and the
+run becomes an expensive way of typing up our own research.
+
+An earlier version of this project did exactly that. Its prompt is kept in
+`archive/proposer_v1_human_priors.py` as an honest record. At the time we removed it, it scored
+better, and we removed it anyway — the autonomy claim was worth more than the delta.
+`tests/test_proposer.py::test_brief_carries_no_human_findings` now fails the build if any finding
+creeps back in.
+
+That trade turned out not to be a trade. The prior-laden agent reached hidden-test +0.0039; the
+no-priors agent now reaches **+0.0039 as well**, from a higher validation score (0.6049 against
+0.6038). Deleting our answers cost nothing in the end.
+
+**And that guard was not enough.** After removing the findings from the brief we went looking
+for what else fed the prompt, and found our own measurements sitting in the knowledge base's
+`expected_effect` fields — injected on every improve iteration. The `rank_aggregation` entry
+spelled out the winning recipe, its 0.6/0.3/0.1 weights, and the rank-transform trick. Fifteen
+of twenty-eight entries were contaminated. We had the worst of both worlds: the claim was false
+in principle, and useless in practice, because retrieval never surfaced those entries anyway.
+The entries now say what each paper claims and nothing about what we measured
+(`archive/papers_v1_human_priors.json` keeps the originals), and a second test,
+`test_knowledge_base_carries_no_measured_results`, guards the channel the first test missed.
+The lesson generalises: *the prompt is not the only way a human's answer reaches the agent.*
+
+**It works.** Unprompted, the agent's own EDA independently measured several things we had
+previously hand-written into that old brief — that duration is a weak, non-monotonic signal
+(long_view rate 0.273–0.376 across buckets), that `is_lowactive_period` is constant — plus a
+distribution shift we had never documented: between train and validation the share of users
+with zero positives goes 5.1% → 30.3%, and the median rows per user 59 → 7.
+
+**And one of our priors was simply wrong.** The old brief stated flatly that per-user behaviour
+sequences do not exist here, so "DIN, DIEN, BST, SASRec and GRU4Rec are NOT implementable" — an
+instruction that closed off an entire literature. It was false. Sequences are not a column, but
+they are constructible by ordering each user's rows by date, and once we stopped withholding the
+impression date the agent built exactly that: a DIN-style candidate-aware pooling over each
+user's strictly-prior positive videos. It scored 0.6032 against DeepFM's 0.6043, so it did not
+win — but it ran, which our brief had asserted was impossible.
+
+That is the sharpest argument for the whole design. A human prior is not merely redundant when
+the agent could find it alone; it is a hard constraint that propagates a human's mistake into
+every iteration, and unlike the agent's own beliefs it can never be revised by evidence.
+
+### The search follows the literature, not our intuition
+
+Our first design was solution-centric tree search: every executed script a node, expand the
+best, retire what stops paying. We then read what the current systems actually do, and rebuilt
+around three findings that contradicted us.
+
+**Breadth beats depth, and the switch should be adaptive.** FML-bench finds broad exploration
+beats narrow-deep refinement ([arXiv:2510.10472](https://arxiv.org/abs/2510.10472)), and that an
+agent switching to broader exploration *on detecting stagnation* outperforms every fixed
+strategy, with breadth tracking opportunity density
+([arXiv:2605.17373](https://arxiv.org/abs/2605.17373)). Our prompt had said "make ONE targeted
+change" unconditionally — the losing strategy, applied always. Now: refine while gains land; the
+moment one iteration fails to clear ε, broaden — keep the best script as the base but demand a
+change of *direction*, with everything already tried listed so a restatement does not qualify.
+Gains here are sparse (almost nothing clears 0.002), which is exactly the regime the paper says
+favours breadth.
+
+We got that detail wrong first, and a run showed us. Broaden originally sent the agent back to
+the *earliest* node, on the reasoning that it would reuse working plumbing. In r34 the agent
+proposed recency weighting — the right idea for this dataset's actual constraint — and its own
+internal sweep showed it was worth +0.0005 over not doing it. But because broaden had anchored
+it to the plain baseline instead of the leading DeepFM, the whole iteration scored 0.6034
+against a 0.6043 leader and was recorded as a loss. Breadth belongs in method space, not in
+which file you start from.
+
+**Exhaustive search is the wrong tool at frontier model strength.** Gome
+([arXiv:2603.01692](https://arxiv.org/abs/2603.01692)) measures a crossover across ten models:
+with weak models tree search wins by 1.3–2.7 points, but at frontier tier directed updates win
+by 2.7–7.1, reaching 35.1% vs 24.0% any-medal on MLE-bench with GPT-5. We were running
+exhaustive search on a frontier model — the wrong side of that line.
+
+**Information management, not solution management, is the centre.** Iris
+([arXiv:2608.02143](https://arxiv.org/abs/2608.02143), 64.9% any-medal vs AIDE's 17.1% at half
+the budget) argues that organising research around candidate solutions leaves the system's
+evolving understanding secondary, and that under limited budgets this is what costs you. Its
+ablations on small-data tasks — the closest published setting to ours — put numbers on it:
+
+| component removed | any-medal | delta |
+|---|---|---|
+| — (full system) | 66.7% | — |
+| adaptive topology | 40.0% | −26.7 |
+| knowledge management | 53.3% | −13.4 |
+| epistemic actions | 60.0% | −6.7 |
+
+So the agent now keeps a **belief set** rather than a pile of reflections: claims with evidence
+and a status of `active` / `qualified` / `invalidated`, rewritten after every scored iteration so
+later evidence can demote an earlier conclusion. We built this because our own logs showed the
+failure it prevents — one run recommended the same next experiment four times running, because
+an append-only reflection can never be overturned.
+
+Two smaller consequences of the same reading:
+
+- **One iteration is one script, not one model.** A script may build and compare several
+  candidates within its time budget and report what it compared (`CANDIDATES`). The convergence
+  rule charges an iteration per experiment, so searching *inside* an iteration buys comparisons
+  the iteration budget cannot.
+- **Epistemic evidence rides along.** A script may print `FINDINGS` lines — a distribution, a
+  correlation, an assumption checked — which feed the belief set whatever the score was. Iris
+  scores diagnostic actions separately; our convergence rule cannot afford a purely diagnostic
+  iteration, so we attach them to a scored one instead.
+
+The rendered search tree (`runs/<id>/search_tree.txt`) and the belief set
+(`runs/<id>/knowledge.md`) are deliverables in their own right: they show *where* the agent
+spent its budget and *what it concluded*, not just what it scored.
+
+### Robustness
+
+Failures are handled in-loop; the agent never escalates.
+
+- A crashed script's traceback **and its source** go back to the proposer, so it fixes the
+  failing line instead of rewriting from scratch. Two retries, then the idea is retired.
+- Ideas are keyed by **method name**, so rewording "Implement a LambdaRank loss" as
+  "Implementing a LambdaRank objective" does not evade retirement. Sentence-level Jaccard, which
+  we tried first, read those two as different ideas.
+- **Timeouts are fed back differently from crashes** ("too slow, not wrong") because rerunning
+  a slow approach unchanged just times out again.
+- Timed-out scripts are killed **process-tree-wide**. A bare `kill()` left orphaned trainers
+  running for an hour, competing for CPU and corrupting the reported compute.
+- LLM outages and rate limits are absorbed with server-hinted backoff; the loop survives them.
+- A circuit breaker halts with `environment_broken` after five consecutive instant, output-less
+  failures. We added this after a real incident: a torn-down parent left the runner unable to
+  spawn children, and 32 iterations "failed" in 0 seconds each, silently shredding the budget.
+
+### What we learned about steering an agent
+
+Most of this project's engineering went into the agent's *scaffolding*, not its reasoning. Every
+recurring failure traced to a defect in what we had built around the model, and each fix showed
+up in the failure rate: ~50% → 35% → 27% → 0%.
+
+- It called `.cuda()` repeatedly because our brief claimed a GPU was available when torch was
+  CPU-only. We had written a false statement into the prompt.
+- It crashed on `IndexError` five times building per-video tables, because our own helper
+  applied field offsets and nothing said raw ids were needed for lookups.
+- It spent 8 of 17 iterations on one losing idea, because retirement only triggered on crashes;
+  an idea that runs cleanly and scores badly was never excluded.
+- Our retirement rule then killed the iteration that scored the run's **best** result, because
+  "did not beat the incumbent by ε" counted as an underperformance.
+- Generated blend scripts arrived truncated with `SyntaxError: '(' was never closed` — our
+  `max_tokens` was 4096 and we were cutting the model off mid-script.
+
+The subtlest one: after we added a section telling the agent that ensembling was the proven
+direction, it still proposed only single models, six times in a row. The retrieved-papers block
+directly beneath that section was seeded with query terms like "click", "ranking", "ndcg" — so
+it surfaced only single-model papers, every call. Two halves of the same prompt disagreed and
+the retrieval half won.
+
+Rebuilding the agent around search and a belief set produced more of exactly the same
+kind, and we only found them by reading the logs:
+
+- **The analysis stage and the proposer disagreed.** Every reflection in our first run ended
+  "next, run matched-seed leave-one-field-out ablations" — and the proposer never ran one, four
+  times in a row. The reflection prompt asked for the *most informative* experiment; the run
+  ends after three iterations without a **gain**. Two halves of the same system optimising
+  different objectives, which is the v1 retrieval bug wearing a different hat.
+- **Retrieval tunnel vision came back.** The paper retriever returned the same three entries on
+  every single iteration, because the query is built from the agent's own recent hypotheses — so
+  a run that opens on factorization machines is only ever shown factorization machines. Four
+  ensembling papers sat in the knowledge base, unreachable. In v1 we had "fixed" this by pinning
+  a chosen paper, which is just steering. The real fix is that a retriever returning the same
+  three books every visit is broken: it now excludes what it has already surfaced, and the agent
+  is given the full catalogue and left to decide.
+- **The agent did not know how the run ends.** It was spending early iterations on cautious
+  ablations, each of which burned one of the three lives the convergence rule allows. It now
+  gets the stopping rule and its live budget state. This is task specification straight out of
+  the organizers' document, not a hint about the dataset.
+- **A completed run was killed by its own success message.** A hypothesis contained `×`
+  (U+00D7); redirected stdout on this machine defaults to the system codepage; the harness
+  raised `UnicodeEncodeError` while *printing the result*, after the loop had converged and
+  written its submission, destroying the run metadata. The agent's own output is untrusted text
+  and must never be able to crash the harness that reports on it.
+- **A retry policy that could not tell two rate limits apart.** A per-minute limit clears if you
+  wait; a per-day cap does not. Ours treated both as transient and spent twelve minutes climbing
+  a backoff ladder against a wall, then failed anyway. The client now recognises a daily cap
+  immediately and fails over to another key, marking the capped one so later calls skip it.
+
+None of these were visible from the score. They were only visible by reading what the agent
+actually chose to do, which is what the per-iteration ledger exists for. The pattern across both
+versions is the same: **every defect was in the scaffolding, not in the model's reasoning.**
+
+## Results
+
+Official baseline (organizer-provided FM, k=16): validation primary 0.6016, hidden test 0.5946.
+
+Our submitted run (`runs/r35`, full log in `RUN_REPORT.md`):
+
+| | GAUC | nDCG@5 | primary |
+|---|---|---|---|
+| validation, agent's best iteration | 0.6715 | 0.5383 | 0.6049 |
+| official baseline, validation | 0.6674 | 0.5357 | 0.6016 |
+| **hidden test, this submission** | **0.6657** | **0.5312** | **0.5985** |
+| official baseline, hidden test | 0.6610 | 0.5282 | 0.5946 |
+
+**Absolute delta on hidden test: GAUC +0.0047, nDCG@5 +0.0030, mean +0.0039.**
+
+Resources to reach the converged result: **8 iterations of 50**, **35.1 minutes** of agent
+wall-clock, **91,852 tokens**, **0 GPU-hours** (CPU only), **0 failures**, **0 manual
+interventions**, and **48 candidate solutions compared inside those 8 iterations**.
+
+The agent did all of it: it wrote its own EDA script, reproduced the official baseline to 0.6020
+on the first attempt, proposed and coded six further experiments, and emitted the test
+predictions that became the submission.
+
+### The result that matters most
+
+We deleted our own best finding from the agent's prompt — that rank-blending *decorrelated*
+models beats any single model — and the agent derived it again, unaided, and then beat us with
+it.
+
+Iteration #5's hypothesis, in its own words:
+
+> "replacing two redundant DeepFM seeds with low-rank DCN-V2 cross models; their explicit
+> bounded-order feature crosses should create **less-correlated** user–item ordering errors that
+> heterogeneous rank aggregation can **cancel**."
+
+That is the decorrelation argument from the deleted `EXHIBIT A`, reconstructed from first
+principles. It then compared fourteen aggregation schemes inside that one iteration — Borda
+versus logit-mean, homogeneous versus heterogeneous, per-seed — and its belief set went on to
+record the correlation measurements that explain the ceiling it hit:
+
+> "The tested DeepFM seeds, low-rank DCN-V2 models, per-user-weighted DeepFM models, and MMoE
+> model are too prediction-correlated to yield a measurable ensemble gain; observed rank
+> correlations were generally about 0.94 or higher, including MMoE correlations of 0.9888 with
+> standard DeepFM."
+
+We ran that same correlation study by hand in the earlier version of this project and reached
+the same conclusion. The difference is that this time nobody told it to.
+
+**The scores make the point sharply.** Our hand-tuned blend reached validation 0.6045. The
+earlier agent, *with the winning recipe written into its prompt*, reached 0.6046. This agent,
+with the recipe deleted and a test that fails the build if it creeps back, reached **0.6049**,
+and its hidden-test delta (+0.0039) matches the prior-laden version's exactly. Removing our
+answers did not cost us score; it cost us nothing and produced a better one.
+
+### What the architecture changes actually did
+
+We ran the same architecture repeatedly, changing one thing at a time. Every run converged in 5
+iterations with zero failures and zero interventions:
+
+| run | change under test | validation best | hidden-test delta |
+|---|---|---|---|
+| r27 | no priors in the brief | 0.6033 | +0.0024 |
+| r28 | + agent told the convergence rule | 0.6027 | +0.0013 |
+| r29 | + budget-aware analysis, paper catalogue, retrieval rotation, noise-band memory | 0.6023 | +0.0013 |
+| r30 | + "one iteration is one script, not one model" | 0.6030 | +0.0006 |
+| **r33** | **+ belief set, adaptive breadth, internal candidates, decontaminated KB** | **0.6044** | **+0.0035** |
+| **r34** | **+ `Split.date` exposed to the agent** | **0.6043** | **+0.0033** |
+| **r35** | **+ broaden anchors on the best node, not the earliest** | **0.6049** | **+0.0039** |
+| **r36** | **+ `evaluate(per_user=True)` for per-segment diagnosis** | **0.6037** | **+0.0036** |
+| **r37** | **+ `RUN_ARTIFACTS` cache directory (agent never used it)** | **0.6037** | **+0.0041** |
+
+r27–r30 are the honest negative result: **none of those four scaffolding fixes moved the score**,
+and the spread across them (0.6023–0.6033) is the size of the baseline's own seed noise. We
+report that rather than quietly dropping it.
+
+r33–r37 carry the literature-driven changes, and the separation is clean on both metrics:
+
+|  | validation | hidden-test delta |
+|---|---|---|
+| before (r27–r30) | 0.6023 – 0.6033 | +0.0006 – +0.0024 |
+| after (r33–r37) | **0.6037 – 0.6049** | **+0.0033 – +0.0041** |
+
+**The worst run after beats the best run before, on both metrics, 5/5 against 4/4.** Five runs
+is still a small sample and we are reading a ~0.0015 effect against a 0.0008 noise floor, so we
+report the ranges rather than a mean and a p-value. What is not in doubt is the direction.
+
+The cost side is worth stating too: r35 took 35 minutes and 92K tokens against r27's 8 minutes
+and 37K. The gain is real but it is not free, and a judge weighing Feasibility should see both
+numbers. Both remain far inside the organizers' 6-hour ceiling and 50-iteration cap.
+
+### Why we do not run a selection lottery
+
+The five post-change runs separate cleanly from the four before them, but they do **not**
+separate from each other. Across r33–r37:
+
+| | spread | std | vs baseline seed noise (0.0008) |
+|---|---|---|---|
+| validation | 0.0012 | 0.00051 | below |
+| hidden test | 0.0008 | 0.00032 | below |
+
+Both are under the noise floor, and ranking the runs against each other is a coin flip: of the
+ten run pairs, **4 are concordant, 5 discordant, 1 tied**. Validation carries no usable
+information about which converged run will do better on the hidden test.
+
+This matters because there is an obvious way to inflate a score here — run the agent twenty
+times and submit whichever run happens to peak. The numbers above say that would be sampling
+noise, not selecting quality, and it is exactly the failure mode the held-out test exists to
+catch. We submit the validation-best run under the organizers' rule and report the spread.
+
+r37 is the concrete case. It scored **+0.0041 on the hidden test, the best of any run** — and we
+do not submit it, because its validation score (0.6037) is not the best and selecting it would
+mean choosing on the test set. r35 (validation 0.6049, test +0.0039) is the submission.
+
+What is *not* ambiguous is the mechanism, and the clearest single example is r33, where broaden
+fired for the first time at iteration #3 and that iteration is the one that won. Instead of
+tuning latent dimension again, the agent changed direction to a DeepFM and used the candidate
+contract to sweep the FM/deep mixing weight inside one iteration —
+
+| α | 0.00 | 0.25 | 0.50 | **0.75** | 1.00 |
+|---|---|---|---|---|---|
+| validation primary | 0.6019 | 0.6033 | 0.6041 | **0.6044** | 0.6040 |
+
+Five models compared for one iteration of budget. It also missed resetting the convergence
+counter by 0.0001 (0.6044 against a 0.6045 threshold), a fair illustration of how tight the
+ε = 0.002 rule is here.
+
+Both mechanisms are auditable in the run logs. In r33's `llm_calls.jsonl` the search mode goes
+`refine → broaden → broaden` across the three improve iterations while the belief set carries
+1 → 2 → 3 claims into successive prompts, so each proposal is conditioned on a revised reading
+of everything before it rather than on a raw score history. In the submitted run, r35, the same
+machinery runs longer: 8 iterations, 48 internal candidates, and a trajectory of
+0.6036 → 0.6040 → 0.6047 → 0.6049.
+
+The submitted run is chosen on **validation** — r35 is the validation-best of all no-priors runs.
+We never used the hidden-test column to choose between runs; it is shown only because we hold
+the public test labels and would rather report it than hide it.
+
+**We stop the run where the rule says the run is over.** The scored result is "the
+validation-best checkpoint at [the convergence] point", and convergence is the *first* of
+ε/N = 0.002/3, the 50-iteration cap, or 6 hours. So iterations that happen after the ε/N rule
+has already fired cannot legitimately supply the submission, no matter what they score. An
+earlier run of ours used a looser patience and produced its best number six iterations past its
+own convergence point; truncating it at the rule cost 0.0003 on test, and we truncated it. The
+agent's default `--patience 3` now makes this correct by construction, and the ledger shows
+exactly where the rule fired.
+
+Selection is on validation only. We hold the public test labels and therefore *can* see each
+iteration's test score, but choosing between iterations on that basis would be fitting the
+hidden set, so the submission is always the validation-best checkpoint regardless of what the
+test number says. In one run this cost us: the validation-best iteration (0.6042) scored
+slightly worse on test (+0.0037) than an earlier run's validation-best (0.6039 → +0.0040).
+Differences that small are below the baseline's own 5-seed σ of 0.0008 and we report them as
+noise, not as a result.
+
+We verified `pipeline/evaluate.py` is bit-identical to the organizers' `evaluate.py`
+(max abs diff 1.7e-14) and ~7× faster, and that our row order matches their loader exactly
+(170,588/170,588 on user_id, video_id and label) so `row_id` alignment is correct.
+
+### Why the deltas on this benchmark are small — measured, not assumed
+
+Across this project, roughly fifteen distinct approaches all landed within ±0.005 of the
+baseline: FM, DeepFM, DCN, NFM, LightGBM pointwise, LambdaMART, pairwise BPR, listwise softmax,
+target encodings, multi-task heads, and rank blends of those. That needs an explanation, and
+the three candidates imply completely different strategies: models too small, features too
+weak, or signal that does not survive the date split.
+
+We measured it (`python -m research.ceiling_probe`, ~150s CPU). Fit a deliberately over-powered
+LightGBM on all 37 fields and score it *both* in-sample and on validation:
+
+| | GAUC | nDCG@5 | primary |
+|---|---|---|---|
+| high-capacity, **in-sample** | 0.9456 | 0.9034 | **0.9245** |
+| same model, **validation** | 0.6469 | 0.5266 | 0.5868 |
+| official baseline, validation | 0.6674 | 0.5357 | 0.6016 |
+| oracle (true labels) | 1.0000 | 0.6968 | 0.8484 |
+
+**The features separate `long_view` almost perfectly on the training window and essentially none
+of it transfers.** The same model that scores 0.9245 in-sample scores 0.5868 on validation —
+*worse than the baseline it dwarfs in capacity*. A generalisation gap of 0.3377.
+
+So capacity is not the constraint; transfer across the date boundary is. Train is 9–21 Apr,
+validation the following week, and the agent's own EDA independently measured how far the
+distribution moves: zero-positive users 5.1% → 30.3%, median rows per user 59 → 7.
+
+Three consequences we act on:
+
+1. **The baseline's small k=16 FM is not a weak starting point** — it is close to the right
+   amount of capacity for a signal this non-stationary. That is why bigger models reliably lose.
+2. **The realistic ceiling is ~0.60–0.61 test primary**, not the 0.8645 oracle. The oracle
+   assumes knowledge of the labels; it bounds the metric, not the achievable score. On a
+   benchmark scored by absolute delta, a few thousandths is a real result.
+3. **The methods with a mechanism here target drift, not capacity.** That is why we exposed
+   `Split.date` to the agent — our harness had been withholding the impression date, silently
+   ruling out recency weighting and time-based validation, the family of methods aimed at the
+   one thing that actually binds. Full write-up in `docs/generalisation-ceiling.md`.
+
+This probe is human analysis, clearly labelled and **not** on the submission path. It is context
+for reading the agent's delta, not one of the agent's findings.
+
+## Development tools
+VS Code, Claude Code (orchestration and implementation), Python 3.12 on Windows.
+
+## APIs used
+OpenAI Chat Completions for the agent's proposer and its belief revision, via a stdlib
+`urllib` client —
+no SDK dependency. The interface is a single injected
+`complete(prompt) -> (text, tokens_in, tokens_out)` callable, so any provider can be swapped in;
+an Anthropic client ships alongside it.
+
+## Libraries and frameworks
+PyTorch (CPU), NumPy, LightGBM. Metrics, data loading, submission handling and the agent itself
+are stdlib + NumPy only — no pandas, no scikit-learn.
+
+## Datasets
+KuaiRand-Pure (Zenodo 10439422), under the organizers' fixed date splits. No external training
+data. Logged outcome signals (`play_time_ms`, `is_click`, `is_like`, …) are exposed only as
+auxiliary targets and are asserted absent from the feature set by test;
+`video_features_statistic_pure.csv` is excluded entirely because its counts are aggregated over
+the whole log period, including the validation and test windows.
+
+## One thing we deliberately did not do
+
+KuaiRand-Pure ships a randomised-exposure log (`log_random_4_22_to_5_08_pure.csv`), and the
+problem statement points at it: the randomised intervention "supports counterfactual evaluation",
+and the dataset notes say it "enables off-policy / counterfactual evaluation (OPE)". Debiasing
+logged feedback is arguably what this dataset exists for, and our loader ignores it entirely.
+
+We left it alone because of its date range. That file covers 22 Apr - 8 May, which is exactly
+the validation and hidden-test windows. The official splits are date-based precisely to stop a
+model learning from the evaluation period, and training on randomised impressions drawn from
+those same days would learn item-level behaviour from the window we are scored on. No rule
+names the file, which makes it ambiguous rather than permitted — and we would rather report a
+smaller honest delta than a larger one that a judge might read as exploiting the split.
+
+If the organizers confirm the random log is in scope for training, it is the single most
+promising unexplored direction here, and the harness change is one loader function.
+
+## Limitations and what we would improve
+
+- **The delta over baseline is small and close to the noise floor** (baseline seed std 0.0008).
+  We report it as measured rather than as a decisive win.
+- **The search is explored one node at a time**, because scripts run sequentially on one CPU.
+  Iris and Gome both run parallel traces sharing a memory; we do not, and with a 6-hour ceiling
+  against a 35-minute run there is a lot of unused budget.
+- **Every script gets the same time budget** regardless of what it is attempting, which biases
+  the agent against methods that legitimately need longer.
+- **We never validated the belief set's claims.** The agent asserts things like "these
+  components correlate above 0.94"; we checked a few by hand and they held, but nothing in the
+  harness verifies a claim before it is carried into the next prompt. A false belief would
+  propagate silently — the same failure mode as a human prior, which is what we removed.
+- **Three runs is a small sample.** The separation between the old and new architectures has no
+  overlap, but we are reading a ~0.002 effect against a 0.0008 noise floor from n=3.
+- **Cross-run memory is new and nearly unproven** — it deliberately reads only runs produced by
+  this architecture, so at submission time it has very little history to draw on.
