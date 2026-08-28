@@ -420,11 +420,12 @@ counter by 0.0001 (0.6044 against a 0.6045 threshold), a fair illustration of ho
 Both mechanisms are auditable in the run logs. In r33's `llm_calls.jsonl` the search mode goes
 `refine → broaden → broaden` across the three improve iterations while the belief set carries
 1 → 2 → 3 claims into successive prompts, so each proposal is conditioned on a revised reading
-of everything before it rather than on a raw score history. In the submitted run, r35, the same
-machinery runs longer: 8 iterations, 48 internal candidates, and a trajectory of
-0.6036 → 0.6040 → 0.6047 → 0.6049.
+of everything before it rather than on a raw score history. The submitted run, r41, traces
+0.6015 → 0.6007 → 0.6053 → 0.6059 across its scored iterations: the baseline reproduction, one
+experiment that lost ground, then two that built on what the belief set had recorded.
 
-The submitted run is chosen on **validation** — r35 is the validation-best of all no-priors runs.
+The submitted run is chosen on **validation** — r41 is the validation-best of all no-priors runs
+(0.6059, against r39's 0.6053 and r35's 0.6049).
 We never used the hidden-test column to choose between runs; it is shown only because we hold
 the public test labels and would rather report it than hide it.
 
