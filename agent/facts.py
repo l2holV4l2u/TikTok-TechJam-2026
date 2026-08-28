@@ -60,11 +60,8 @@ def measure(baseline: dict, seed: int = 0) -> dict:
     try:
         import torch as _t
         f["torch_version"] = _t.__version__
-        f["gpu"] = (f"{_t.cuda.get_device_properties(0).name}, "
-                    f"{_t.cuda.get_device_properties(0).total_memory/1e9:.1f} GB"
-                    if _t.cuda.is_available() else "none")
     except Exception:
-        f["torch_version"], f["gpu"] = "unavailable", "none"
+        f["torch_version"] = "unavailable"
     categorical = sorted(FEATURE_CARDINALITIES)
     f["n_categorical"] = len(categorical)
     f["categorical_names"] = ", ".join(categorical)

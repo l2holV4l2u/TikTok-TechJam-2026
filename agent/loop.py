@@ -149,8 +149,6 @@ class SavedScoresEvaluator(StdoutJsonEvaluator):
                 return None
         if isinstance(reported.get("gpu_seconds"), (int, float)):
             verified["gpu_seconds"] = float(reported["gpu_seconds"])
-        if reported.get("device") in {"cpu", "cuda"}:
-            verified["device"] = reported["device"]
         return verified
 
 
@@ -235,7 +233,7 @@ def _publish_incumbent(evaluator, artifacts: Path, run_dir: Path, iter_id: int,
 def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
              workdir, primary: str = "primary", epsilon: float = 0.002,
              patience: int = 3, max_iters: int = 50, timeout: float = 300,
-             wall_clock_limit_s: float = SIX_HOURS, gpu_budget_s: float = float("inf"),
+             wall_clock_limit_s: float = SIX_HOURS,
              tree: Tree | None = None, recovery: Recovery | None = None,
              knowledge: Knowledge | None = None, revise_fn=None,
              memory: str = "", baseline: float = 0.6016, ceiling: float | None = None,
@@ -271,8 +269,6 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
     for i in range(max_iters):
         if elapsed() >= wall_clock_limit_s:
             return finish("wall_clock")
-        if spent >= gpu_budget_s:
-            return finish("budget")
 
         # ---- which stage of Figure 1 are we in
         if context["eda"] is None and eda_attempts < MAX_EDA_ATTEMPTS:

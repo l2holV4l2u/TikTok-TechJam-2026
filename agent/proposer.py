@@ -12,7 +12,6 @@ import re
 from pathlib import Path
 from typing import Callable
 
-from .hardware import prompt_hardware_note, resolve_device
 from .kb import index, retrieve
 from .loop import Proposal
 
@@ -112,9 +111,7 @@ RULES:
   - No external datasets, and no pretrained weights trained on this benchmark's test labels.
 
 ENVIRONMENT:
-  {hardware_note}
-  - Read os.environ["AGENT_DEVICE"] and select that device explicitly. A CPU run must remain
-    reproducible even on a CUDA host. numpy, torch, lightgbm 4.7 and scipy are installed.
+  - Everything runs on CPU. numpy, torch, lightgbm 4.7 and scipy are installed.
   - lightgbm 4.7 removed `early_stopping_rounds` as a keyword everywhere; it raises TypeError.
     The supported form is a callback:
         m = lgb.train(params, dset, num_boost_round=600, valid_sets=[dvalid],
@@ -140,8 +137,8 @@ OUTPUT CONTRACT -- the harness reads stdout:
 
   - The FINAL stdout line must be exactly:
     METRICS {{"primary": <float>, "gauc": <float>, "ndcg@5": <float>,
-              "gpu_seconds": <float>, "device": "<cpu|cuda>"}}
-    `gpu_seconds` is CUDA execution time when device=cuda and script wall time otherwise.
+              "gpu_seconds": <float>}}
+    `gpu_seconds` is the script's wall time in seconds.
   - The script must ALSO score the test split and save it, so that your best iteration can be
     submitted without a human rebuilding anything. After evaluating validation:
 
@@ -295,7 +292,6 @@ class LLMProposer:
         categorical = sorted(FEATURE_CARDINALITIES)
         self.facts.setdefault("n_categorical", len(categorical))
         self.facts.setdefault("categorical_names", ", ".join(categorical))
-        self.facts.setdefault("hardware_note", prompt_hardware_note(resolve_device("auto")))
         self._seen_papers: set[str] = set()   # so retrieval widens instead of repeating
 
     def propose(self, *, phase: str = "improve", history=None, blacklist=None,

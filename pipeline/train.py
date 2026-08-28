@@ -22,7 +22,6 @@ def parse_args():
     p.add_argument("--batch-size", type=int, default=4096)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--embed-dim", type=int, default=16)
-    p.add_argument("--device", default=None)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--fraction", type=float, default=1.0, help="subsample fraction of the train split")
     p.add_argument("--out", default=None, help="path to write a user_id,video_id,score submission CSV")
@@ -34,8 +33,6 @@ def set_seed(seed: int):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
 
 
 def subsample(split: Split, fraction: float, seed: int) -> Split:
@@ -80,21 +77,14 @@ def write_submission(path: str, user_id, video_id, scores):
 def main():
     args = parse_args()
     set_seed(args.seed)
-    device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
-    use_cuda = device.type == "cuda"
+    device = torch.device("cpu")
 
     train = subsample(load("train"), args.fraction, args.seed)
     valid = load("valid")
 
     model = build(args.model, FEATURE_CARDINALITIES, embed_dim=args.embed_dim).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    scaler = torch.amp.GradScaler("cuda", enabled=use_cuda)
-
-    if use_cuda:
-        start_evt, end_evt = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-        start_evt.record()
-    else:
-        wall_start = time.perf_counter()
+    wall_start = time.perf_counter()
 
     x_train = to_tensors(train.X, device)
     y_train = torch.tensor(np.array(train.y), dtype=torch.float32, device=device)
@@ -113,12 +103,10 @@ def main():
             xb = {f: v[idx] for f, v in x_train.items()}
             yb = y_train[idx]
             optimizer.zero_grad(set_to_none=True)
-            with torch.amp.autocast("cuda", enabled=use_cuda):
-                logit = model(xb)
-                loss = F.binary_cross_entropy_with_logits(logit, yb)
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+            logit = model(xb)
+            loss = F.binary_cross_entropy_with_logits(logit, yb)
+            loss.backward()
+            optimizer.step()
 
         scores = predict(model, x_valid, args.batch_size)
         metrics = evaluate(valid.user_id, valid.y, scores)
@@ -126,12 +114,7 @@ def main():
             best_primary, best_metrics, best_scores = metrics["primary"], metrics, scores
             torch.save(model.state_dict(), ckpt_path)
 
-    if use_cuda:
-        end_evt.record()
-        torch.cuda.synchronize()
-        gpu_seconds = start_evt.elapsed_time(end_evt) / 1000.0
-    else:
-        gpu_seconds = time.perf_counter() - wall_start
+    gpu_seconds = time.perf_counter() - wall_start
 
     if best_metrics is None:
         best_metrics, best_scores = metrics, scores  # every epoch scored worse than -inf never happens, but guard anyway

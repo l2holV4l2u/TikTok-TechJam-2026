@@ -269,15 +269,7 @@ def main() -> None:
           f"including the knowledge-revision stage")
     print(f"- Iterations used: **{len(rows)} of {meta.get('iteration_cap', 50)}** "
           f"({len(scored)} accepted scores, {len(failed)} failed, {len(rejected)} rejected)")
-    hardware = meta.get("hardware") or {}
-    gpu_hours = float(meta.get("gpu_hours", 0.0))
-    if hardware.get("device") == "cuda":
-        print(f"- GPU-hours: **{gpu_hours:.2f}** allocation-time upper bound on "
-              f"{hardware.get('gpu_name', 'CUDA GPU')}. Compute inside scripts totalled "
-              f"{_fmt_hours(script_s)}.")
-    else:
-        print(f"- GPU-hours: **0.0** - this run selected CPU. Compute inside scripts "
-              f"totalled {_fmt_hours(script_s)}.")
+    print(f"- Compute inside generated scripts: **{_fmt_hours(script_s)}** on CPU.")
     if rows:
         print(f"- Mean tokens per iteration: {(tok_in + tok_out) / len(rows):,.0f}")
     print(f"- Stop reason: `{meta.get('stop_reason', 'unknown')}`")

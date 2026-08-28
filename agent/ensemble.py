@@ -86,7 +86,6 @@ def retain_or_blend(metrics: dict, evaluator, artifacts: Path, run_dir: Path,
     selected_metrics = evaluate(valid.user_id, valid.y, selected_valid)
     selected_metrics.update({
         "gpu_seconds": metrics.get("gpu_seconds", 0.0),
-        "device": metrics.get("device", "cpu"),
         "raw_candidate_primary": raw_primary,
         "harness_blend_alpha": float(alpha),
     })

@@ -80,7 +80,6 @@ agent/       the product. dataset-agnostic.
   proposer.py    prompt construction; the brief is task spec + API only, no findings
   critic.py      integrity gate; rejected scores cannot enter the tree or submission
   ensemble.py    controller-owned validation-selected blend against the incumbent
-  hardware.py    reproducible CPU/CUDA discovery for prompts and run metadata
   knowledge.py   the revisable belief set -- the reflect+revise stage of Figure 1
   memory.py      distils this agent's own prior run ledgers into the next run's context
   llm.py         stdlib LLM client (Anthropic / OpenAI-compatible), records every call
@@ -120,22 +119,6 @@ tar -xzf KuaiRand-Pure.tar.gz && cd ../..
 python -c "import pipeline.data as d; d.build_cache('data/raw/KuaiRand-Pure/data','data/cache')"
 export OPENAI_API_KEY=...   # and LLM_PROVIDER=openai, or ANTHROPIC_API_KEY
 ```
-
-### GPU and fast prototypes
-
-Use the CUDA-enabled Python environment when prototyping PyTorch models:
-
-```powershell
-.\.venv-gpu\Scripts\python.exe -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
-.\.venv-gpu\Scripts\python.exe run_agent.py --run-dir runs/rN --device cuda --iters 50
-```
-
-`--device cuda` opts in; `--device auto` selects CUDA when the active Python can use it. CPU is
-the default because the measured reference FM was 56 s on CPU versus 60 s on this RTX 4050, and
-loading CUDA costs about 20 s per generated script. Generated scripts receive the resolved choice in `AGENT_DEVICE`, and
-`run_meta.json` records the PyTorch/CUDA versions and GPU. CUDA helps neural training, but data
-loading, NumPy evaluation, and this LightGBM build remain CPU work, so use short dry runs and
-small in-script samples for architecture smoke tests before paying for a full autonomous run.
 
 ## Reproduce our result
 
@@ -197,7 +180,7 @@ rebuilds it, and selection is on validation only; the hidden test set never pick
 for m in agent.tree agent.knowledge agent.memory agent.demo \
          tests.test_proposer tests.test_llm tests.test_evaluate tests.test_submit \
          tests.test_data tests.test_models tests.test_weights tests.test_executor \
-         tests.test_harness tests.test_history tests.test_ensemble tests.test_hardware; \
+         tests.test_harness tests.test_history tests.test_ensemble; \
          do python -m $m; done
 ```
 

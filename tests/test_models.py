@@ -11,8 +11,8 @@ CARD = {"user_id": 11, "video_id": 7, "tab": 4}
 MODEL_NAMES = ["fm", "deepfm", "dcnv2", "din"]
 
 
-def _batch(n: int, device="cpu"):
-    return {f: torch.randint(0, c, (n,), device=device) for f, c in CARD.items()}
+def _batch(n: int):
+    return {f: torch.randint(0, c, (n,)) for f, c in CARD.items()}
 
 
 def test_models_build_and_forward_finite():
@@ -63,23 +63,6 @@ def test_fm_pairwise_term_matches_naive_double_loop():
     assert torch.allclose(fast, naive, atol=1e-5), (fast, naive)
 
 
-def test_cpu_cuda_consistent_shapes():
-    if not torch.cuda.is_available():
-        return "skip (no CUDA device)"
-    for name in MODEL_NAMES:
-        model_cpu = build(name, CARD, embed_dim=4)
-        x_cpu = _batch(6, device="cpu")
-        out_cpu = model_cpu(x_cpu)
-
-        model_gpu = build(name, CARD, embed_dim=4).to("cuda")
-        x_gpu = _batch(6, device="cuda")
-        out_gpu = model_gpu(x_gpu)
-
-        assert out_cpu.shape == out_gpu.shape, (name, out_cpu.shape, out_gpu.shape)
-        assert out_gpu.device.type == "cuda", name
-        assert torch.isfinite(out_gpu).all(), name
-
-
 def test_initial_logits_are_small_enough_to_train():
     """Default torch N(0,1) embedding init makes the FM interaction term explode at step zero.
 
@@ -103,7 +86,6 @@ if __name__ == "__main__":
             test_models_build_and_forward_finite,
             test_gradients_flow_to_all_embeddings,
             test_fm_pairwise_term_matches_naive_double_loop,
-            test_cpu_cuda_consistent_shapes,
             test_initial_logits_are_small_enough_to_train,
         ):
             note = t()

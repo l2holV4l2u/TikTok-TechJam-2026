@@ -9,7 +9,6 @@ import sys
 import time
 from pathlib import Path
 
-from agent.hardware import prompt_hardware_note, resolve_device
 from agent.kb import load_papers
 from agent.ledger import Ledger
 from agent.llm import FakeComplete, RecordingComplete, ReplayComplete, make_complete
@@ -139,25 +138,13 @@ def main() -> None:
                     help="dataset facts for the brief, produced by agent.facts")
     ap.add_argument("--no-memory", action="store_true", help="ignore this agent's prior runs")
     ap.add_argument("--dry-run", action="store_true", help="use a canned LLM, no network")
-    ap.add_argument("--device", choices=("auto", "cpu", "cuda"), default="cpu",
-                    help="execution device exposed to generated scripts (default: cpu)")
     ap.add_argument("--replay", default=None,
                     help="replay a previous run's llm_calls.jsonl: no network, no cost. Tests loop/parsing/reporting changes, NOT prompt changes")
     ap.add_argument("--replay-strict", action="store_true",
                     help="with --replay, fail if a prompt differs from the recording")
     args = ap.parse_args()
 
-    try:
-        hardware = resolve_device("cpu" if args.dry_run else args.device)
-    except RuntimeError as exc:
-        ap.error(str(exc))
-    # index-qualified: torch.cuda.set_device("cuda") raises, "cuda:0" is accepted by
-    # set_device, torch.device() and .to() alike. r58 lost two iterations to the bare form.
-    os.environ["AGENT_DEVICE"] = "cuda:0" if hardware["device"] == "cuda" else "cpu"
-    print("execution device: " + (
-        f"cuda ({hardware['gpu_name']}, {hardware['gpu_memory_gb']:.2f} GiB)"
-        if hardware["device"] == "cuda" else "cpu"
-    ))
+    os.environ["AGENT_DEVICE"] = "cpu"
 
     if args.dry_run:
         args.baseline_valid = _dry_run_baseline()
@@ -188,7 +175,7 @@ def main() -> None:
             " te=load('test'); tvid=np.minimum(te.X['video_id'],len(rate)-1)\n"
             " np.save(os.path.join(out,'scores_test.npy'),rate[tvid].astype(float))\n"
             "print('METRICS', json.dumps({'primary':m['primary'],'gauc':m['gauc'],"
-            "'ndcg@5':m['ndcg@5'],'gpu_seconds':time.perf_counter()-t0,'device':'cpu'}))\n"
+            "'ndcg@5':m['ndcg@5'],'gpu_seconds':time.perf_counter()-t0}))\n"
             "```", 900, 300)])
     elif args.replay:
         complete = ReplayComplete(args.replay, strict=args.replay_strict)
@@ -223,7 +210,6 @@ def main() -> None:
         print(f"cross-run memory: {len(memory.splitlines())} lines from this agent's prior runs")
 
     facts = json.loads(Path(args.facts).read_text(encoding="utf-8"))
-    facts["hardware_note"] = prompt_hardware_note(hardware)
     print(f"dataset: {facts.get('variant', '?')}  "
           f"train {facts['train_rows']:,} / valid {facts['valid_rows']:,} / test {facts['test_rows']:,}")
     proposer = LLMProposer(complete, kb_papers=load_papers(), timeout=args.timeout,
@@ -297,10 +283,6 @@ def main() -> None:
         "wall_clock_s": wall,
         "wall_clock_h": wall / 3600.0,
         "script_seconds": r.script_seconds,
-        # Conservative allocation-time upper bound. A CUDA script may spend some of its wall
-        # time in CPU preprocessing, but this never understates allocated GPU time.
-        "gpu_hours": r.script_seconds / 3600.0 if hardware["device"] == "cuda" else 0.0,
-        "hardware": hardware,
         # the ledger counts proposer calls; r.llm_tokens_* also include knowledge revision
         "proposer_tokens_in": t["tokens_in"],
         "proposer_tokens_out": t["tokens_out"],

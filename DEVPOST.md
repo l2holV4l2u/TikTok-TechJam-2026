@@ -266,7 +266,7 @@ selection or submission. The harness now excludes them and provides equivalent a
 only on training rows. r35 is the strongest validation-selected run before that exposure.
 
 Resources for the submitted run (`r35`): **8 iterations of 50**, **35.1 minutes** of agent
-wall-clock, **91,852 tokens**, **0 GPU-hours** (CPU only), **0 failures**, **0 manual
+wall-clock, **91,852 tokens**, CPU only, **0 failures**, **0 manual
 interventions**, and **48 candidate solutions compared inside those 8 iterations**.
 
 A later run did lose 6 iterations to an expired API key. That is an outage rather than the agent
@@ -580,18 +580,16 @@ One caveat on causation: `s.num` arrived alongside a knowledge-base gap being fi
 to exposure alone. The process mechanisms had contracts in the brief from the start and no
 comparable retrieval support, which may be part of why they lagged.
 
-## GPU: available, but opt-in
+## Why this harness is CPU-only
 
-We measured the available RTX 4050 instead of assuming it would reduce agent wall-clock. A raw
-4096x4096 matrix multiply was 16.2x faster, but the organizer-style FM took **60 s on GPU versus
-56 s on CPU**. These small models are embedding-lookup heavy, and loading CUDA costs roughly 20
-seconds in every fresh experiment subprocess. One unchanged real agent script was 131.5 s with
-the CUDA runtime present versus 108.1 s on CPU, with bit-identical predictions.
-
-The harness therefore exposes `--device cuda` and records the resolved hardware/GPU allocation,
-but defaults to CPU. `research/baseline_reference.py` is also pinned to CPU so the reference does
-not shift with the active environment. GPU remains useful for an experiment large enough to
-repay its startup cost; it is not automatically faster on this benchmark.
+We measured the available RTX 4050 rather than assuming it would help. A raw 4096x4096 matmul
+was 16.2x faster, but the models this benchmark rewards are embedding-lookup bound, not
+matmul bound. End to end the GPU returned only ~1.25x: FM 69.3 s CPU against 55.6 s GPU,
+DeepFM 113.4 s against 90.3 s. It also changes results -- `torch.randperm` draws a different
+permutation on CUDA, so the same seed is not the same run, and the FM moved 0.6023 to 0.6007,
+inside noise but on the exact margin the baseline gate checks. A 1.25x speedup is not worth a
+reference that shifts with whatever device happens to be installed, so every device path was
+removed: the harness, the reference script and the generated experiments all run on CPU.
 
 ## What actually determines the score: completed iterations
 
