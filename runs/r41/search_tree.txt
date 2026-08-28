@@ -1,0 +1,4 @@
+#1 0.6015  Reproduce the official baseline stage by training a k=16 Factorization
+  #2 0.6007  Target the training-objective stage with inverse-square-root user-freq
+  #3 0.6053  Target the feature-representation and interaction stage by augmenting 
+    #4 0.6059  Target numeric feature encoding by adding train-quantile embeddings fo

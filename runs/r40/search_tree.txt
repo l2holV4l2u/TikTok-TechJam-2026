@@ -1,0 +1,4 @@
+#1 0.6021  Reproduce the official baseline stage by training a k=16 Factorization
+  #2 0.6025  Augment the FM feature stage with a robustly scaled nonlinear tower ov
+    #3 0.6036  Target the learning-objective and interaction-modeling stages by combi
+      #4 0.6030  Target the feature-representation stage with leakage-safe empirical-Ba

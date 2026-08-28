@@ -1,0 +1,2 @@
+{"iter_id": 3, "phase": "improve", "candidates": {"deepfm": 0.60525, "baseline": 0.6015173, "blend_deep_0.25": 0.6029755, "blend_deep_0.50": 0.6036976, "blend_deep_0.75": 0.6045314}}
+{"iter_id": 4, "phase": "improve", "candidates": {"quantile_deepfm": 0.6058727, "baseline": 0.6015173, "blend_deep_0.25": 0.6035507, "blend_deep_0.50": 0.6046227, "blend_deep_0.75": 0.6055128}}

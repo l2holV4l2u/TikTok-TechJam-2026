@@ -18,9 +18,15 @@ runs/*
 !runs/r35/
 !runs/r36/
 !runs/r37/
+!runs/r39/
+!runs/r40/
+!runs/r41/
 runs/*/scripts/*
 !runs/*/scripts/*.py
 *.npy
+# model checkpoints the agent caches between iterations via RUN_ARTIFACTS: regenerable
+# intermediates, 11MB in one run. The scripts that write them are kept; the weights are not.
+runs/*/artifacts/
 # a submission CSV is 5.9MB; the run that produced the submitted one is identified
 # in RUN_REPORT.md, and the file itself is kept once at the repo root
 runs/*/submission.csv

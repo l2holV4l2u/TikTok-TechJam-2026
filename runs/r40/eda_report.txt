@@ -1,0 +1,43 @@
+ROWS train=1141112 valid=124909 test=170588 X=37 num=22 aux=10
+REPRESENTATION scalar_per_row=True X_dtypes=['int64'] num_dtypes=['float32']
+LABEL rate train=0.3366 valid=0.3133
+DATE train 0409:0.336 0410:0.341 0411:0.333 0412:0.332 0413:0.317 0414:0.319 0415:0.363 0416:0.377 0417:0.364 0418:0.331 0419:0.323 0420:0.311 0421:0.315
+DATE valid 0422:0.319 0423:0.338 0424:0.303 0425:0.312 0426:0.311 0427:0.297 0428:0.290
+USER train n=26210 rows_q=1,13,31,59,97,207,809 pos_q=0,4,10,21,34,67,155
+USER train zero=0.051 all=0.023 mixed=0.927 GAUC_pos_eligible=0.996
+USER valid n=22377 rows_q=1,2,4,7,12,26,74 pos_q=0,0,1,2,4,9,24
+USER valid zero=0.303 all=0.119 mixed=0.578 GAUC_pos_eligible=0.884
+OVERLAP valid_users_unique_seen=0.981 rows_seen=0.984; videos_unique_seen=0.999 rows_seen=1.000
+COLD rows both_seen=0.984 user_only=0.000 video_only=0.016 neither=0.000
+CAT format=name card/usedTrain/usedValid/usedTest,validUnseenRow,adjEtaTrain/Valid
+CAT author_id=7000/6482/5311/5333,uv0.000,e0.322/0.319 | duration_bucket=12/10/10/10,uv0.000,e0.071/0.071
+CAT fans_user_num_range=16/9/9/9,uv0.000,e0.043/0.032 | follow_user_num_range=16/8/8/8,uv0.000,e0.020/0.016
+CAT friend_user_num_range=16/7/7/7,uv0.000,e0.031/0.021 | hour=32/24/24/24,uv0.000,e0.030/0.020
+CAT is_live_streamer=4/2/2/2,uv0.000,e0.028/0.030 | is_lowactive_period=4/1/1/1,uv0.000,e0.000/0.000
+CAT is_video_author=4/2/2/2,uv0.000,e0.015/0.007 | music_type=12/6/6/6,uv0.000,e0.063/0.056
+CAT onehot_feat0=8/2/2/2,uv0.000,e0.047/0.039 | onehot_feat1=12/7/7/7,uv0.000,e0.067/0.074
+CAT onehot_feat10=8/5/5/5,uv0.000,e0.013/0.015 | onehot_feat11=8/5/5/4,uv0.000,e0.038/0.044
+CAT onehot_feat12=8/3/3/3,uv0.000,e0.043/0.038 | onehot_feat13=8/3/3/3,uv0.000,e0.010/0.007
+CAT onehot_feat14=8/3/3/3,uv0.000,e0.011/0.012 | onehot_feat15=8/3/3/3,uv0.000,e0.013/0.008
+CAT onehot_feat16=8/3/3/3,uv0.000,e0.021/0.016 | onehot_feat17=8/3/3/3,uv0.000,e0.000/0.000
+CAT onehot_feat2=64/50/50/49,uv0.000,e0.034/0.035 | onehot_feat3=1600/1436/1330/1359,uv0.001,e0.123/0.128
+CAT onehot_feat4=24/16/16/16,uv0.000,e0.017/0.023 | onehot_feat5=48/33/31/31,uv0.000,e0.015/0.017
+CAT onehot_feat6=8/3/3/3,uv0.000,e0.034/0.029 | onehot_feat7=160/117/105/106,uv0.000,e0.060/0.058
+CAT onehot_feat8=512/452/438/439,uv0.000,e0.090/0.087 | onehot_feat9=12/7/7/7,uv0.000,e0.025/0.020
+CAT register_days_bucket=12/10/10/10,uv0.000,e0.057/0.047 | register_days_range=16/7/8/8,uv0.000,e0.052/0.043
+CAT tab=20/15/15/15,uv0.000,e0.277/0.255 | tag=64/44/43/43,uv0.000,e0.160/0.158
+CAT upload_type=20/14/11/12,uv0.000,e0.106/0.086 | user_active_degree=16/9/9/9,uv0.000,e0.060/0.062
+CAT user_id=30000/26210/21956/23099,uv0.016,e0.378/0.358 | video_id=8000/7538/5945/5974,uv0.000,e0.326/0.320
+CAT video_type=8/3/3/3,uv0.000,e0.010/0.020
+NUM format=name missingTrain/Valid,logSDTrain,pointBiserialTrain/Valid
+NUM collect_cnt=m0.00/0.00,sd1.52,r+0.121/+0.099 | comment_cnt=m0.00/0.00,sd1.60,r+0.075/+0.062
+NUM complete_play_cnt=m0.00/0.00,sd1.78,r+0.183/+0.190 | counts=m0.00/0.00,sd0.15,r+0.127/+0.130
+NUM download_cnt=m0.00/0.00,sd1.36,r+0.038/+0.013 | duration_ms=m0.00/0.00,sd1.90,r+0.074/+0.049
+NUM fans_user_num=m0.00/0.00,sd1.96,r-0.043/-0.033 | follow_cnt=m0.00/0.00,sd1.53,r+0.114/+0.096
+NUM follow_user_num=m0.00/0.00,sd1.55,r+0.016/+0.009 | friend_user_num=m0.00/0.00,sd1.98,r-0.030/-0.021
+NUM like_cnt=m0.00/0.00,sd1.58,r+0.142/+0.135 | long_time_play_cnt=m0.00/0.00,sd1.60,r+0.206/+0.207
+NUM play_cnt=m0.00/0.00,sd1.41,r+0.153/+0.151 | play_duration=m0.00/0.00,sd1.65,r+0.180/+0.172
+NUM play_progress=m0.00/0.00,sd0.09,r+0.192/+0.215 | play_user_num=m0.00/0.00,sd1.41,r+0.152/+0.150
+NUM register_days=m0.00/0.00,sd0.83,r-0.053/-0.044 | share_cnt=m0.00/0.00,sd1.45,r+0.054/+0.024
+NUM short_time_play_cnt=m0.00/0.00,sd1.37,r+0.106/+0.097 | show_cnt=m0.00/0.00,sd1.25,r+0.117/+0.116
+NUM show_user_num=m0.00/0.00,sd1.26,r+0.119/+0.116 | valid_play_cnt=m0.00/0.00,sd1.51,r+0.186/+0.188
