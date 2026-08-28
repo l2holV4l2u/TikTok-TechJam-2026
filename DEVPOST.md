@@ -530,6 +530,38 @@ Iteration #11 then hit the wall-clock timeout, and the harness distinguished tha
 telling it the approach was too slow rather than wrong, since re-running a slow script unchanged
 only times out again. Full log in `RUN_REPORT_1K.md`.
 
+## What the agent adopted, and what it ignored
+
+We added capabilities over many runs and then measured which ones the agent actually used,
+counting only the scripts written in runs where each capability existed:
+
+| capability | kind | adoption |
+|---|---|---|
+| `s.num` — 22 continuous features | data | **63.0%** (17/27) |
+| `s.time_ms` — impression order | data | **33.3%** (9/27) |
+| `s.date` — impression day | data | **29.2%** (19/65) |
+| `FINDINGS` — report epistemic evidence | process | 9.8% (38/387) |
+| `CANDIDATES` — compare inside an iteration | process | 8.5% (33/387) |
+| `RUN_ARTIFACTS` — cache between iterations | process | 1.0% (4/387) |
+| `evaluate(per_user=True)` — segment diagnosis | process | 0.8% (3/387) |
+
+**Give the agent new data and it uses it; give it new process and it mostly does not.** Every
+data channel we exposed was picked up within an iteration or two of becoming available, and the
+winning iteration of the submitted run uses two of them. Every optional protocol we invented
+sat near the floor, including two we were confident about: a per-user error breakdown it asked
+for nothing to obtain, and a cache directory that would have saved it retraining the same model
+each iteration.
+
+This is the most useful thing we learned about building the harness, and it was not what we
+expected. It also cost us: `RUN_ARTIFACTS` and `per_user` were built early, reported as
+capabilities, and did nothing for six runs. We report the adoption numbers rather than the
+feature list, because a capability with 0.8% uptake is a capability we should not claim.
+
+One caveat on causation: `s.num` arrived alongside a knowledge-base gap being filled (the KB had
+28 entries and zero on numeric features until we added five), so its uptake is not attributable
+to exposure alone. The process mechanisms had contracts in the brief from the start and no
+comparable retrieval support, which may be part of why they lagged.
+
 ## Harness engineering
 
 Four changes that are not model work but decide whether the agent gets a fair run.
