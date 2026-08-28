@@ -8,6 +8,7 @@ revising its own belief set. That is what makes Requirement 1 and Innovation hon
 what gets tried, and why, has to come from the agent.
 """
 import json
+import os
 import re
 from pathlib import Path
 from typing import Callable
@@ -26,6 +27,11 @@ MAX_KB = 3
 MAX_ATTEMPTS = 2
 MAX_CODE_CHARS = 14000     # a parent script is sent in full; truncating it produces bad edits
 MAX_EDA_CHARS = 4000
+# Off by default. A free-tier key allows 10,000 tokens per minute while prompts reach 12,000
+# on their own, so every call 429s and each retry spends one of the 50 daily requests: r63
+# completed 3 calls and burned 28. A budget makes those keys usable, at the cost of less
+# context per call. Measured at ~3.6 characters per token on real prompts.
+PROMPT_CHAR_BUDGET = int(os.environ.get("LLM_PROMPT_CHAR_BUDGET", "0"))
 
 # ---------------------------------------------------------------- task specification only
 
@@ -258,6 +264,29 @@ def _fmt_metrics(metrics: dict) -> str:
                     for k, v in metrics.items())
 
 
+def _fit_budget(blocks: list[str], budget: int) -> str:
+    """Join the prompt, trimming the least load-bearing blocks first if it is over budget.
+
+    The task brief carries the contracts, the parent script is what the agent edits, and the
+    response format is what makes the reply parseable -- none of those may go. The catalogue,
+    the EDA dump and the prior-run record are context, and a shorter version of each beats a
+    call that can never be served.
+    """
+    joined = "\n\n".join(blocks)
+    if budget <= 0 or len(joined) <= budget:
+        return joined
+    for head in ("AVAILABLE LITERATURE", "DETAIL ON A FEW OF THEM",
+                 "WHAT YOU MEASURED WHEN YOU INSPECTED", "PRIOR RUNS OF THIS AGENT",
+                 "WHAT YOU CURRENTLY BELIEVE"):
+        for i, b in enumerate(blocks):
+            if b.startswith(head) and len(b) > 400:
+                blocks[i] = b[:400].rstrip() + "\n[trimmed to fit the request budget]"
+        joined = "\n\n".join(blocks)
+        if len(joined) <= budget:
+            return joined
+    return joined
+
+
 def _summarize_history(history, n: int) -> str:
     """Label each past iteration by what happened to the SCORE, not by the loop status.
 
@@ -422,7 +451,7 @@ class LLMProposer:
             "<complete runnable script>\n"
             "```"
         )
-        return "\n\n".join(blocks)
+        return _fit_budget(blocks, PROMPT_CHAR_BUDGET)
 
     def _parse(self, text: str) -> tuple[str, str] | None:
         hm = _HYP_RE.search(text)

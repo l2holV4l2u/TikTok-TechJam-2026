@@ -266,6 +266,27 @@ def test_history_reports_the_score_outcome_not_the_loop_status():
     assert "failed" in next(l for l in out.splitlines() if "a crash" in l)
 
 
+def test_a_prompt_budget_trims_context_but_never_the_contracts():
+    """A free-tier key allows 10,000 tokens a minute; prompts reach 12,000 unaided.
+
+    r63 completed three calls and spent 28 of its 31 daily requests in retries discovering
+    that. Trimming context is survivable; dropping the task contracts or the response format
+    is not, and neither is a call that can never be served.
+    """
+    from agent.proposer import _fit_budget
+
+    blocks = ["TASK BRIEF " + "x" * 5000,
+              "AVAILABLE LITERATURE " + "y" * 3000,
+              "PRIOR RUNS OF THIS AGENT " + "z" * 4000,
+              "Respond EXACTLY as: HYPOTHESIS"]
+    assert len(_fit_budget(list(blocks), 0)) > 12000, "budget 0 means no trimming at all"
+    out = _fit_budget(list(blocks), 6000)
+    assert len(out) <= 6000, len(out)
+    assert "TASK BRIEF" in out and "x" * 5000 in out, "the contracts are never trimmed"
+    assert "Respond EXACTLY as" in out, "the response format is never trimmed"
+    assert "[trimmed" in out, "context blocks are what gives way"
+
+
 if __name__ == "__main__":
     for t in (
         test_brief_carries_no_human_findings,
@@ -291,6 +312,7 @@ if __name__ == "__main__":
         test_detailed_retrieval_rotates_instead_of_repeating,
         test_token_counts_summed_across_retries,
         test_history_reports_the_score_outcome_not_the_loop_status,
+        test_a_prompt_budget_trims_context_but_never_the_contracts,
     ):
         t()
         print(f"ok  {t.__name__}")
