@@ -326,6 +326,9 @@ iterations with zero failures and zero interventions:
 | **r36** | **+ `evaluate(per_user=True)` for per-segment diagnosis** | **0.6037** | **+0.0036** |
 | **r37** | **+ `RUN_ARTIFACTS` cache directory (agent never used it)** | **0.6037** | **+0.0041** |
 | **r39** | **+ `s.time_ms` and `s.num`: impression order and 22 continuous features** | **0.6053** | **+0.0051** |
+| **r41** | **+ stale-capability note in cross-run memory** | **0.6059** | **+0.0050** |
+| r43 | + all 51 video statistics, GPU visible — *proposer swapped to gpt-5.6-luna* | 0.6042 | +0.0023 |
+| r44 | same harness — *proposer swapped to gpt-5.6-terra* | 0.6020 | +0.0014 |
 
 r30's `run_meta.json` was destroyed by an encoding crash *after* it had written its submission
 (a hypothesis containing `×` met a cp874 stdout). Its row is therefore re-derived by scoring
@@ -344,6 +347,27 @@ r33–r37 carry the literature-driven changes, and the separation is clean on bo
 | before (r27–r30) | 0.6023 – 0.6033 | +0.0006 – +0.0024 |
 | after (r33–r37) | **0.6037 – 0.6049** | **+0.0033 – +0.0041** |
 | with the new instruments (r39) | **0.6053** | **+0.0051** |
+
+### The proposer model is the largest single effect we measured
+
+We swapped the proposer between three models of the same family, holding the harness fixed:
+
+| proposer | runs | hidden-test delta |
+|---|---|---|
+| `gpt-5.6-sol` | r37, r39, r40, r41 | +0.0041, **+0.0051**, +0.0030, **+0.0050** (mean +0.0043) |
+| `gpt-5.6-luna` | r43 | +0.0023 |
+| `gpt-5.6-terra` | r44 | +0.0014 |
+
+That spread is **larger than any harness change in this table**, which is worth stating plainly
+given how much of this project is harness work. Two caveats keep it from being a clean
+experiment: luna and terra are single runs each, and both also carried later harness states (all
+51 statistics, a visible GPU), so model and harness are not fully separated.
+
+One concrete failure mode was visible rather than statistical. `gpt-5.1`, tried briefly, spent
+two iterations inventing field names — `duration_ms_range`, then `duration_range`, where the real
+field is `duration_bucket`. That exposed a genuine gap: the brief said `s.X` held 37 categorical
+features and named only the five baseline ones, so a model wanting a sixth had to guess. All 37
+are now listed. The weaker model found a hole the stronger ones had been stepping around.
 
 **The worst run after beats the best run before, on both metrics, 5/5 against 4/4.** Five runs
 is still a small sample and we are reading a ~0.0015 effect against a 0.0008 noise floor, so we
