@@ -17,6 +17,12 @@ DEFAULT_TIMEOUT_S = 120
 MAX_RETRIES = 8
 BASE_DELAY_S = 1.0
 MAX_DELAY_S = 90.0
+# A ceiling on ALL attempts for one call, not just on each one. Eight retries at up to 90s of
+# backoff plus a 120s socket timeout each is ~28 minutes before the caller hears anything, and a
+# socket left dead by a suspended machine can outlast its own timeout: an observed run sat 42
+# minutes with no child process and no progress. The loop cannot recover from a call that never
+# returns, so the call has to give up on its own.
+TOTAL_DEADLINE_S = 420.0
 CHARS_PER_TOKEN = 4  # fallback estimate (chars/4) used only when the API omits usage
 
 
@@ -64,11 +70,25 @@ def _retry_delay(err, body: str, attempt: int) -> float:
     return min(MAX_DELAY_S, BASE_DELAY_S * (2 ** (attempt - 1)))
 
 
-def _post_json(url: str, headers: dict, body: dict, timeout: float = DEFAULT_TIMEOUT_S) -> dict:
-    """POST JSON via urllib, retrying 429/5xx/connection errors with capped exponential backoff."""
+def _post_json(url: str, headers: dict, body: dict, timeout: float = DEFAULT_TIMEOUT_S,
+               total_deadline_s: float = TOTAL_DEADLINE_S) -> dict:
+    """POST JSON via urllib, retrying 429/5xx/connection errors with capped exponential backoff.
+
+    Gives up once total_deadline_s has elapsed across all attempts, so one call can never wedge
+    a run indefinitely.
+    """
     data = json.dumps(body).encode("utf-8")
     attempt = 0
+    started = time.monotonic()
+
+    def _out_of_time() -> bool:
+        return time.monotonic() - started >= total_deadline_s
+
     while True:
+        if _out_of_time():
+            raise LLMRetryExhausted(
+                f"gave up after {time.monotonic() - started:.0f}s across {attempt} attempts "
+                f"(deadline {total_deadline_s:.0f}s)")
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -84,14 +104,24 @@ def _post_json(url: str, headers: dict, body: dict, timeout: float = DEFAULT_TIM
                 attempt += 1
                 if attempt > MAX_RETRIES:
                     raise LLMRetryExhausted(f"HTTP {e.code} after {MAX_RETRIES} retries: {err_body}") from e
-                time.sleep(_retry_delay(e, err_body, attempt))
+                delay = _retry_delay(e, err_body, attempt)
+                if time.monotonic() - started + delay >= total_deadline_s:
+                    raise LLMRetryExhausted(
+                        f"HTTP {e.code}; next backoff would pass the {total_deadline_s:.0f}s "
+                        f"deadline") from e
+                time.sleep(delay)
                 continue
             raise LLMError(f"HTTP {e.code}: {err_body}") from e
         except urllib.error.URLError as e:
             attempt += 1
             if attempt > MAX_RETRIES:
                 raise LLMRetryExhausted(f"connection error after {MAX_RETRIES} retries: {e}") from e
-            time.sleep(min(MAX_DELAY_S, BASE_DELAY_S * (2 ** (attempt - 1))))
+            delay = min(MAX_DELAY_S, BASE_DELAY_S * (2 ** (attempt - 1)))
+            if time.monotonic() - started + delay >= total_deadline_s:
+                raise LLMRetryExhausted(
+                    f"connection error; next backoff would pass the "
+                    f"{total_deadline_s:.0f}s deadline") from e
+            time.sleep(delay)
 
 
 class AnthropicComplete:

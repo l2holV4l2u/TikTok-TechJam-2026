@@ -168,6 +168,41 @@ def test_replay_returns_recorded_responses_and_refuses_to_overrun():
         os.unlink(path)
 
 
+def test_a_call_gives_up_instead_of_wedging_the_run():
+    """One LLM call must not be able to hang a run indefinitely.
+
+    Eight retries at up to 90s of backoff, each behind a 120s socket timeout, is ~28 minutes
+    before the caller hears anything -- and a socket left dead by a suspended machine outlasted
+    even that: an observed run sat 42 minutes with no child process and no progress. The loop
+    has no way to recover from a call that never returns, so the call enforces its own ceiling.
+    """
+    import time as _time
+    import urllib.error
+    from agent import llm
+
+    calls = {"n": 0}
+
+    def always_down(*a, **k):
+        calls["n"] += 1
+        raise urllib.error.URLError("connection refused")
+
+    real = llm.urllib.request.urlopen
+    llm.urllib.request.urlopen = always_down
+    try:
+        t0 = _time.monotonic()
+        try:
+            llm._post_json("https://example.invalid", {}, {"x": 1}, total_deadline_s=1.0)
+            raise AssertionError("should have given up")
+        except llm.LLMRetryExhausted as e:
+            elapsed = _time.monotonic() - t0
+            assert elapsed < 8.0, f"took {elapsed:.1f}s despite a 1s deadline"
+            assert "deadline" in str(e).lower(), str(e)
+        # and it must not have burned the full retry ladder to get there
+        assert calls["n"] <= llm.MAX_RETRIES, calls["n"]
+    finally:
+        llm.urllib.request.urlopen = real
+
+
 if __name__ == "__main__":
     for t in (test_daily_cap_body_is_recognised,
               test_failover_to_the_second_key_on_a_daily_cap,
@@ -177,7 +212,8 @@ if __name__ == "__main__":
               test_no_key_anywhere_is_an_explicit_error,
               test_recording_wrapper_exposes_the_model_for_the_run_log,
               test_key_is_never_placed_in_the_body,
-              test_replay_returns_recorded_responses_and_refuses_to_overrun):
+              test_replay_returns_recorded_responses_and_refuses_to_overrun,
+              test_a_call_gives_up_instead_of_wedging_the_run):
         t()
         print(f"ok  {t.__name__}")
     print("all passed")
