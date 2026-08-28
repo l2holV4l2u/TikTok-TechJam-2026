@@ -168,6 +168,7 @@ def main() -> None:
     meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
     scored = [e for e in rows if e["status"] in ("ok", "reverted") and "primary" in e["metrics"]]
     failed = [e for e in rows if e["status"] in ("failed", "blacklisted")]
+    rejected = [e for e in rows if e["status"] == "rejected"]
     infra = [e for e in failed if _is_infra(e)]
     failed = [e for e in failed if not _is_infra(e)]
 
@@ -177,6 +178,9 @@ def main() -> None:
         print(f"> {len(infra)} iteration(s) in this run were lost to the LLM transport rather "
               f"than to the agent ({', '.join(kinds)}). They are excluded from the failure count "
               f"below, which reports experiments the agent actually ran and recovered from.\n")
+    if rejected:
+        print(f"> {len(rejected)} scored iteration(s) were rejected by the integrity critic. "
+              "They are excluded from the search tree, cross-run memory, and submission.\n")
 
     # ---- the three stages of the loop, all performed by the agent
     print("## Loop stages executed by the agent\n")
@@ -264,9 +268,16 @@ def main() -> None:
     print(f"- Total LLM tokens: **{tok_in + tok_out:,}** ({tok_in:,} in / {tok_out:,} out), "
           f"including the knowledge-revision stage")
     print(f"- Iterations used: **{len(rows)} of {meta.get('iteration_cap', 50)}** "
-          f"({len(scored)} scored, {len(failed)} failed)")
-    print(f"- GPU-hours: **0.0** - this benchmark needs no GPU; every script ran on CPU. "
-          f"Compute inside scripts totalled {_fmt_hours(script_s)}.")
+          f"({len(scored)} accepted scores, {len(failed)} failed, {len(rejected)} rejected)")
+    hardware = meta.get("hardware") or {}
+    gpu_hours = float(meta.get("gpu_hours", 0.0))
+    if hardware.get("device") == "cuda":
+        print(f"- GPU-hours: **{gpu_hours:.2f}** allocation-time upper bound on "
+              f"{hardware.get('gpu_name', 'CUDA GPU')}. Compute inside scripts totalled "
+              f"{_fmt_hours(script_s)}.")
+    else:
+        print(f"- GPU-hours: **0.0** - this run selected CPU. Compute inside scripts "
+              f"totalled {_fmt_hours(script_s)}.")
     if rows:
         print(f"- Mean tokens per iteration: {(tok_in + tok_out) / len(rows):,.0f}")
     print(f"- Stop reason: `{meta.get('stop_reason', 'unknown')}`")

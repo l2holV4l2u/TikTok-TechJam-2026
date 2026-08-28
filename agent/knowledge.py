@@ -89,6 +89,8 @@ def _coerce(raw) -> list[Claim]:
 def _outcome(entry) -> str:
     if entry.status in ("failed", "blacklisted"):
         return f"CRASHED ({entry.status}): {(entry.error or '')[:300]}"
+    if entry.status == "rejected":
+        return f"REJECTED BY INTEGRITY CRITIC: {(entry.error or '')[:300]}"
     parts = [f"{k}={v:.4f}" for k, v in (entry.metrics or {}).items() if isinstance(v, float)]
     return f"scored {', '.join(parts)} in {entry.gpu_seconds:.0f}s"
 

@@ -153,13 +153,12 @@ Two smaller consequences of the same reading:
   rule charges an iteration per experiment, so searching *inside* an iteration buys comparisons
   the iteration budget cannot.
 
-  We checked whether searching harder inside an iteration actually pays, and it does not:
-  across nine Pure runs the candidate count ranges 0-96, and runs above the mean average 0.6046
-  best-validation against 0.6041 below it -- a 0.0005 gap on n=3 against n=6, inside the noise
-  floor. The run that compared the most candidates (96) scored *worst* of the recent set
-  (0.6036); the best run (0.6059) compared ten. The mechanism gives the agent room the
-  iteration budget denies it, and it is used, but we have no evidence it drives the result and
-  do not claim it does.
+  We checked whether searching harder inside an iteration actually pays. Across nine eligible
+  Pure runs the candidate count ranges 0-48; the three above the mean average 0.6043
+  best-validation against 0.6032 for the other six. That +0.0011 association is inside the
+  0.002 noise threshold and is confounded with later harness revisions. The mechanism gives the
+  agent room the iteration budget denies it, and it is used, but this sample does not establish
+  a causal score gain.
 - **Epistemic evidence rides along.** A script may print `FINDINGS` lines — a distribution, a
   correlation, an assumption checked — which feed the belief set whatever the score was. Iris
   scores diagnostic actions separately; our convergence rule cannot afford a purely diagnostic
@@ -247,33 +246,24 @@ versions is the same: **every defect was in the scaffolding, not in the model's 
 
 Official baseline (organizer-provided FM, k=16): validation primary 0.6016, hidden test 0.5946.
 
-Our submitted run (`runs/r41`, full log in `RUN_REPORT.md`):
+Our submitted run (`runs/r35`, full log in `RUN_REPORT.md`):
 
 | | GAUC | nDCG@5 | primary |
 |---|---|---|---|
-| validation, agent's best iteration | 0.6732 | 0.5386 | 0.6059 |
+| validation, agent's best iteration | 0.6711 | 0.5387 | 0.6049 |
 | official baseline, validation | 0.6674 | 0.5357 | 0.6016 |
-| **hidden test, this submission** | **0.6677** | **0.5316** | **0.5996** |
+| **hidden test, this submission** | **0.6657** | **0.5312** | **0.5985** |
 | official baseline, hidden test | 0.6610 | 0.5282 | 0.5946 |
 
-**Absolute delta on hidden test: GAUC +0.0067, nDCG@5 +0.0034, mean +0.0050.**
+**Absolute delta on hidden test: GAUC +0.0047, nDCG@5 +0.0030, mean +0.0039.**
 
-r41 is validation-best of every run, which is the only criterion we select on. r39 reached a
-marginally higher hidden-test score (0.5997, +0.0051) from a lower validation score (0.6053) --
-we do not take it, because choosing the higher test number would be selecting on the split we
-are scored against.
-
-Both are runs with two instruments the harness previously withheld -- impression timestamps and
-a continuous-feature channel -- and both winning iterations use them. Before them
-the best run reached 0.6049 validation / +0.0039 test (`runs/r35`), and five runs had clustered
-there. Details in **Harness engineering** below.
-
-One thing stated plainly: r39 did not converge on its own. The machine it ran on was suspended
-mid-run, which left the proposer's HTTP socket dead, and we terminated the process during
-iteration #7. Iteration #6 -- the one selected -- had completed and been scored normally before
-that, and the submission was written by the harness's own validation-best selector, not rebuilt
-by hand. The incident is also why `agent/llm.py` now bounds the total time of a single call: a
-run must not be able to hang on one dead socket.
+We later produced higher-looking r39/r41/r43/r44 numbers after exposing
+`video_features_statistic_pure.csv`. An integrity review rejected those runs: the dataset
+documentation defines those item outcome statistics as averages over the full month, which
+overlaps this repository's validation and test dates. They are useful measurements, but they
+are future-window information under the fixed date split and are not eligible for model
+selection or submission. The harness now excludes them and provides equivalent aggregates fit
+only on training rows. r35 is the strongest validation-selected run before that exposure.
 
 Resources for the submitted run (`r41`): **11 iterations of 50**, **7.1 minutes** of script
 time, **54,029 tokens** over 8 model calls, **0 GPU-hours** (CPU only), **0 manual
@@ -334,10 +324,6 @@ iterations with zero failures and zero interventions:
 | **r35** | **+ broaden anchors on the best node, not the earliest** | **0.6049** | **+0.0039** |
 | **r36** | **+ `evaluate(per_user=True)` for per-segment diagnosis** | **0.6037** | **+0.0036** |
 | **r37** | **+ `RUN_ARTIFACTS` cache directory (agent never used it)** | **0.6037** | **+0.0041** |
-| **r39** | **+ `s.time_ms` and `s.num`: impression order and 22 continuous features** | **0.6053** | **+0.0051** |
-| **r41** | **+ stale-capability note in cross-run memory** | **0.6059** | **+0.0050** |
-| r43 | + all 51 video statistics, GPU visible — *proposer swapped to gpt-5.6-luna* | 0.6042 | +0.0023 |
-| r44 | same harness — *proposer swapped to gpt-5.6-terra* | 0.6020 | +0.0014 |
 
 r30's `run_meta.json` was destroyed by an encoding crash *after* it had written its submission
 (a hypothesis containing `×` met a cp874 stdout). Its row is therefore re-derived by scoring
@@ -355,22 +341,12 @@ r33–r37 carry the literature-driven changes, and the separation is clean on bo
 |---|---|---|
 | before (r27–r30) | 0.6023 – 0.6033 | +0.0006 – +0.0024 |
 | after (r33–r37) | **0.6037 – 0.6049** | **+0.0033 – +0.0041** |
-| with the new instruments (r39) | **0.6053** | **+0.0051** |
 
-### The proposer model is the largest single effect we measured
+### The proposer-model comparison is inconclusive
 
-We swapped the proposer between three models of the same family, holding the harness fixed:
-
-| proposer | runs | hidden-test delta |
-|---|---|---|
-| `gpt-5.6-sol` | r37, r39, r40, r41 | +0.0041, **+0.0051**, +0.0030, **+0.0050** (mean +0.0043) |
-| `gpt-5.6-luna` | r43 | +0.0023 |
-| `gpt-5.6-terra` | r44 | +0.0014 |
-
-That spread is **larger than any harness change in this table**, which is worth stating plainly
-given how much of this project is harness work. Two caveats keep it from being a clean
-experiment: luna and terra are single runs each, and both also carried later harness states (all
-51 statistics, a visible GPU), so model and harness are not fully separated.
+We tried `gpt-5.6-luna` and `gpt-5.6-terra`, but those single runs also used the later,
+ineligible full-month statistic exposure. Model, harness and data contract all changed at once,
+so their score spread cannot identify a proposer-model effect and is not used as evidence.
 
 One concrete failure mode was visible rather than statistical. `gpt-5.1`, tried briefly, spent
 two iterations inventing field names — `duration_ms_range`, then `duration_range`, where the real
@@ -405,9 +381,10 @@ times and submit whichever run happens to peak. The numbers above say that would
 noise, not selecting quality, and it is exactly the failure mode the held-out test exists to
 catch. We submit the validation-best run under the organizers' rule and report the spread.
 
-r37 is the concrete case. It scored **+0.0041 on the hidden test, the best of any run** — and we
-do not submit it, because its validation score (0.6037) is not the best and selecting it would
-mean choosing on the test set. r39 (validation 0.6053, test +0.0051) is the submission, selected the same way.
+r37 is the concrete case. It scored **+0.0041 on the hidden test, the best of any eligible run**
+— and we do not submit it, because its validation score (0.6037) is not the best and selecting
+it would mean choosing on the test set. r35 (validation 0.6049, test +0.0039) is the submission,
+selected the same way.
 
 What is *not* ambiguous is the mechanism, and the clearest single example is r33, where broaden
 fired for the first time at iteration #3 and that iteration is the one that won. Instead of
@@ -571,7 +548,7 @@ counting only the scripts written in runs where each capability existed:
 
 | capability | kind | adoption |
 |---|---|---|
-| `s.num` — 22 continuous features | data | **63.0%** (17/27) |
+| `s.num` — continuous features | data | **63.0%** (17/27) |
 | `s.time_ms` — impression order | data | **33.3%** (9/27) |
 | `s.date` — impression day | data | **29.2%** (19/65) |
 | `FINDINGS` — report epistemic evidence | process | 9.8% (38/387) |
@@ -580,8 +557,7 @@ counting only the scripts written in runs where each capability existed:
 | `evaluate(per_user=True)` — segment diagnosis | process | 0.8% (3/387) |
 
 **Give the agent new data and it uses it; give it new process and it mostly does not.** Every
-data channel we exposed was picked up within an iteration or two of becoming available, and the
-winning iteration of the submitted run uses two of them. Every optional protocol we invented
+data channel we exposed was picked up within an iteration or two of becoming available. Every optional protocol we invented
 sat near the floor, including two we were confident about: a per-user error breakdown it asked
 for nothing to obtain, and a cache directory that would have saved it retraining the same model
 each iteration.
@@ -596,35 +572,18 @@ One caveat on causation: `s.num` arrived alongside a knowledge-base gap being fi
 to exposure alone. The process mechanisms had contracts in the brief from the start and no
 comparable retrieval support, which may be part of why they lagged.
 
-## The GPU does not help this benchmark
+## GPU: available, but opt-in
 
-An RTX 4050 was available and unused, so we measured what it was worth rather than assuming.
+We measured the available RTX 4050 instead of assuming it would reduce agent wall-clock. A raw
+4096x4096 matrix multiply was 16.2x faster, but the organizer-style FM took **60 s on GPU versus
+56 s on CPU**. These small models are embedding-lookup heavy, and loading CUDA costs roughly 20
+seconds in every fresh experiment subprocess. One unchanged real agent script was 131.5 s with
+the CUDA runtime present versus 108.1 s on CPU, with bit-identical predictions.
 
-| | result |
-|---|---|
-| raw 4096² matmul ×20 | **16.2× faster** on GPU (0.74 s vs 11.90 s) |
-| the organizers' FM recipe, end to end | **60 s on GPU vs 56 s on CPU** |
-| a real agent iteration, CUDA runtime merely *present* | **131.5 s vs 108.1 s**, bit-identical output |
-
-The benchmark is not matmul-limited. These models are small and embedding-lookup bound, and the
-CUDA runtime costs about 20 seconds per script to load — which a 100-second script cannot earn
-back. Simply having the CUDA build on the path made an unchanged script 22% slower while
-producing exactly the same metric, because the script never moved anything to the device.
-
-Two consequences we acted on:
-
-- The brief now states the device and **the load cost**, so the agent can judge whether moving
-  work earns it back instead of assuming a GPU is free. It does use it: the first two scored
-  iterations of the following run wrote CUDA code.
-- `research/baseline_reference.py` is **pinned to CPU**. The same recipe returns valid 0.6020 /
-  test 0.5947 on GPU against 0.6022 / 0.5957 on CPU — a 0.0010 shift on test, at the edge of the
-  0.0008 seed-noise band. A reference number that moves with whichever device happens to be
-  installed is not a reference, and this one anchors both the ablation table and the entire
-  KuaiRand-1K experiment.
-
-The organizers note that compute is deliberately not the binding constraint here — their
-baseline runs in about 40 s on one CPU core. Our measurements agree: there is nothing for a GPU
-to win on this task.
+The harness therefore exposes `--device cuda` and records the resolved hardware/GPU allocation,
+but defaults to CPU. `research/baseline_reference.py` is also pinned to CPU so the reference does
+not shift with the active environment. GPU remains useful for an experiment large enough to
+repay its startup cost; it is not automatically faster on this benchmark.
 
 ## Harness engineering
 

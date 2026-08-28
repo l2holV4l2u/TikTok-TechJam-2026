@@ -74,6 +74,9 @@ agent/       the product. dataset-agnostic.
   loop.py        controller: the three phases above, wall-clock and iteration budgets
   tree.py        search over solution scripts: adaptive refine/broaden, retirement
   proposer.py    prompt construction; the brief is task spec + API only, no findings
+  critic.py      integrity gate; rejected scores cannot enter the tree or submission
+  ensemble.py    controller-owned validation-selected blend against the incumbent
+  hardware.py    reproducible CPU/CUDA discovery for prompts and run metadata
   knowledge.py   the revisable belief set -- the reflect+revise stage of Figure 1
   memory.py      distils this agent's own prior run ledgers into the next run's context
   llm.py         stdlib LLM client (Anthropic / OpenAI-compatible), records every call
@@ -85,6 +88,7 @@ agent/       the product. dataset-agnostic.
   diagnose.py    per-segment error profile fed back so proposals target a measured weakness
 pipeline/    the sandbox the agent works in.
   data.py        KuaiRand-Pure loader, organizer-fixed date splits, train-only vocabs
+  history.py     leakage-safe train-only item/author histories, leave-one-out on train
   evaluate.py    GAUC / nDCG@5, verified bit-identical to the official evaluate.py
   baseline_fm.py numpy Factorization Machine — the official baseline, for reference
   submit.py      submission writer + validator
@@ -112,6 +116,22 @@ tar -xzf KuaiRand-Pure.tar.gz && cd ../..
 python -c "import pipeline.data as d; d.build_cache('data/raw/KuaiRand-Pure/data','data/cache')"
 export OPENAI_API_KEY=...   # and LLM_PROVIDER=openai, or ANTHROPIC_API_KEY
 ```
+
+### GPU and fast prototypes
+
+Use the CUDA-enabled Python environment when prototyping PyTorch models:
+
+```powershell
+.\.venv-gpu\Scripts\python.exe -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+.\.venv-gpu\Scripts\python.exe run_agent.py --run-dir runs/rN --device cuda --iters 50
+```
+
+`--device cuda` opts in; `--device auto` selects CUDA when the active Python can use it. CPU is
+the default because the measured reference FM was 56 s on CPU versus 60 s on this RTX 4050, and
+loading CUDA costs about 20 s per generated script. Generated scripts receive the resolved choice in `AGENT_DEVICE`, and
+`run_meta.json` records the PyTorch/CUDA versions and GPU. CUDA helps neural training, but data
+loading, NumPy evaluation, and this LightGBM build remain CPU work, so use short dry runs and
+small in-script samples for architecture smoke tests before paying for a full autonomous run.
 
 ## Reproduce our result
 
@@ -163,7 +183,8 @@ are **not** comparable between variants; see `research/transfer-1k.md`. Cross-ru
 disabled with `--no-memory`, since it ranks prior runs against a baseline on a different scale.
 
 The agent writes the submission from its own validation-best iteration — every generated script
-saves test scores to `$ITER_OUT/scores_test.npy` and the loop assembles the winner. No human
+saves both validation and test scores. The controller recomputes the official validation metrics
+from `scores_valid.npy`, rejects mismatched or invalid output, and assembles the winner. No human
 rebuilds it, and selection is on validation only; the hidden test set never picks the winner.
 
 ## Tests
@@ -171,7 +192,9 @@ rebuilds it, and selection is on validation only; the hidden test set never pick
 ```bash
 for m in agent.tree agent.knowledge agent.memory agent.demo \
          tests.test_proposer tests.test_llm tests.test_evaluate tests.test_submit \
-         tests.test_data tests.test_models tests.test_weights; do python -m $m; done
+         tests.test_data tests.test_models tests.test_weights tests.test_executor \
+         tests.test_harness tests.test_history tests.test_ensemble tests.test_hardware; \
+         do python -m $m; done
 ```
 
 Two tests guard the whole design, and they cover different channels into the prompt:
@@ -208,7 +231,9 @@ iteration; it now sees the full catalogue and retrieval rotates.
 and the other logged signals are outcomes of the row being scored; they are exposed as
 `Split.aux`, never as features, asserted by test. `video_features_statistic_pure.csv` is
 excluded entirely — its counts are aggregated over the whole log period, including the
-validation and test windows.
+validation and test windows. Historical r39/r41/r43/r44 scores that used that file are retained as
+an audit trail but excluded from memory, comparison, and submission; `submission_best.csv` is
+restored to the strongest eligible run, r35.
 
 ## What we would do with more time
 

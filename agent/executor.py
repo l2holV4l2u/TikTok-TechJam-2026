@@ -60,9 +60,12 @@ def run_script(path: Path, timeout: float = 1800, cwd=None, pythonpath=None, ext
         env["PYTHONPATH"] = os.pathsep.join([str(pythonpath), env.get("PYTHONPATH", "")]).rstrip(os.pathsep)
     env.update(extra_env or {})
     t0 = time.perf_counter()
+    process_group = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+                     if sys.platform == "win32" else {"start_new_session": True})
     proc = subprocess.Popen(
         [sys.executable, str(path)],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=cwd, env=env,
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, cwd=cwd, env=env, **process_group,
     )
     try:
         out, err = proc.communicate(timeout=timeout)

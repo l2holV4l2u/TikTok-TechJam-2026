@@ -90,11 +90,11 @@ def test_refine_mode_climbs_from_the_current_best_node():
     """While every iteration keeps gaining, the search stays greedy and deepens the leader."""
     with tempfile.TemporaryDirectory() as tmp:
         led = _ledger(tmp)
-        pr = ScriptedProposer([0.70, 0.75, 0.80])
+        pr = ScriptedProposer([0.62, 0.64, 0.66])
         r = run_loop(pr, StdoutJsonEvaluator(), led, workdir=tmp, patience=99, timeout=30)
         assert pr.modes[:3] == ["refine"] * 3, pr.modes
         assert pr.parents[:3] == [1, 2, 3], pr.parents
-        assert r.tree.best.score == 0.80
+        assert r.tree.best.score == 0.66
         parents = {e.iter_id: e.parent_iter_id for e in led.read() if e.phase == "improve"}
         assert parents == {2: 1, 3: 2, 4: 3}, parents
 
@@ -126,6 +126,18 @@ def test_search_broadens_on_stagnation_and_narrows_after_a_gain():
         assert pr.parents[1] == 1 and pr.parents[2] == 1, pr.parents
         assert pr.parents[3] == 4, "after the gain, build on the node that produced it"
         assert r.tree.best.score == 0.6100
+
+
+def test_critic_rejection_never_becomes_a_search_node():
+    """A flagged leak used to remain both selectable and submission-eligible as `reverted`."""
+    with tempfile.TemporaryDirectory() as tmp:
+        led = _ledger(tmp)
+        r = run_loop(ScriptedProposer([0.80]), StdoutJsonEvaluator(), led, workdir=tmp,
+                     patience=1, timeout=30, ceiling=0.8645)
+        improve = [e for e in led.read() if e.phase == "improve"]
+        assert improve[0].status == "rejected", improve[0]
+        assert r.tree.get(improve[0].iter_id) is None
+        assert r.tree.best.score == 0.6016
 
 
 def test_internal_candidates_are_recorded():
@@ -318,6 +330,7 @@ if __name__ == "__main__":
               test_refine_mode_climbs_from_the_current_best_node,
               test_a_node_that_never_pays_off_is_retired_and_search_moves_on,
               test_search_broadens_on_stagnation_and_narrows_after_a_gain,
+              test_critic_rejection_never_becomes_a_search_node,
               test_internal_candidates_are_recorded,
               test_candidates_line_is_optional_and_malformed_is_ignored,
               test_artifacts_dir_persists_across_iterations,

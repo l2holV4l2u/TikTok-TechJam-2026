@@ -13,11 +13,15 @@ MAX_DEAD = 8
 MAX_CRASH = 4
 MAX_FLAT = 10
 NOISE = 0.002  # organizer epsilon; below this a difference is not a finding
+UNSAFE_API_SENTINEL = "s.num[counts]"  # supplied full-month video outcome aggregates
 
 
-def _entries(runs_dir: Path, exclude: str | None, require_marker: bool):
+def _entries(runs_dir: Path, exclude: str | None, require_marker: bool,
+             excluded_runs: set[str] | None = None):
     for led in sorted(runs_dir.glob("*/ledger.jsonl")):
         if exclude and led.parent.name == exclude:
+            continue
+        if excluded_runs and led.parent.name in excluded_runs:
             continue
         # only runs produced by the current agent count. Earlier runs were driven by a brief
         # containing human-authored findings; distilling those would re-import a human's
@@ -32,7 +36,23 @@ def _entries(runs_dir: Path, exclude: str | None, require_marker: bool):
                     continue
 
 
-def _stale_capability_note(runs_dir: Path, exclude: str | None, current: list[str]) -> str:
+def _unsafe_runs(runs_dir: Path, exclude: str | None) -> set[str]:
+    """Runs exposed to the dataset's full-month video aggregates cannot seed future search."""
+    out = set()
+    for meta in runs_dir.glob("*/run_meta.json"):
+        if exclude and meta.parent.name == exclude:
+            continue
+        try:
+            api = json.loads(meta.read_text(encoding="utf-8")).get("api_surface") or []
+        except (json.JSONDecodeError, OSError):
+            continue
+        if UNSAFE_API_SENTINEL in api:
+            out.add(meta.parent.name)
+    return out
+
+
+def _stale_capability_note(runs_dir: Path, exclude: str | None, current: list[str],
+                           excluded_runs: set[str] | None = None) -> str:
     """Name the API the prior runs could not reach, so their silence on it is not read as a verdict.
 
     Memory ranks prior hypotheses by score, so a run that starts after the harness gains a new
@@ -44,6 +64,8 @@ def _stale_capability_note(runs_dir: Path, exclude: str | None, current: list[st
     seen: set[str] = set()
     for meta in sorted(runs_dir.glob("*/run_meta.json")):
         if exclude and meta.parent.name == exclude:
+            continue
+        if excluded_runs and meta.parent.name in excluded_runs:
             continue
         try:
             seen |= set(json.loads(meta.read_text(encoding="utf-8")).get("api_surface") or [])
@@ -63,7 +85,10 @@ def distil(runs_dir="runs", exclude: str | None = None, baseline: float = 0.6016
     if not runs_dir.exists():
         return ""
     scored, crashes = [], {}
-    for run, e in _entries(runs_dir, exclude, require_marker):
+    unsafe_runs = _unsafe_runs(runs_dir, exclude)
+    for run, e in _entries(runs_dir, exclude, require_marker, unsafe_runs):
+        if e.get("status") == "rejected":
+            continue
         p = (e.get("metrics") or {}).get("primary")
         if isinstance(p, (int, float)):
             scored.append((p, e.get("hypothesis", "")[:100], run))
@@ -74,7 +99,10 @@ def distil(runs_dir="runs", exclude: str | None = None, baseline: float = 0.6016
                 crashes[key] = crashes.get(key, 0) + 1
     if not scored:
         return ""
-    _note = _stale_capability_note(runs_dir, exclude, api_surface or [])
+    _note = _stale_capability_note(runs_dir, exclude, api_surface or [], unsafe_runs)
+    if unsafe_runs:
+        _note += (f"\nExcluded {len(unsafe_runs)} prior run(s) whose API exposed full-month "
+                  "video outcome aggregates overlapping validation/test.")
 
     scored.sort(reverse=True)
     wins = [s for s in scored if s[0] > baseline + NOISE][:MAX_WINS]
@@ -138,6 +166,17 @@ def demo() -> None:
         (root / "r1" / "run_meta.json").write_text("{}", encoding="utf-8")
         assert "rank blend" in distil(root), "a marked run does count"
         assert "noise-level" not in distil(root), "r2 has no marker, so it is excluded"
+
+        p = root / "r3" / "ledger.jsonl"
+        p.parent.mkdir(parents=True)
+        p.write_text(json.dumps({"hypothesis": "future aggregate winner",
+                                 "metrics": {"primary": 0.9}, "status": "ok"}),
+                     encoding="utf-8")
+        (p.parent / "run_meta.json").write_text(
+            json.dumps({"api_surface": [UNSAFE_API_SENTINEL]}), encoding="utf-8")
+        txt = distil(root)
+        assert "future aggregate winner" not in txt
+        assert "Excluded 1 prior run" in txt
     print("ok")
 
 

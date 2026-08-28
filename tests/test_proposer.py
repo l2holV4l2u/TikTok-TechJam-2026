@@ -130,6 +130,17 @@ def test_beliefs_and_memory_reach_the_improve_prompt():
     assert "PRIOR RUNS OF THIS AGENT" in prompts[0]
 
 
+def test_controller_diagnosis_and_incumbent_predictions_reach_prompt():
+    p, prompts = _capture()
+    p.propose(phase="improve", context={
+        "diagnosis": "16-40 users gap 0.42 share 63%",
+        "incumbent_ready": True,
+    })
+    assert "WHERE THE TRUSTED INCUMBENT LOSES" in prompts[0]
+    assert "16-40 users gap" in prompts[0]
+    assert "incumbent_valid_scores.npy" in prompts[0]
+
+
 def test_empty_belief_set_is_not_rendered():
     p, prompts = _capture()
     p.propose(phase="improve", context={"knowledge": "nothing established yet"})
@@ -240,6 +251,7 @@ if __name__ == "__main__":
         test_iterate_prompt_states_the_candidates_contract,
         test_improve_without_a_parent_drafts_from_scratch,
         test_beliefs_and_memory_reach_the_improve_prompt,
+        test_controller_diagnosis_and_incumbent_predictions_reach_prompt,
         test_empty_belief_set_is_not_rendered,
         test_iterate_prompt_states_the_findings_contract,
         test_prompt_size_bounded_as_history_grows,

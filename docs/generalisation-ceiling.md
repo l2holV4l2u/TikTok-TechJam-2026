@@ -78,12 +78,11 @@ best iteration available in that run.
 | r35 | 0.6049 | 0.5985 | 0.5988 | 0.0003 |
 | r36 | 0.6037 | 0.5982 | 0.5982 | 0.0000 |
 | r37 | 0.6037 | 0.5987 | 0.5987 | 0.0000 |
-| r39 | 0.6053 | 0.5997 | 0.5997 | 0.0000 |
 | r40 | 0.6036 | 0.5976 | 0.5976 | 0.0000 |
-| r41 | 0.6059 | 0.5996 | 0.5998 | 0.0002 |
 
-Validation picks the test-best iteration in **5 of 8 runs**, and an oracle with access to the
-hidden test set would gain **+0.0001 primary on average** -- about 2% of our +0.0050 delta.
+Validation picks the test-best iteration in **4 of 6 eligible runs**, and an oracle with access
+to the hidden test set would gain less than **+0.0002 primary on average**. r39 and r41 are
+excluded from this analysis because their item statistics aggregate the evaluation month.
 
 The problem is not choosing among the iterations a run produces. It is that the best iteration
 a run produces is not better. Effort spent on the selection signal is therefore capped at

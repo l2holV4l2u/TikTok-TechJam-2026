@@ -144,6 +144,36 @@ def test_no_leak_columns_in_feature_cardinalities():
     assert not (set(FEATURE_CARDINALITIES) & _LEAK_COLUMNS)
 
 
+def test_generated_process_can_size_but_not_read_test_labels():
+    tmp, prev = _use_temp_cache()
+    old = os.environ.get("AGENT_HIDE_TEST_LABELS")
+    try:
+        build_synth(tmp, sizes={"train": 20, "valid": 10, "test": 7}, seed=9)
+        os.environ["AGENT_HIDE_TEST_LABELS"] = "1"
+        test = load("test")
+        assert len(test.y) == 7 and test.y.shape == (7,)
+        try:
+            np.asarray(test.y)
+        except RuntimeError as exc:
+            assert "test labels are hidden" in str(exc)
+        else:
+            raise AssertionError("generated code could read hidden-test labels")
+        assert "is_click" in test.aux
+        try:
+            _ = test.aux["is_click"]
+        except RuntimeError as exc:
+            assert "post-impression outcomes are hidden" in str(exc)
+        else:
+            raise AssertionError("generated code could read hidden-test outcomes")
+        assert len(load("valid").y) == 10, "validation labels remain available for selection"
+    finally:
+        if old is None:
+            os.environ.pop("AGENT_HIDE_TEST_LABELS", None)
+        else:
+            os.environ["AGENT_HIDE_TEST_LABELS"] = old
+        _restore(tmp, prev)
+
+
 def test_vocab_built_from_train_only_unseen_maps_to_zero():
     tmp = Path(tempfile.mkdtemp(prefix="kuairand_rawfixture_"))
     try:

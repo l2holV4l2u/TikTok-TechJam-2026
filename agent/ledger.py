@@ -15,7 +15,7 @@ class Entry:
     gpu_seconds: float
     tokens_in: int
     tokens_out: int
-    status: str  # ok | failed | reverted | blacklisted
+    status: str  # ok | failed | reverted | blacklisted | rejected (integrity critic)
     error: str | None = None
     phase: str = "improve"  # eda | baseline | improve; default keeps old ledgers readable
     timestamp: float = field(default_factory=time.time)

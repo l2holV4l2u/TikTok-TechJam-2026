@@ -19,6 +19,7 @@ import csv
 import json
 import os
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -66,45 +67,19 @@ FEATURE_CARDINALITIES: dict[str, int] = {
     "register_days_bucket": 12,     # quantile bucket of the user's account age (pre-click, safe)
 }
 
-# Continuous features. Split.X is categorical ids only, so until now every numeric quantity in
-# the dataset was unreachable: raw video length, the user's real follower counts, and the whole
-# of video_features_statistic (52 columns the harness never opened). All of these are attributes
-# known BEFORE the impression is scored -- they describe the user and the video, not what
-# happened on this row -- which is what separates them from the post-click signals in aux.
-#
-# The video statistics carry no declared time window. Measured as standalone rankers they score
-# train 0.5910 > valid 0.5804 > test 0.5740, i.e. worst on the split they would leak into, and
-# their `counts` field spans 45-181 daily records against a 30-day log -- both consistent with
-# historical attributes rather than anything fitted on the evaluation window.
+# Continuous features that are known before the scored impression. The official
+# video_features_statistic file is deliberately absent: its documentation says the values are
+# averaged over the full month, which overlaps validation and test. Those outcome aggregates
+# are future information under this repository's date split. Use pipeline.history for equivalent
+# aggregates fitted strictly on the train log.
 NUMERIC_LOG: tuple[str, ...] = ("duration_ms",)
-# Prefixed because `follow_user_num` exists in BOTH user_features (people this user follows)
-# and video_features_statistic (people who followed via this video). They are different
-# quantities; unprefixed, the video column silently overwrote the user column and the brief
-# described one while the cache held the other.
 NUMERIC_USER_SRC: tuple[str, ...] = ("follow_user_num", "fans_user_num", "friend_user_num",
                                      "register_days")
-NUMERIC_USER: tuple[str, ...] = tuple("user_" + c for c in NUMERIC_USER_SRC)
-NUMERIC_VIDEO_STAT: tuple[str, ...] = (
-    # every column of video_features_statistic. We screened these individually and only
-    # three reach 0.55 as standalone rankers -- but that screen scores each column ALONE,
-    # and a feature can be uninformative by itself and useful in a cross. The FM exists to
-    # find those. Judging them for the agent is the mistake; exposing them is cheap
-    # (~180MB of float32) and lets it decide.
-    "counts", "show_cnt", "show_user_num", "play_cnt", "play_user_num", "play_duration",
-    "complete_play_cnt", "complete_play_user_num", "valid_play_cnt", "valid_play_user_num",
-    "long_time_play_cnt", "long_time_play_user_num", "short_time_play_cnt",
-    "short_time_play_user_num", "play_progress", "comment_stay_duration", "like_cnt",
-    "like_user_num", "click_like_cnt", "double_click_cnt", "cancel_like_cnt",
-    "cancel_like_user_num", "comment_cnt", "comment_user_num", "direct_comment_cnt",
-    "reply_comment_cnt", "delete_comment_cnt", "delete_comment_user_num", "comment_like_cnt",
-    "comment_like_user_num", "follow_cnt", "follow_user_num", "cancel_follow_cnt",
-    "cancel_follow_user_num", "share_cnt", "share_user_num", "download_cnt",
-    "download_user_num", "report_cnt", "report_user_num", "reduce_similar_cnt",
-    "reduce_similar_user_num", "collect_cnt", "collect_user_num", "cancel_collect_cnt",
-    "cancel_collect_user_num", "direct_comment_user_num", "reply_comment_user_num",
-    "share_all_cnt", "share_all_user_num", "outsite_share_all_cnt",
-)
-NUMERIC_FEATURES: tuple[str, ...] = NUMERIC_LOG + NUMERIC_USER + NUMERIC_VIDEO_STAT
+NUMERIC_USER: tuple[str, ...] = tuple("user_" + name for name in NUMERIC_USER_SRC)
+# Compatibility name for downstream inventory/tests. It is intentionally empty: the supplied
+# file aggregates outcomes across the evaluation month and is never loaded.
+NUMERIC_VIDEO_STAT: tuple[str, ...] = ()
+NUMERIC_FEATURES: tuple[str, ...] = NUMERIC_LOG + NUMERIC_USER
 
 
 # Post-click feedback signals -> dtype. aux-only, see LEAKAGE WARNING above.
@@ -134,7 +109,6 @@ _TRAIN_LOG = f"log_standard_4_08_to_4_21_{_VARIANT}.csv"
 _VALID_TEST_LOG = f"log_standard_4_22_to_5_08_{_VARIANT}.csv"
 _USER_FEATURES_FILE = f"user_features_{_VARIANT}.csv"
 _VIDEO_FEATURES_FILE = f"video_features_basic_{_VARIANT}.csv"
-_VIDEO_STAT_FILE = f"video_features_statistic_{_VARIANT}.csv"
 
 _TRAIN_RANGE = ("20220408", "20220421")
 _VALID_RANGE = ("20220422", "20220428")
@@ -159,10 +133,64 @@ class Split:
     video_id: np.ndarray              # int64, (n,) raw ids, for submission
     X: dict[str, np.ndarray]          # feature name -> int64 (n,), contiguous ids, 0 = unseen/OOV
     y: np.ndarray                     # int8 (n,), long_view -- the officially scored label
-    aux: dict[str, np.ndarray]        # other feedback signals, int8/float32
+    aux: Mapping[str, np.ndarray]     # other feedback signals, int8/float32
     date: np.ndarray | None = None    # int32 (n,), YYYYMMDD of the impression
     time_ms: np.ndarray | None = None # int64 (n,), epoch ms of the impression (pre-click, safe)
     num: dict[str, np.ndarray] | None = None  # float32 (n,), continuous features, NaN = unknown
+
+
+class HiddenTestLabels:
+    """Length-only stand-in used inside generated experiment subprocesses.
+
+    Legitimate test scoring sometimes allocates by ``len(test.y)``; it never needs the label
+    values.  Keeping length/shape compatible avoids breaking that code while any attempted
+    conversion or indexing fails with an actionable leakage error.
+    """
+
+    dtype = np.dtype(np.int8)
+
+    def __init__(self, n: int):
+        self.shape = (n,)
+
+    def __len__(self) -> int:
+        return self.shape[0]
+
+    @staticmethod
+    def _blocked():
+        raise RuntimeError(
+            "test labels are hidden from generated experiments; produce scores only and let "
+            "the trusted parent harness evaluate them"
+        )
+
+    def __array__(self, dtype=None, copy=None):
+        self._blocked()
+
+    def __getitem__(self, key):
+        self._blocked()
+
+    def __iter__(self):
+        self._blocked()
+
+
+class HiddenTestOutcomes(Mapping):
+    """Name-visible, value-hidden mapping for test-split post-impression outcomes."""
+
+    def __iter__(self):
+        return iter(AUX_DTYPES)
+
+    def __len__(self) -> int:
+        return len(AUX_DTYPES)
+
+    def __contains__(self, key) -> bool:
+        return key in AUX_DTYPES
+
+    def __getitem__(self, key):
+        if key not in AUX_DTYPES:
+            raise KeyError(key)
+        raise RuntimeError(
+            "test post-impression outcomes are hidden from generated experiments; no test "
+            "label or auxiliary outcome may be used for fitting or selection"
+        )
 
 
 LABEL = "long_view"  # starter kit data.py: LABEL = 'long_view'; the prose saying "click" is wrong
@@ -186,9 +214,15 @@ def load(split: str) -> Split:
 
     user_id = np.load(split_dir / "user_id.npy", mmap_mode="r")
     video_id = np.load(split_dir / "video_id.npy", mmap_mode="r")
-    y = np.load(split_dir / "y.npy", mmap_mode="r")
+    raw_y = np.load(split_dir / "y.npy", mmap_mode="r")
+    y = (HiddenTestLabels(len(raw_y))
+         if split == "test" and os.environ.get("AGENT_HIDE_TEST_LABELS") == "1"
+         else raw_y)
     X = {feat: np.load(split_dir / f"X_{feat}.npy", mmap_mode="r") for feat in FEATURE_CARDINALITIES}
-    aux = {name: np.load(split_dir / f"aux_{name}.npy", mmap_mode="r") for name in AUX_DTYPES}
+    aux = (HiddenTestOutcomes()
+           if split == "test" and os.environ.get("AGENT_HIDE_TEST_LABELS") == "1"
+           else {name: np.load(split_dir / f"aux_{name}.npy", mmap_mode="r")
+                 for name in AUX_DTYPES})
     # the impression date. It is what the splits are defined by, and the train window is 13 days
     # wide, so withholding it silently rules out recency weighting and time-based validation --
     # a whole family of methods aimed at the drift between the train and evaluation windows.
@@ -200,8 +234,16 @@ def load(split: str) -> Split:
     # impression time, known before the click, so it is a feature and not an outcome.
     tms_path = split_dir / "time_ms.npy"
     time_ms = np.load(tms_path, mmap_mode="r") if tms_path.exists() else None
-    num = {f: np.load(split_dir / f"num_{f}.npy", mmap_mode="r")
-           for f in NUMERIC_FEATURES if (split_dir / f"num_{f}.npy").exists()} or None
+    num = {}
+    for f in NUMERIC_FEATURES:
+        path = split_dir / f"num_{f}.npy"
+        # Read old caches without forcing a rebuild; newly-built caches use the unambiguous
+        # user_ prefix introduced when the video-statistic name collision was discovered.
+        if not path.exists() and f.startswith("user_"):
+            path = split_dir / f"num_{f.removeprefix('user_')}.npy"
+        if path.exists():
+            num[f] = np.load(path, mmap_mode="r")
+    num = num or None
     return Split(user_id=user_id, video_id=video_id, X=X, y=y, aux=aux, date=date,
                  time_ms=time_ms, num=num)
 
@@ -276,33 +318,6 @@ def _load_video_features(path: Path) -> dict[int, tuple[str, ...]]:
 
 
 
-def _load_video_stats(path: Path) -> dict[int, tuple[float, ...]]:
-    """video_features_statistic: per-video historical aggregates. Missing file -> no numerics.
-
-    KuaiRand-1K ships this as a 3.4GB file covering 2.7M videos; a cache built without it simply
-    omits those columns rather than failing, and Split.num reports only what is present.
-    """
-    if not path.exists():
-        return {}
-    out: dict[int, tuple[float, ...]] = {}
-    with path.open(newline="", encoding="utf-8") as f:
-        r = csv.reader(f)
-        header = next(r)
-        idx = {h: i for i, h in enumerate(header)}
-        cols = [idx[c] for c in NUMERIC_VIDEO_STAT if c in idx]
-        if len(cols) != len(NUMERIC_VIDEO_STAT):
-            return {}
-        for row in r:
-            vals = []
-            for c in cols:
-                try:
-                    vals.append(float(row[c]))
-                except (ValueError, IndexError):
-                    vals.append(float("nan"))
-            out[int(row[idx["video_id"]])] = tuple(vals)
-    return out
-
-
 def _row_values(uid: int, vid: int, hourmin: int, tab: str,
                  users: dict[int, dict[str, str]], videos: dict[int, tuple[str, ...]]) -> dict[str, str]:
     u = users.get(uid, {})
@@ -373,7 +388,7 @@ def _build_vocabs_and_edges(train_log: Path, users: dict, videos: dict, vocab_di
 
 def _convert(log_path: Path, date_lo: str, date_hi: str, split: str,
              users: dict, videos: dict, vocabs: dict, duration_edges: list[float], reg_edges: list[float],
-             out_dir: Path, stats: dict[int, tuple[float, ...]] | None = None) -> None:
+             out_dir: Path) -> None:
     n_expected = _EXPECTED_ROWS[split]
     split_dir = Path(out_dir) / split
     split_dir.mkdir(parents=True, exist_ok=True)
@@ -383,11 +398,9 @@ def _convert(log_path: Path, date_lo: str, date_hi: str, split: str,
     y_arr = np.lib.format.open_memmap(split_dir / "y.npy", mode="w+", dtype=np.int8, shape=(n_expected,))
     date_arr = np.lib.format.open_memmap(split_dir / "date.npy", mode="w+", dtype=np.int32, shape=(n_expected,))
     time_ms_arr = np.lib.format.open_memmap(split_dir / "time_ms.npy", mode="w+", dtype=np.int64, shape=(n_expected,))
-    stats = stats or {}
-    num_names = NUMERIC_LOG + NUMERIC_USER + (NUMERIC_VIDEO_STAT if stats else ())
+    num_names = NUMERIC_FEATURES
     num_arrs = {f: np.lib.format.open_memmap(split_dir / f"num_{f}.npy", mode="w+",
                 dtype=np.float32, shape=(n_expected,)) for f in num_names}
-    _empty_stat = tuple([float("nan")] * len(NUMERIC_VIDEO_STAT))
     X_arrs = {f: np.lib.format.open_memmap(split_dir / f"X_{f}.npy", mode="w+", dtype=np.int64, shape=(n_expected,))
               for f in FEATURE_CARDINALITIES}
     aux_arrs = {name: np.lib.format.open_memmap(split_dir / f"aux_{name}.npy", mode="w+",
@@ -417,10 +430,6 @@ def _convert(log_path: Path, date_lo: str, date_hi: str, split: str,
                 num_arrs[f][i] = float(u_rec.get(src, ""))
             except ValueError:
                 num_arrs[f][i] = float("nan")
-        if stats:
-            st = stats.get(vid, _empty_stat)
-            for j, f in enumerate(NUMERIC_VIDEO_STAT):
-                num_arrs[f][i] = st[j]
         for f, vocab in vocabs.items():
             X_arrs[f][i] = vocab.get(vals[f], 0)
 
@@ -452,8 +461,8 @@ def build_cache(raw_dir, out_dir) -> None:
 
     users = _load_user_features(raw_dir / _USER_FEATURES_FILE)
     videos = _load_video_features(raw_dir / _VIDEO_FEATURES_FILE)
-    stats = _load_video_stats(raw_dir / _VIDEO_STAT_FILE)
-
+    # Do not load video_features_statistic: it aggregates the full month, including the fixed
+    # validation/test dates. Train-only historical features live in pipeline.history instead.
     train_log = raw_dir / _TRAIN_LOG
     valid_test_log = raw_dir / _VALID_TEST_LOG
 
@@ -466,6 +475,6 @@ def build_cache(raw_dir, out_dir) -> None:
     else:
         vocabs, duration_edges, reg_edges = _build_vocabs_and_edges(train_log, users, videos, vocab_dir)
 
-    _convert(train_log, *_TRAIN_RANGE, "train", users, videos, vocabs, duration_edges, reg_edges, out_dir, stats)
-    _convert(valid_test_log, *_VALID_RANGE, "valid", users, videos, vocabs, duration_edges, reg_edges, out_dir, stats)
-    _convert(valid_test_log, *_TEST_RANGE, "test", users, videos, vocabs, duration_edges, reg_edges, out_dir, stats)
+    _convert(train_log, *_TRAIN_RANGE, "train", users, videos, vocabs, duration_edges, reg_edges, out_dir)
+    _convert(valid_test_log, *_VALID_RANGE, "valid", users, videos, vocabs, duration_edges, reg_edges, out_dir)
+    _convert(valid_test_log, *_TEST_RANGE, "test", users, videos, vocabs, duration_edges, reg_edges, out_dir)

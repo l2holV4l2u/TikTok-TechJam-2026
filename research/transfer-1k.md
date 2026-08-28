@@ -147,8 +147,9 @@ collapse to the same tie-broken ordering. Screening the four raw user counts and
 useless, evidence the screen cannot see them. They reach the model only through interactions
 with item-side features, which is what the FM is for.
 
-The screen was therefore used only where it is valid: `video_features_statistic` (item-level,
-three columns promoted on it) and the video metadata columns (item-level, all rejected on it).
+The screen was therefore used only for video metadata columns (item-level, all rejected on it).
+An earlier analysis also screened `video_features_statistic`, but those columns are now excluded:
+they average outcomes over the full evaluation month and violate the fixed chronological split.
 
 ## Every raw column is now accounted for
 
@@ -162,14 +163,14 @@ reachable by the agent or measured and rejected:
 | log: `is_rand` | 0 on every row of both standard logs |
 | log: post-click columns | `s.aux` only -- they are outcomes of the row being scored |
 | `user_features`: ranges + 18 one-hots | `s.X` |
-| `user_features`: raw counts, `register_days` | `s.num` (prefixed `user_*`) |
+| `user_features`: raw counts, `register_days` | `s.num` |
 | `video_features_basic`: author, type, upload/music type, tag, duration | `s.X` |
 | `video_features_basic`: `upload_dt`, aspect, `visible_status` | measured at random (0.4749-0.4808 against a 0.4732 floor) |
-| `video_features_statistic`: all 51 columns | `s.num` |
+| `video_features_statistic`: all 51 outcome aggregates | excluded; they overlap validation/test |
 
 `hourmin` behaving as a session key rather than a timestamp is consistent with the tied
 timestamps `s.time_ms` shows: 57.9% of users have at least two impressions sharing a millisecond,
 because a feed page is logged as one batch.
 
-Nothing raw remains to expose. Further data work would have to be derived rather than read --
-and everything derivable from these columns, the agent can already compute for itself.
+Nothing valid remains to expose. Further data work must be derived from training rows;
+`pipeline.history` supplies leakage-safe item and author histories for that purpose.
