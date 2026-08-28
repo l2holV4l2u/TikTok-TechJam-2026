@@ -119,6 +119,7 @@ class Split:
     y: np.ndarray                     # int8 (n,), long_view -- the officially scored label
     aux: dict[str, np.ndarray]        # other feedback signals, int8/float32
     date: np.ndarray | None = None    # int32 (n,), YYYYMMDD of the impression
+    time_ms: np.ndarray | None = None # int64 (n,), epoch ms of the impression (pre-click, safe)
 
 
 LABEL = "long_view"  # starter kit data.py: LABEL = 'long_view'; the prose saying "click" is wrong
@@ -150,7 +151,13 @@ def load(split: str) -> Split:
     # a whole family of methods aimed at the drift between the train and evaluation windows.
     date_path = split_dir / "date.npy"
     date = np.load(date_path, mmap_mode="r") if date_path.exists() else None
-    return Split(user_id=user_id, video_id=video_id, X=X, y=y, aux=aux, date=date)
+    # the impression timestamp. `date` only orders across days and `hour` is time-of-day, so
+    # without this a user's impressions cannot be put in order at all -- which rules out every
+    # sequence model, session split, inter-arrival feature and recency decay. It is the
+    # impression time, known before the click, so it is a feature and not an outcome.
+    tms_path = split_dir / "time_ms.npy"
+    time_ms = np.load(tms_path, mmap_mode="r") if tms_path.exists() else None
+    return Split(user_id=user_id, video_id=video_id, X=X, y=y, aux=aux, date=date, time_ms=time_ms)
 
 
 def write_cache(out_dir, split: str, user_id: np.ndarray, video_id: np.ndarray,
@@ -295,6 +302,7 @@ def _convert(log_path: Path, date_lo: str, date_hi: str, split: str,
     video_id_arr = np.lib.format.open_memmap(split_dir / "video_id.npy", mode="w+", dtype=np.int64, shape=(n_expected,))
     y_arr = np.lib.format.open_memmap(split_dir / "y.npy", mode="w+", dtype=np.int8, shape=(n_expected,))
     date_arr = np.lib.format.open_memmap(split_dir / "date.npy", mode="w+", dtype=np.int32, shape=(n_expected,))
+    time_ms_arr = np.lib.format.open_memmap(split_dir / "time_ms.npy", mode="w+", dtype=np.int64, shape=(n_expected,))
     X_arrs = {f: np.lib.format.open_memmap(split_dir / f"X_{f}.npy", mode="w+", dtype=np.int64, shape=(n_expected,))
               for f in FEATURE_CARDINALITIES}
     aux_arrs = {name: np.lib.format.open_memmap(split_dir / f"aux_{name}.npy", mode="w+",
@@ -312,6 +320,7 @@ def _convert(log_path: Path, date_lo: str, date_hi: str, split: str,
         user_id_arr[i] = uid
         video_id_arr[i] = vid
         date_arr[i] = int(row[idx["date"]])
+        time_ms_arr[i] = int(row[idx["time_ms"]])
         for f, vocab in vocabs.items():
             X_arrs[f][i] = vocab.get(vals[f], 0)
 
@@ -329,7 +338,8 @@ def _convert(log_path: Path, date_lo: str, date_hi: str, split: str,
     if i != n_expected:
         raise ValueError(f"split {split!r}: expected {n_expected} rows from {log_path}, got {i} -- date filter mismatch")
 
-    for arr in (user_id_arr, video_id_arr, y_arr, date_arr, *X_arrs.values(), *aux_arrs.values()):
+    for arr in (user_id_arr, video_id_arr, y_arr, date_arr, time_ms_arr,
+                *X_arrs.values(), *aux_arrs.values()):
         arr.flush()
 
 

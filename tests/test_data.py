@@ -228,5 +228,35 @@ def main():
     print("all tests passed")
 
 
+def test_time_ms_is_exposed_and_orders_impressions():
+    """Without a timestamp a user's impressions cannot be put in order at all.
+
+    `date` only separates days and `hour` is time-of-day, so every sequence model, session
+    split, inter-arrival feature and recency decay was inexpressible. time_ms is the impression
+    time -- known before the click -- so it belongs in the Split, not in aux with the outcomes.
+    """
+    import datetime
+    for split in ("train", "valid", "test"):
+        try:
+            sp = load(split)
+        except FileNotFoundError:
+            return "skip (no real cache)"
+        if sp.time_ms is None:
+            raise AssertionError(f"{split}: time_ms missing -- rebuild the cache")
+        t = np.asarray(sp.time_ms)
+        assert t.dtype == np.int64, t.dtype
+        assert len(t) == len(sp.y)
+        assert (t > 1_600_000_000_000).all() and (t < 1_700_000_000_000).all(), "not epoch ms"
+        # the day each timestamp falls on must equal the cached date for the same row, or the
+        # backfill wrote a misaligned column and every sequence built from it would be wrong
+        d = np.asarray(sp.date)[:2000]
+        got = np.array([int(datetime.datetime.fromtimestamp(v / 1000).strftime("%Y%m%d"))
+                        for v in t[:2000]])
+        assert (got == d).all(), f"{split}: time_ms does not line up with date"
+
+    # it is a feature, never an outcome
+    assert "time_ms" not in AUX_DTYPES
+
+
 if __name__ == "__main__":
     main()
