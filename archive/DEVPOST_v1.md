@@ -166,7 +166,7 @@ The headroom is also smaller than the oracle suggests: the ceiling is 0.8484, no
 27.1% of test users are all-negative and score nDCG 0 for any model.
 
 ## Development tools
-VS Code, Claude Code (orchestration and implementation), Python 3.12 on Windows.
+VS Code, Python 3.12 on Windows.
 
 ## APIs used
 OpenAI Chat Completions (gpt-4o) as the agent's proposer, via a stdlib `urllib` client — no SDK

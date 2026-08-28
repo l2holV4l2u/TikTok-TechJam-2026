@@ -427,7 +427,7 @@ This probe is human analysis, clearly labelled and **not** on the submission pat
 for reading the agent's delta, not one of the agent's findings.
 
 ## Development tools
-VS Code, Claude Code (orchestration and implementation), Python 3.12 on Windows.
+VS Code, Python 3.12 on Windows.
 
 ## APIs used
 OpenAI Chat Completions for the agent's proposer and its belief revision, via a stdlib

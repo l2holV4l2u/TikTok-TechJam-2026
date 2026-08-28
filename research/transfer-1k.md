@@ -61,3 +61,44 @@ budget would have sent 99.6% of 1K's catalogue to OOV before the agent saw it. 1
 videos and 150,000 authors (`pipeline/data.py`). The tail still goes to OOV — with 2.4
 impressions per video that tail is genuinely unlearnable — but the head is preserved, and the
 decision of what to do about the remainder is left to the agent.
+
+## Measured reference
+
+`research/baseline_reference.py` runs the organizers' recipe (FM, k=16, lr=0.001, five fields)
+on either variant. On Pure it reproduces the published numbers closely enough to trust it
+elsewhere:
+
+| | our run | published | Δ |
+|---|---|---|---|
+| Pure valid | 0.6022 | 0.6016 | +0.0006 |
+| Pure test | 0.5957 | 0.5946 | +0.0011 |
+
+On 1K the same recipe gives **valid 0.6422 / test 0.6355**, and the training curve is itself a
+result: validation peaks at **epoch 1** and declines every epoch after. On Pure it peaks at
+epoch 6. With 2.4 impressions per video the item table memorises on the first pass and each
+further epoch trades generalisation for fit.
+
+`agent/facts.py` measures the rest of the brief's dataset facts, and three of them invert:
+
+| | Pure | 1K |
+|---|---|---|
+| perfect-ranking ceiling | 0.8645 | 0.9995 |
+| test users with zero positives | 27.1% | 0.1% |
+| random-scoring primary | 0.4732 | 0.4218 |
+| item-popularity primary | 0.5709 | 0.4771 |
+| **item-popularity lift over random** | **+0.098** | **+0.055** |
+
+Item popularity is the most dependable signal in the field and it earns barely half as much on
+1K — the cold-item wall measured a third way. The ceiling moves the other direction: nearly
+every 1K user has a positive somewhere in their 4,145 impressions, so the metric's headroom is
+almost the full unit interval rather than Pure's 0.8645.
+
+Absolute scores are therefore **not comparable across the two datasets**, which is why the
+protocol above compares deltas within a dataset and never across.
+
+## What the agent is told
+
+The 1K brief is generated from these measured facts, not from the Pure literals — the agent
+sees 1K's own row counts, ceiling and rungs. Cross-run memory is disabled for the 1K run
+(`--no-memory`): it distils prior runs relative to a baseline score, and Pure's 0.60-scale
+results carry no meaning against a 0.6422 anchor.
