@@ -6,6 +6,8 @@ import json
 import sys
 from pathlib import Path
 
+# KuaiRand-Pure's published baseline. A report on another variant must pass its own measured
+# reference, or every "vs baseline" column in the table is nonsense.
 BASE_VALID, BASE_TEST = 0.6016, 0.5946
 EPSILON = 0.002
 
@@ -117,7 +119,14 @@ def main() -> None:
         sys.stdout.reconfigure(encoding="utf-8")
     except AttributeError:
         pass
-    run_dir = Path(sys.argv[1] if len(sys.argv) > 1 else "runs/latest")
+    global BASE_VALID, BASE_TEST
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    for a in sys.argv[1:]:
+        if a.startswith("--baseline-valid="):
+            BASE_VALID = float(a.split("=", 1)[1])
+        elif a.startswith("--baseline-test="):
+            BASE_TEST = float(a.split("=", 1)[1])
+    run_dir = Path(args[0] if args else "runs/latest")
     rows = [json.loads(l) for l in (run_dir / "ledger.jsonl").open(encoding="utf-8") if l.strip()]
     meta_path = run_dir / "run_meta.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
@@ -156,7 +165,9 @@ def main() -> None:
     for e in rows:
         m = e["metrics"].get("primary")
         d = f"{m - BASE_VALID:+.4f}" if m is not None else "-"
-        p = f"{m:.4f}" if m is not None else "FAIL"
+        # EDA legitimately reports no metric. Printing FAIL there put the word on row one of a
+        # run whose own summary says zero failures -- the status column already says what happened.
+        p = f"{m:.4f}" if m is not None else ("n/a" if e["status"] == "ok" else "FAIL")
         par = e.get("parent_iter_id")
         h = e["hypothesis"].replace("|", "/")[:70]
         print(f"| {e['iter_id']} | {e.get('phase', 'improve')} | "

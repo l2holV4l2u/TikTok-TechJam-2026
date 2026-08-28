@@ -10,7 +10,7 @@
 
 | # | phase | parent | status | secs | primary | vs baseline | hypothesis |
 |---|---|---|---|---|---|---|---|
-| 0 | eda | - | ok | 2 | FAIL | - | In the data-inspection stage, quantify temporal drift, user/item cold- |
+| 0 | eda | - | ok | 2 | n/a | - | In the data-inspection stage, quantify temporal drift, user/item cold- |
 | 1 | baseline | - | ok | 25 | 0.6020 | +0.0004 | Reproduce the official baseline by training a k=16 five-field Factoriz |
 | 2 | improve | #1 | reverted | 84 | 0.6036 | +0.0020 | Target the feature-interaction representation stage by replacing the f |
 | 3 | improve | #2 | reverted | 92 | 0.6036 | +0.0020 | Target leakage-free historical feature construction and score fusion b |
@@ -79,32 +79,12 @@ The agent's belief set, revised after every scored iteration rather than appende
 
 The loop never stalled, crashed, or escalated to a human. Guards in place: retry-with-source on crash, distinct handling for timeouts (which are not bugs to fix), method-keyed retirement so a reworded idea cannot evade the blacklist, process-tree kill so a timed-out script leaves no orphan burning CPU, tolerance of LLM outages and rate limits, node retirement with backtracking so the search cannot grind on one exhausted branch, and a circuit breaker that halts on repeated instant failures (a broken environment rather than broken code).
 
-### Evidence from development runs
-
-Across 31 development runs of this agent, 308 iterations were executed and 171 failed. Every one was handled in-loop; none was escalated to a human. Failure taxonomy:
-
-- `(no output)`: 92
-- `IndexError`: 28
-- `RuntimeError`: 22
-- `TypeError`: 11
-- `TIMEOUT`: 4
-- `AttributeError`: 4
-- `SyntaxError`: 3
-- `AssertionError`: 2
-
-Each recovery path, with a concrete instance:
-
-- **Retry with source.** `r11` #1 crashed with `RuntimeError: The size of tensor a (8192) must match the size of tenso`. The traceback *and the failing script* went back to the proposer, which fixed it: #2 scored 0.6001.
-- **Timeout, handled as distinct from a bug.** `r11` #8 was killed at the limit after 420s. The feedback says the approach is too slow rather than wrong, because re-running a slow script unchanged just times out again.
-- **Idea retirement.** `r2` #16: an idea was retired after repeated failure and never proposed again. Retirement keys on the named method, so restating it in different words does not evade the blacklist.
-- **Circuit breaker.** `r7` hit 32 consecutive instant, output-less failures: the interpreter could not spawn children at all. That is a broken machine, not broken code, and grinding on would shred the budget for nothing. The loop now halts with `environment_broken` after five such failures — this incident is what the guard was written for.
-
 ## Result
 
 - Best validation primary: **0.6049** (baseline 0.6016, delta +0.0033)
 - From iteration #6: Target the training-objective stage with metric-aligned per-user loss weighting; reducing domination by the unusually long training histories and assigning each user a mixture of equal-user and positive-count mass should better match validation GAUC/nDCG aggregation, while blending with the incumbent heterogeneous ensemble preserves its interaction signal.
 - Selection is on validation only, per the scoring rules; the hidden test set was never used to choose between iterations.
-- Submission: written to `runs\r35\submission.csv`
+- Submission: written to `C:\Users\USER\Desktop\Supahotfile\competition\TikTok-TechJam-2026\runs\r35\submission.csv`
 
 ### Results table
 
