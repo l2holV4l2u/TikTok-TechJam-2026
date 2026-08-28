@@ -256,6 +256,41 @@ def test_rate_limit_exhaustion_fails_over_to_another_key():
         llm._post_json = real
 
 
+def test_requests_are_spaced_to_stay_under_the_per_minute_limit():
+    """Losing an iteration to a 429 costs far more than waiting for a slot.
+
+    The free tier allows 3 requests/minute; an iteration costs two calls plus any retries, so
+    runs breached it within a couple of iterations. Measured across three runs, 2-5 iterations
+    each were lost that way -- and iteration count is what tracks the final score.
+    """
+    import time as _time
+    saved = llm.MIN_REQUEST_INTERVAL_S
+    llm.MIN_REQUEST_INTERVAL_S = 0.3
+    real = llm.urllib.request.urlopen
+    stamps = []
+
+    def fake_open(req, timeout=None):
+        stamps.append(_time.monotonic())
+
+        class R:
+            def read(self):
+                return (b'{"choices":[{"message":{"content":"ok"}}],'
+                        b'"usage":{"prompt_tokens":1,"completion_tokens":1}}')
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+        return R()
+
+    llm.urllib.request.urlopen = fake_open
+    try:
+        for _ in range(3):
+            llm._post_json("https://example.invalid", {}, {})
+        gaps = [b - a for a, b in zip(stamps, stamps[1:])]
+        assert gaps and all(g >= 0.29 for g in gaps), gaps
+    finally:
+        llm.urllib.request.urlopen = real
+        llm.MIN_REQUEST_INTERVAL_S = saved
+
+
 if __name__ == "__main__":
     for t in (test_daily_cap_body_is_recognised,
               test_failover_to_the_second_key_on_a_daily_cap,
@@ -268,7 +303,8 @@ if __name__ == "__main__":
               test_replay_returns_recorded_responses_and_refuses_to_overrun,
               test_a_call_gives_up_instead_of_wedging_the_run,
               test_a_revoked_key_fails_over_instead_of_killing_the_run,
-              test_rate_limit_exhaustion_fails_over_to_another_key):
+              test_rate_limit_exhaustion_fails_over_to_another_key,
+              test_requests_are_spaced_to_stay_under_the_per_minute_limit):
         t()
         print(f"ok  {t.__name__}")
     print("all passed")

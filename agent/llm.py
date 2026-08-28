@@ -23,6 +23,24 @@ MAX_DELAY_S = 90.0
 # minutes with no child process and no progress. The loop cannot recover from a call that never
 # returns, so the call has to give up on its own.
 TOTAL_DEADLINE_S = 420.0
+# Free-tier accounts allow 3 requests per minute. An iteration costs two calls (propose, then
+# revise beliefs) and every retry counts, so a run breaches the limit within a couple of
+# iterations and then loses whole iterations to 429s -- measured across r45/r49/r51, which each
+# lost 2-5 iterations that way. Waiting our turn is strictly cheaper than retrying into a wall:
+# a 21s spacing costs ~40s per iteration, while one lost iteration costs the whole experiment.
+MIN_REQUEST_INTERVAL_S = float(os.environ.get("LLM_MIN_INTERVAL_S", "21"))
+_last_request_at = 0.0
+
+
+def _wait_for_slot() -> None:
+    """Space requests so we stay under the account's per-minute limit."""
+    global _last_request_at
+    if MIN_REQUEST_INTERVAL_S <= 0:
+        return
+    gap = time.monotonic() - _last_request_at
+    if gap < MIN_REQUEST_INTERVAL_S:
+        time.sleep(MIN_REQUEST_INTERVAL_S - gap)
+    _last_request_at = time.monotonic()
 CHARS_PER_TOKEN = 4  # fallback estimate (chars/4) used only when the API omits usage
 
 
@@ -89,6 +107,7 @@ def _post_json(url: str, headers: dict, body: dict, timeout: float = DEFAULT_TIM
         return time.monotonic() - started >= total_deadline_s
 
     while True:
+        _wait_for_slot()
         if _out_of_time():
             raise LLMRetryExhausted(
                 f"gave up after {time.monotonic() - started:.0f}s across {attempt} attempts "
