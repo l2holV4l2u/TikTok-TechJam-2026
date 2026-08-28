@@ -95,6 +95,27 @@ rule (ε = 0.002 over N = 3 iterations). A 6-hour wall-clock backstop is enforce
 
 `python run_agent.py --dry-run` exercises the whole loop with a canned LLM and no network.
 
+### Running on another KuaiRand variant
+
+The dataset facts in the task brief -- row counts, date windows, the perfect-ranking ceiling,
+the random and item-popularity rungs -- are measured from the cache by `agent.facts`, not
+written into the prompt by hand, so the harness can be pointed at another release without
+feeding the agent false premises. `KUAIRAND_VARIANT` selects which raw files the loader reads.
+
+```bash
+export KUAIRAND_VARIANT=1k KUAIRAND_CACHE_DIR=data/cache_1k
+python -c "from pipeline.data import build_cache; build_cache('data/raw/KuaiRand-1K/data','data/cache_1k')"
+python -m research.baseline_reference --epochs 10 --out research/reference_1k.json
+python -m agent.facts --baseline research/reference_1k.json --out research/facts_1k.json --variant KuaiRand-1K
+python run_agent.py --run-dir runs/rN_1k --facts research/facts_1k.json     --baseline-valid 0.6422 --baseline-test 0.6355 --timeout 3000 --no-memory
+```
+
+Only KuaiRand-Pure has a published baseline. On any other variant the anchor is our own run of
+the organizers' recipe (`research/baseline_reference.py`), which reproduces Pure's published
+0.6016 / 0.5946 as 0.6022 / 0.5957 -- that agreement is what makes it usable elsewhere. Scores
+are **not** comparable between variants; see `research/transfer-1k.md`. Cross-run memory is
+disabled with `--no-memory`, since it ranks prior runs against a baseline on a different scale.
+
 The agent writes the submission from its own validation-best iteration — every generated script
 saves test scores to `$ITER_OUT/scores_test.npy` and the loop assembles the winner. No human
 rebuilds it, and selection is on validation only; the hidden test set never picks the winner.
