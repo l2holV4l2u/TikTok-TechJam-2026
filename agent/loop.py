@@ -88,7 +88,12 @@ class SavedScoresEvaluator(StdoutJsonEvaluator):
     automatic diagnosis and incumbent reuse by the controller.
     """
 
-    def __init__(self, tolerance: float = 1e-9, require_test: bool = True):
+    # The check catches a FABRICATED metric, and a fabrication worth making differs by far
+    # more than display rounding. At 1e-9 an honest script that printed six significant
+    # figures was rejected -- r62 lost a baseline iteration to 0.590473 against
+    # 0.590472506127, a gap of 5e-7. 1e-6 is still 2000x tighter than the epsilon that
+    # decides convergence.
+    def __init__(self, tolerance: float = 1e-6, require_test: bool = True):
         self.tolerance = tolerance
         self.require_test = require_test
         self.last_error: str | None = None

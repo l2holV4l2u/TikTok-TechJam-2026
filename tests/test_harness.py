@@ -174,6 +174,27 @@ def test_a_script_that_produced_no_stdout_does_not_kill_the_run():
     assert parse_findings("FINDINGS users with 1 impression cannot be reranked") != ""
 
 
+def test_display_rounding_is_not_treated_as_a_fabricated_metric():
+    """A script printing six significant figures is honest, not fraudulent.
+
+    r62 lost a baseline iteration to 0.590473 against a trusted 0.590472506127 -- a gap of
+    5e-7 against a 1e-9 tolerance. A fabrication worth making is orders of magnitude larger.
+    """
+    with _fake_splits():
+        out = Path(tempfile.mkdtemp())
+        np.save(out / "scores_valid.npy", SCORES)
+        np.save(out / "scores_test.npy", SCORES[:2])
+        truth = evaluate(USERS, LABELS, SCORES)
+        rounded = {k: float(f"{truth[k]:.6g}") for k in ("primary", "gauc", "ndcg@5")}
+        ev = SavedScoresEvaluator()
+        assert ev.evaluate(_result(rounded), out) is not None, ev.last_error
+
+        faked = dict(rounded)
+        faked["primary"] = truth["primary"] + 0.01
+        assert SavedScoresEvaluator().evaluate(_result(faked), out) is None, (
+            "a metric off by 0.01 is still a fabrication and must be rejected")
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_") and callable(v)]
     for test in tests:
