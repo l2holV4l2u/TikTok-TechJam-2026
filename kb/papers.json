@@ -425,5 +425,87 @@
     "summary": "Trains a meta-learner on the out-of-fold predictions of several base learners to combine them, correcting each base learner's bias instead of averaging naively.",
     "applies_to": "ensemble",
     "expected_effect": "Trains a meta-learner on the out-of-fold predictions of several base learners, correcting each learner's bias instead of averaging naively. Needs enough held-out data to fit the combiner without overfitting it."
+  },
+  {
+    "id": "autoint_numeric",
+    "title": "AutoInt: Automatic Feature Interaction Learning via Self-Attentive Neural Networks",
+    "year": 2019,
+    "url": "https://doi.org/10.1145/3357384.3357925",
+    "tags": [
+      "numeric",
+      "continuous",
+      "embedding",
+      "self-attention",
+      "feature-interaction"
+    ],
+    "summary": "Maps both categorical and NUMERIC fields into a shared low-dimensional space -- a scalar field is embedded as value * field_embedding -- so continuous quantities take part in the same learned interactions as ids, rather than being bucketised away first.",
+    "applies_to": "features",
+    "expected_effect": "Reported by the authors as a way to let continuous fields participate in learned crosses without discretisation loss."
+  },
+  {
+    "id": "gbdt_numeric_split",
+    "title": "Practical Lessons from Predicting Clicks on Ads at Facebook",
+    "year": 2014,
+    "url": "https://doi.org/10.1145/2648584.2648589",
+    "tags": [
+      "numeric",
+      "continuous",
+      "gbdt",
+      "tree",
+      "feature-transform",
+      "hybrid"
+    ],
+    "summary": "Boosted trees consume raw continuous features directly and learn their own thresholds, then their leaf indices are fed to a linear model as categorical features. The paper's point is that trees are a supervised discretiser for numeric inputs.",
+    "applies_to": "features",
+    "expected_effect": "Described as a way to combine numeric-native tree splits with a sparse linear/factorisation model."
+  },
+  {
+    "id": "numeric_embedding_survey",
+    "title": "On Embeddings for Numerical Features in Tabular Deep Learning",
+    "year": 2022,
+    "url": "https://arxiv.org/abs/2203.05556",
+    "tags": [
+      "numeric",
+      "continuous",
+      "embedding",
+      "tabular",
+      "piecewise-linear",
+      "periodic"
+    ],
+    "summary": "Compares ways of feeding scalar features to deep models: raw, quantile-binned, piecewise-linear encodings and periodic (Fourier) activations. Reports that how a numeric feature is encoded changes results as much as the architecture around it.",
+    "applies_to": "features",
+    "expected_effect": "Presented as evidence that the encoding of a scalar input is itself a design decision, not a preprocessing detail."
+  },
+  {
+    "id": "feature_scaling_heavy_tail",
+    "title": "Deep Neural Networks for YouTube Recommendations",
+    "year": 2016,
+    "url": "https://doi.org/10.1145/2959100.2959190",
+    "tags": [
+      "numeric",
+      "continuous",
+      "normalisation",
+      "recency",
+      "feature-transform"
+    ],
+    "summary": "Continuous inputs are normalised to a quantile-uniform scale and additionally supplied as powers and roots of that value, letting the network form sub- and super-linear responses. Also feeds age-of-item explicitly so the model can represent freshness rather than average it away.",
+    "applies_to": "features",
+    "expected_effect": "Authors report heavy-tailed raw counts being unusable until transformed, and explicit recency inputs changing behaviour on fresh items."
+  },
+  {
+    "id": "item_side_statistics",
+    "title": "Wide & Deep Learning for Recommender Systems",
+    "year": 2016,
+    "url": "https://doi.org/10.1145/2988450.2988454",
+    "tags": [
+      "numeric",
+      "continuous",
+      "side-information",
+      "memorisation",
+      "generalisation"
+    ],
+    "summary": "Combines a wide memorising component over sparse crosses with a deep generalising component over dense/continuous inputs, on the argument that the two capture different structure and neither subsumes the other.",
+    "applies_to": "architecture",
+    "expected_effect": "Framed by the authors as complementary rather than competing components."
   }
 ]
