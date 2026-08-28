@@ -109,6 +109,10 @@ def main() -> None:
                     help="validation score the agent must reproduce; measure it with research.baseline_reference on a non-Pure variant")
     ap.add_argument("--baseline-test", type=float, default=BASELINE_TEST,
                     help="test score the reported delta is taken against")
+    ap.add_argument("--revision-model", default=None,
+                    help="model for belief revision. Rate limits are per-model, and revision is "
+                         "~37%% of a run's requests, so pointing it at a second model both halves "
+                         "pressure on the proposer's quota and costs less for a summarising task")
     ap.add_argument("--facts", default="research/facts_pure.json",
                     help="dataset facts for the brief, produced by agent.facts")
     ap.add_argument("--no-memory", action="store_true", help="ignore this agent's prior runs")
@@ -148,6 +152,18 @@ def main() -> None:
     # every prompt/response lands in the run log -- it is a graded deliverable
     complete = RecordingComplete(complete, run_dir / "llm_calls.jsonl")
 
+    # belief revision rewrites a claim list; it does not have to be the model that writes the
+    # experiments. Keeping it on a separate model spends a separate per-model quota.
+    if args.revision_model and not args.dry_run and not args.replay:
+        import os as _os
+        from agent.llm import OpenAICompatComplete
+        revise_complete = RecordingComplete(
+            OpenAICompatComplete(model=args.revision_model), run_dir / "llm_calls.jsonl")
+        print(f"belief revision routed to {args.revision_model} "
+              f"(proposer stays on {getattr(complete, 'model', '?')})")
+    else:
+        revise_complete = complete
+
     # what a run could reach. Recorded so a later run can tell which capabilities post-date the
     # experiments in its memory, instead of reading their absence as evidence against them.
     from pipeline.data import NUMERIC_FEATURES
@@ -181,7 +197,7 @@ def main() -> None:
         recovery=Recovery(max_retries=args.max_retries),
         knowledge=knowledge,
         revise_fn=lambda entries, last, findings, stale, patience: knowledge.revise(
-            complete, entries, last, findings, stale, patience),
+            revise_complete, entries, last, findings, stale, patience),
         memory=memory,
         baseline=args.baseline_valid,
         # the perfect-ranking ceiling, measured by agent.facts. The critic needs it to
