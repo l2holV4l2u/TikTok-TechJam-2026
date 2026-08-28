@@ -239,6 +239,33 @@ def test_token_counts_summed_across_retries():
     assert (r.tokens_in, r.tokens_out) == (35, 7)
 
 
+def test_history_reports_the_score_outcome_not_the_loop_status():
+    """The loop marks any sub-epsilon gain "kept"; the score is still kept and submittable.
+
+    r59 set its record on three consecutive iterations the loop labelled that way, and the
+    prompt printed the label verbatim -- telling the agent its best work had been discarded.
+    """
+    from agent.proposer import _summarize_history
+
+    rows = [
+        Entry(1, None, 0, "baseline", "", {"primary": 0.6016}, 1, 0, 0, "ok", None, "baseline"),
+        Entry(2, None, 0, "deepfm", "", {"primary": 0.6049}, 1, 0, 0, "ok", None, "improve"),
+        Entry(3, None, 0, "record set on a sub-epsilon row", "", {"primary": 0.6056}, 1, 0, 0, "kept",
+              None, "improve"),
+        Entry(4, None, 0, "a genuinely worse idea", "", {"primary": 0.6002}, 1, 0, 0, "kept",
+              None, "improve"),
+        Entry(5, None, 0, "a crash", "", {}, 1, 0, 0, "failed", "boom", "improve"),
+    ]
+    out = _summarize_history(rows, 10)
+    record = next(l for l in out.splitlines() if "record set on a sub-epsilon row" in l)
+    assert "BEST SO FAR" in record, record
+    assert "kept" not in record, ("the highest score in the run must not be reported to the "
+                                  "agent by the label the loop used to skip it: " + record)
+    worse = next(l for l in out.splitlines() if "genuinely worse" in l)
+    assert "below best 0.6056" in worse, worse
+    assert "failed" in next(l for l in out.splitlines() if "a crash" in l)
+
+
 if __name__ == "__main__":
     for t in (
         test_brief_carries_no_human_findings,
@@ -263,6 +290,7 @@ if __name__ == "__main__":
         test_full_catalogue_is_offered_so_retrieval_cannot_hide_a_method,
         test_detailed_retrieval_rotates_instead_of_repeating,
         test_token_counts_summed_across_retries,
+        test_history_reports_the_score_outcome_not_the_loop_status,
     ):
         t()
         print(f"ok  {t.__name__}")

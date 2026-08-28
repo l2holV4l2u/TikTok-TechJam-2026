@@ -93,7 +93,7 @@ def _robustness_evidence(run_dir: Path) -> None:
 
     for run, rows in runs.items():
         for a, b in zip(rows, rows[1:]):
-            if (a["status"] == "failed" and b["status"] in ("ok", "reverted")
+            if (a["status"] == "failed" and b["status"] in ("ok", "reverted", "kept")
                     and "primary" in b.get("metrics", {})):
                 print(f"- **Retry with source.** `{run}` #{a['iter_id']} crashed with "
                       f"`{_last_err(a)[:70]}`. The traceback *and the failing script* went back "
@@ -166,7 +166,7 @@ def main() -> None:
     rows = [json.loads(l) for l in (run_dir / "ledger.jsonl").open(encoding="utf-8") if l.strip()]
     meta_path = run_dir / "run_meta.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
-    scored = [e for e in rows if e["status"] in ("ok", "reverted") and "primary" in e["metrics"]]
+    scored = [e for e in rows if e["status"] in ("ok", "reverted", "kept") and "primary" in e["metrics"]]
     failed = [e for e in rows if e["status"] in ("failed", "blacklisted")]
     rejected = [e for e in rows if e["status"] == "rejected"]
     infra = [e for e in failed if _is_infra(e)]

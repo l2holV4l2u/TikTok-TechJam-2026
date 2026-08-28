@@ -459,7 +459,7 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
 
         improved = score > best + epsilon
         ledger.append(Entry(i, parent_id, 0, p.hypothesis, p.code, metrics, res.seconds,
-                            p.tokens_in, p.tokens_out, "ok" if improved else "reverted",
+                            p.tokens_in, p.tokens_out, "ok" if improved else "kept",
                             None, "improve"))
         feedback = None
         tree.add(Node(i, parent_id, p.hypothesis, p.code, score))

@@ -256,8 +256,24 @@ def _fmt_metrics(metrics: dict) -> str:
 
 
 def _summarize_history(history, n: int) -> str:
-    lines = [f"#{e.iter_id} {e.status} {_fmt_metrics(e.metrics)} :: {e.hypothesis[:70]}"
-             for e in history[-n:]]
+    """Label each past iteration by what happened to the SCORE, not by the loop status.
+
+    "kept" only means the gain was under epsilon; the score is still kept, still ranked and
+    still submittable -- r59's submission came from such an iteration. Printing the raw label
+    told the agent its three best results had been thrown away.
+    """
+    best, labels = float("-inf"), []
+    for e in history:
+        p = e.metrics.get("primary")
+        if not isinstance(p, (int, float)):
+            labels.append(e.status)
+        elif p > best:
+            best = p
+            labels.append("BEST SO FAR")
+        else:
+            labels.append(f"below best {best:.4f}")
+    lines = [f"#{e.iter_id} {lab} {_fmt_metrics(e.metrics)} :: {e.hypothesis[:70]}"
+             for e, lab in list(zip(history, labels))[-n:]]
     return "\n".join(lines) if lines else "none"
 
 

@@ -65,7 +65,7 @@ def _write_submission(run_dir: Path, ledger: Ledger, baseline_test: float) -> di
     """
     import numpy as np
     scored = [e for e in ledger.read()
-              if e.status in ("ok", "reverted") and "primary" in e.metrics]
+              if e.status in ("ok", "reverted", "kept") and "primary" in e.metrics]
     if not scored:
         print("no scored iteration; nothing to submit")
         return {}
