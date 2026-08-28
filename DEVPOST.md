@@ -593,6 +593,42 @@ but defaults to CPU. `research/baseline_reference.py` is also pinned to CPU so t
 not shift with the active environment. GPU remains useful for an experiment large enough to
 repay its startup cost; it is not automatically faster on this benchmark.
 
+## What actually determines the score: completed iterations
+
+Across every eligible run, the variable that tracks the final result is not which capabilities
+the harness exposed. It is how many improve iterations actually finished.
+
+| run | iterations that scored | lost to the API | best validation |
+|---|---|---|---|
+| r35 | **6** | 0 | **0.6049** |
+| r34 | 4 | 0 | 0.6043 |
+| r33 | 3 | 0 | 0.6044 |
+| r36, r37 | 3 | 0 | 0.6037 |
+| r50 | 3 | 0 | 0.6027 |
+| r51 | 3 | 4 | 0.6031 |
+| r49 | 2 | 5 | 0.6025 |
+
+The mechanism is compounding. Each iteration edits the best script so far, so a run that
+completes six attempts is refining a much stronger incumbent by the sixth than a run that
+completes two. r35 traces 0.6036 → 0.6040 → 0.6047 → 0.6049 — small steps, each taken from
+where the last one landed. A run cut off at two attempts never leaves the first plateau.
+
+This is worth stating because it contradicts the intuition we started with. We spent most of
+this project adding capability to the harness, and capability is not what separates these runs:
+every one of them spent its attempts mostly on model architecture, including the ones that
+scored worst. What separated them was whether their iterations ran.
+
+The cause was mundane and entirely ours: the account's free tier allows **3 requests per
+minute**, an iteration costs two model calls plus any retries, and runs breached the limit within
+a couple of iterations and then bled whole iterations to 429 responses. The fix is to wait our
+turn rather than retry into a wall — the client now spaces requests below the limit, which costs
+about 40 seconds per iteration against a lost iteration costing the entire experiment.
+
+The organizers' convergence rule (ε = 0.002 over 3 iterations) already makes iterations scarce:
+a run gets three attempts and earns more only by clearing ε. Spending them on infrastructure
+failures is the most expensive mistake available in this setup, and we made it repeatedly before
+measuring it.
+
 ## Harness engineering
 
 Four changes that are not model work but decide whether the agent gets a fair run.
