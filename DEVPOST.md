@@ -247,19 +247,24 @@ versions is the same: **every defect was in the scaffolding, not in the model's 
 
 Official baseline (organizer-provided FM, k=16): validation primary 0.6016, hidden test 0.5946.
 
-Our submitted run (`runs/r39`, full log in `RUN_REPORT.md`):
+Our submitted run (`runs/r41`, full log in `RUN_REPORT.md`):
 
 | | GAUC | nDCG@5 | primary |
 |---|---|---|---|
-| validation, agent's best iteration | 0.6720 | 0.5387 | 0.6053 |
+| validation, agent's best iteration | 0.6732 | 0.5386 | 0.6059 |
 | official baseline, validation | 0.6674 | 0.5357 | 0.6016 |
-| **hidden test, this submission** | **0.6671** | **0.5323** | **0.5997** |
+| **hidden test, this submission** | **0.6677** | **0.5316** | **0.5996** |
 | official baseline, hidden test | 0.6610 | 0.5282 | 0.5946 |
 
-**Absolute delta on hidden test: GAUC +0.0061, nDCG@5 +0.0041, mean +0.0051.**
+**Absolute delta on hidden test: GAUC +0.0067, nDCG@5 +0.0034, mean +0.0050.**
 
-r39 is the first run to use two instruments the harness previously withheld -- impression
-timestamps and a continuous-feature channel -- and its winning iteration uses both. Before them
+r41 is validation-best of every run, which is the only criterion we select on. r39 reached a
+marginally higher hidden-test score (0.5997, +0.0051) from a lower validation score (0.6053) --
+we do not take it, because choosing the higher test number would be selecting on the split we
+are scored against.
+
+Both are runs with two instruments the harness previously withheld -- impression timestamps and
+a continuous-feature channel -- and both winning iterations use them. Before them
 the best run reached 0.6049 validation / +0.0039 test (`runs/r35`), and five runs had clustered
 there. Details in **Harness engineering** below.
 
