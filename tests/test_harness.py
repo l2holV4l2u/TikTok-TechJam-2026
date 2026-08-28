@@ -105,6 +105,38 @@ def test_a_crashed_run_still_records_what_it_measured():
             "a crashed run's measured experiments must still reach the next run")
 
 
+def test_an_exhausted_daily_quota_stops_the_run_instead_of_being_retried():
+    """Every key being out of daily quota is not an outage that a retry clears.
+
+    The loop used to treat it as a transient proposer error and retry six times, each attempt
+    walking the transport's full backoff ladder. r57 spent 50 minutes and 7.7 seconds of CPU
+    rediscovering the same cap before anyone noticed it was asleep rather than working.
+    """
+    from agent.ledger import Ledger
+    from agent.llm import LLMDailyLimit
+    from agent.loop import run_loop
+
+    class CappedProposer:
+        def __init__(self):
+            self.calls = 0
+
+        def propose(self, **_):
+            self.calls += 1
+            raise LLMDailyLimit("Limit 50, Used 50")
+
+    class NeverCalled:
+        def evaluate(self, result, iter_out=None):
+            raise AssertionError("no script should run")
+
+    with tempfile.TemporaryDirectory() as d:
+        proposer = CappedProposer()
+        ledger = Ledger(Path(d) / "ledger.jsonl")
+        r = run_loop(proposer, NeverCalled(), ledger, workdir=Path(d) / "scripts",
+                     max_iters=20, max_proposer_errors=6)
+        assert r.stop_reason == "llm_daily_limit", r.stop_reason
+        assert proposer.calls == 1, f"gave up after {proposer.calls} calls, expected 1"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_") and callable(v)]
     for test in tests:

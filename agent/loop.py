@@ -18,6 +18,7 @@ from typing import Protocol
 from .executor import RunResult, run_script
 from .ensemble import retain_or_blend
 from .ledger import Entry, Ledger
+from .llm import LLMDailyLimit
 from .recovery import RETRY, Recovery
 from .critic import review as critic_review
 from .knowledge import Knowledge
@@ -311,6 +312,10 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
             proposer_errors += 1
             ledger.append(Entry(i, None, 0, "(proposer unavailable)", "", {}, 0.0, 0, 0,
                                 "failed", f"{type(exc).__name__}: {exc}"[:2000], phase))
+            # Every key being out of daily quota is not an outage that clears on a retry.
+            # Retrying it burned 50 minutes of r57 rediscovering the same cap six times.
+            if isinstance(exc, LLMDailyLimit):
+                return finish("llm_daily_limit")
             if proposer_errors >= max_proposer_errors:
                 return finish("proposer_unavailable")
             time.sleep(min(60.0, 5.0 * proposer_errors))
