@@ -4,6 +4,7 @@ No network. The daily-cap failover is exercised by substituting the transport, b
 behaviour that matters -- not burning twelve minutes of backoff on a cap that cannot clear --
 is invisible from the outside until it costs a run.
 """
+import io
 import os
 from contextlib import contextmanager
 
@@ -203,6 +204,42 @@ def test_a_call_gives_up_instead_of_wedging_the_run():
         llm.urllib.request.urlopen = real
 
 
+def test_a_rate_limit_is_not_retried_eight_times():
+    """Every 429 attempt still spends one of the account's daily requests.
+
+    r63 completed 3 calls and consumed ~28 of the 31 daily requests it had, all of it in the
+    retry ladder discovering it was rate limited. 5xx and connection errors cost only time and
+    keep the full budget; a 429 gets a small one.
+    """
+    import urllib.error
+    from agent import llm
+
+    calls = {"n": 0}
+
+    def always_429(*a, **k):
+        calls["n"] += 1
+        raise urllib.error.HTTPError("u", 429, "Too Many Requests", {},
+                                     io.BytesIO(b'{"error":{"message":"tokens per min"}}'))
+
+    real = llm.urllib.request.urlopen
+    llm.urllib.request.urlopen = always_429
+    saved = llm.MIN_REQUEST_INTERVAL_S
+    llm.MIN_REQUEST_INTERVAL_S = 0.0
+    try:
+        try:
+            llm._post_json("https://example.invalid", {}, {"x": 1}, total_deadline_s=30.0)
+            raise AssertionError("should have given up")
+        except llm.LLMRetryExhausted:
+            pass
+        assert calls["n"] <= llm.MAX_RATE_LIMIT_RETRIES + 1, (
+            f"spent {calls['n']} daily requests discovering one rate limit")
+        assert llm.MAX_RATE_LIMIT_RETRIES < llm.MAX_RETRIES, (
+            "a 429 must have a smaller budget than a free-to-retry 5xx")
+    finally:
+        llm.urllib.request.urlopen = real
+        llm.MIN_REQUEST_INTERVAL_S = saved
+
+
 def test_a_revoked_key_fails_over_instead_of_killing_the_run():
     """A key can be cancelled mid-run; that must cost one request, not the whole run.
 
@@ -333,7 +370,8 @@ if __name__ == "__main__":
               test_a_revoked_key_fails_over_instead_of_killing_the_run,
               test_rate_limit_exhaustion_fails_over_to_another_key,
               test_requests_are_spaced_to_stay_under_the_per_minute_limit,
-              test_a_transient_rate_limit_does_not_retire_a_good_key):
+              test_a_transient_rate_limit_does_not_retire_a_good_key,
+              test_a_rate_limit_is_not_retried_eight_times):
         t()
         print(f"ok  {t.__name__}")
     print("all passed")

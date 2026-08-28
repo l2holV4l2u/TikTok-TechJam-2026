@@ -14,7 +14,12 @@ DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_MAX_TOKENS = 8192  # blend scripts overflow 4096 and arrive truncated
 DEFAULT_TIMEOUT_S = 120
-MAX_RETRIES = 8
+MAX_RETRIES = 8            # 5xx and connection errors cost time, nothing else
+# A 429 is different: the attempt still counts against the account's daily request cap, so
+# the ladder spends quota to discover it has none. r63 made 3 successful calls and consumed
+# ~28 of the 31 daily requests it had, entirely in retries. Wait out the server's own
+# retry-after instead of laddering into the wall.
+MAX_RATE_LIMIT_RETRIES = 2
 BASE_DELAY_S = 1.0
 MAX_DELAY_S = 90.0
 # A ceiling on ALL attempts for one call, not just on each one. Eight retries at up to 90s of
@@ -102,6 +107,7 @@ def _post_json(url: str, headers: dict, body: dict, timeout: float = DEFAULT_TIM
     """
     data = json.dumps(body).encode("utf-8")
     attempt = 0
+    rate_limited = 0
     started = time.monotonic()
 
     def _out_of_time() -> bool:
@@ -132,8 +138,16 @@ def _post_json(url: str, headers: dict, body: dict, timeout: float = DEFAULT_TIM
                 raise LLMKeyRejected(f"HTTP {e.code}: {err_body[:200]}") from e
             if e.code == 429 or e.code >= 500:
                 attempt += 1
-                if attempt > MAX_RETRIES:
-                    raise LLMRetryExhausted(f"HTTP {e.code} after {MAX_RETRIES} retries: {err_body}") from e
+                budget = MAX_RETRIES
+                if e.code == 429:
+                    rate_limited += 1
+                    budget = MAX_RATE_LIMIT_RETRIES
+                    if rate_limited > budget:
+                        raise LLMRetryExhausted(
+                            f"HTTP 429 after {budget} retries; each one spends a daily "
+                            f"request: {err_body}") from e
+                elif attempt > budget:
+                    raise LLMRetryExhausted(f"HTTP {e.code} after {budget} retries: {err_body}") from e
                 delay = _retry_delay(e, err_body, attempt)
                 if time.monotonic() - started + delay >= total_deadline_s:
                     raise LLMRetryExhausted(
