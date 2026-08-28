@@ -230,27 +230,46 @@ def main() -> None:
     knowledge = Knowledge()
 
     t0 = time.perf_counter()
-    r = run_loop(
-        proposer, SavedScoresEvaluator(), ledger,
-        workdir=run_dir / "scripts",
-        primary="primary",
-        epsilon=args.epsilon,
-        patience=args.patience,
-        max_iters=args.iters,
-        timeout=args.timeout,
-        wall_clock_limit_s=args.wall_clock_s,
-        tree=Tree(max_misses=args.max_misses, epsilon=args.epsilon),
-        recovery=Recovery(max_retries=args.max_retries),
-        knowledge=knowledge,
-        revise_fn=lambda entries, last, findings, stale, patience: knowledge.revise(
-            revise_complete, entries, last, findings, stale, patience),
-        memory=memory,
-        baseline=args.baseline_valid,
-        baseline_tolerance=args.baseline_tolerance,
-        # the perfect-ranking ceiling, measured by agent.facts. The critic needs it to
-        # tell an extraordinary result from an impossible one.
-        ceiling=facts.get("ceiling"),
-    )
+    try:
+        r = run_loop(
+            proposer, SavedScoresEvaluator(), ledger,
+            workdir=run_dir / "scripts",
+            primary="primary",
+            epsilon=args.epsilon,
+            patience=args.patience,
+            max_iters=args.iters,
+            timeout=args.timeout,
+            wall_clock_limit_s=args.wall_clock_s,
+            tree=Tree(max_misses=args.max_misses, epsilon=args.epsilon),
+            recovery=Recovery(max_retries=args.max_retries),
+            knowledge=knowledge,
+            revise_fn=lambda entries, last, findings, stale, patience: knowledge.revise(
+                revise_complete, entries, last, findings, stale, patience),
+            memory=memory,
+            baseline=args.baseline_valid,
+            baseline_tolerance=args.baseline_tolerance,
+            # the perfect-ranking ceiling, measured by agent.facts. The critic needs it to
+            # tell an extraordinary result from an impossible one.
+            ceiling=facts.get("ceiling"),
+        )
+    except BaseException as exc:
+        # A run that dies mid-flight has still measured real experiments, but memory keys off
+        # run_meta.json, so without this the crash silently discards the whole ledger as well.
+        # r57 lost a +0.0035 DeepFM result that way when every key hit its daily cap.
+        (run_dir / "run_meta.json").write_text(json.dumps({
+            "model": getattr(complete, "model", "unknown"),
+            "dataset": facts.get("variant", "unknown"),
+            "api_surface": api_surface,
+            "data_contract": "train-only-v1",
+            "stop_reason": f"crashed: {type(exc).__name__}: {exc}"[:400],
+            "crashed": True,
+            "iterations": len(ledger.read()),
+            "wall_clock_s": time.perf_counter() - t0,
+        }, indent=2), encoding="utf-8")
+        print("", file=sys.stderr)
+        print(f"CRASHED after {len(ledger.read())} iterations: "
+              f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        raise
     wall = time.perf_counter() - t0
 
     sub = _write_submission(run_dir, ledger, args.baseline_test)
