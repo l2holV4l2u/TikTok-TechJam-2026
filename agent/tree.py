@@ -16,6 +16,8 @@ class Node:
     code: str
     score: float
     misses: int = 0          # children that failed to beat this node
+    crashes: int = 0         # children that crashed or timed out before producing a score
+    child_seconds: float = 0.0   # wall time this node's children have consumed
     dead: bool = False
 
 
@@ -48,15 +50,40 @@ class Tree:
         live = [n for n in self.nodes if not n.dead]
         return max(live, key=lambda n: n.score) if live else None
 
-    def record_child(self, parent_id: int | None, score: float) -> None:
+    def record_child(self, parent_id: int | None, score: float, seconds: float = 0.0) -> None:
         """A child that does not clear the parent by epsilon is a miss, not progress."""
         parent = self.get(parent_id) if parent_id is not None else None
         if parent is None:
             return
+        parent.child_seconds += seconds
         if score <= parent.score + self.epsilon:
             parent.misses += 1
             if parent.misses >= self.max_misses:
                 parent.dead = True
+
+    def record_failure(self, parent_id: int | None, seconds: float = 0.0) -> None:
+        """A child that crashed or timed out is evidence against its parent too.
+
+        record_child only ever ran after a score existed, so a crash counted for nothing. In
+        r38_1k node #8 produced five children: two of them crashed -- one after 4,373 s at the
+        timeout -- and neither moved the node any closer to retirement. Arbor (arXiv:2606.12563)
+        scores an action by expected gain over cost, discounted by an explicit crash-rate term;
+        this is that term at the scale of a run that gets a handful of iterations.
+
+        A crash is weaker evidence than a miss: the idea may be sound and the code wrong, and
+        recovery already retries it. So it counts half.
+
+        INTEGRATION: loop.py must call this on the failure path, beside the existing
+        `tree.record_child(parent_id, score)` on the success path:
+            tree.record_failure(parent_id, res.seconds)
+        """
+        parent = self.get(parent_id) if parent_id is not None else None
+        if parent is None:
+            return
+        parent.crashes += 1
+        parent.child_seconds += seconds
+        if parent.crashes >= 2 * self.max_misses:
+            parent.dead = True
 
     @property
     def best(self) -> Node | None:
