@@ -46,8 +46,12 @@ def main():
     p.add_argument("--k", type=int, default=16)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", default=None, help="write the measured reference to this JSON path")
-    # Reference scores must not move when the active environment changes. CPU also measured
-    # slightly faster for this embedding-heavy baseline on the available RTX 4050.
+    # Pinned to CPU. Every reference number cited in this repo was measured on CPU, and the same
+    # recipe on GPU returns valid 0.6020 / test 0.5947 against 0.6022 / 0.5957 -- a 0.0010 shift
+    # on test, at the edge of the 0.0008 seed-noise band. A reference that moves with whatever
+    # device happens to be installed is not a reference. It is also not faster here: 60s on an
+    # RTX 4050 against 56s on CPU, because these models are embedding-lookup bound and the CUDA
+    # runtime costs ~20s to load.
     p.add_argument("--device", default="cpu", choices=["cpu", "cuda"])
     args = p.parse_args()
 

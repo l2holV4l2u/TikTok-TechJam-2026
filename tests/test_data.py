@@ -318,5 +318,29 @@ def test_numeric_channel_is_present_and_carries_no_post_click_signal():
     assert not flat, f"numeric features are constant: {flat}"
 
 
+def test_numeric_names_do_not_collide_across_sources():
+    """Two sources can use the same column name for different quantities.
+
+    `follow_user_num` is in user_features (accounts this user follows) and in
+    video_features_statistic (accounts that followed via this video). Unprefixed, whichever was
+    written last won: the cache held the video figure while the brief described the user one,
+    and nothing failed. The names must stay disjoint.
+    """
+    from pipeline.data import NUMERIC_LOG, NUMERIC_USER, NUMERIC_VIDEO_STAT, NUMERIC_FEATURES
+    pairs = (("log", NUMERIC_LOG), ("user", NUMERIC_USER), ("video", NUMERIC_VIDEO_STAT))
+    for i, (an, a) in enumerate(pairs):
+        for bn, b in pairs[i + 1:]:
+            clash = sorted(set(a) & set(b))
+            assert not clash, f"{an} and {bn} both define {clash}"
+    assert len(NUMERIC_FEATURES) == len(set(NUMERIC_FEATURES)), "duplicate in NUMERIC_FEATURES"
+
+    try:
+        tr = load("train")
+    except FileNotFoundError:
+        return "skip (no real cache)"
+    assert set(tr.num) == set(NUMERIC_FEATURES), (
+        f"cache and definition disagree: {sorted(set(NUMERIC_FEATURES) ^ set(tr.num))}")
+
+
 if __name__ == "__main__":
     main()

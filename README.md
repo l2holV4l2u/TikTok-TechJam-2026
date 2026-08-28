@@ -203,7 +203,7 @@ iteration; it now sees the full catalogue and retrieval rotates.
 and the other logged signals are outcomes of the row being scored; they are exposed as
 `Split.aux`, never as features, asserted by test. `video_features_statistic_pure.csv` is
 excluded entirely — its counts are aggregated over the whole log period, including the
-validation and test windows. Historical r39/r41/r43 scores that used that file are retained as
+validation and test windows. Historical r39/r41/r43/r44 scores that used that file are retained as
 an audit trail but excluded from memory, comparison, and submission; `submission_best.csv` is
 restored to the strongest eligible run, r35.
 

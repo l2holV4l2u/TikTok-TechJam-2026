@@ -57,6 +57,14 @@ def measure(baseline: dict, seed: int = 0) -> dict:
     present = sorted(tr.num) if tr.num else []
     f["n_numeric"] = len(present)
     f["numeric_names"] = ", ".join(present) if present else "(none cached)"
+    try:
+        import torch as _t
+        f["torch_version"] = _t.__version__
+        f["gpu"] = (f"{_t.cuda.get_device_properties(0).name}, "
+                    f"{_t.cuda.get_device_properties(0).total_memory/1e9:.1f} GB"
+                    if _t.cuda.is_available() else "none")
+    except Exception:
+        f["torch_version"], f["gpu"] = "unavailable", "none"
     categorical = sorted(FEATURE_CARDINALITIES)
     f["n_categorical"] = len(categorical)
     f["categorical_names"] = ", ".join(categorical)

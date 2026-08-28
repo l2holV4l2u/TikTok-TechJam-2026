@@ -257,7 +257,7 @@ Our submitted run (`runs/r35`, full log in `RUN_REPORT.md`):
 
 **Absolute delta on hidden test: GAUC +0.0047, nDCG@5 +0.0030, mean +0.0039.**
 
-We later produced higher-looking r39/r41/r43 numbers after exposing
+We later produced higher-looking r39/r41/r43/r44 numbers after exposing
 `video_features_statistic_pure.csv`. An integrity review rejected those runs: the dataset
 documentation defines those item outcome statistics as averages over the full month, which
 overlaps this repository's validation and test dates. They are useful measurements, but they
@@ -337,6 +337,18 @@ r33–r37 carry the literature-driven changes, and the separation is clean on bo
 |---|---|---|
 | before (r27–r30) | 0.6023 – 0.6033 | +0.0006 – +0.0024 |
 | after (r33–r37) | **0.6037 – 0.6049** | **+0.0033 – +0.0041** |
+
+### The proposer-model comparison is inconclusive
+
+We tried `gpt-5.6-luna` and `gpt-5.6-terra`, but those single runs also used the later,
+ineligible full-month statistic exposure. Model, harness and data contract all changed at once,
+so their score spread cannot identify a proposer-model effect and is not used as evidence.
+
+One concrete failure mode was visible rather than statistical. `gpt-5.1`, tried briefly, spent
+two iterations inventing field names — `duration_ms_range`, then `duration_range`, where the real
+field is `duration_bucket`. That exposed a genuine gap: the brief said `s.X` held 37 categorical
+features and named only the five baseline ones, so a model wanting a sixth had to guess. All 37
+are now listed. The weaker model found a hole the stronger ones had been stepping around.
 
 **The worst run after beats the best run before, on both metrics, 5/5 against 4/4.** Five runs
 is still a small sample and we are reading a ~0.0015 effect against a 0.0008 noise floor, so we

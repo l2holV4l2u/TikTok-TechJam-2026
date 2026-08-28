@@ -17,7 +17,7 @@ from pathlib import Path
 
 import numpy as np
 
-from pipeline.data import (NUMERIC_LOG, NUMERIC_USER,
+from pipeline.data import (NUMERIC_LOG, NUMERIC_USER, NUMERIC_USER_SRC,
                            _EXPECTED_ROWS, _TEST_RANGE, _TRAIN_RANGE, _VALID_RANGE,
                            _TRAIN_LOG, _VALID_TEST_LOG, _USER_FEATURES_FILE,
                            _cache_root, _iter_log_rows, _load_user_features)
@@ -53,9 +53,9 @@ def main() -> None:
                     num[f][i] = float(row[idx[f]])
                 except (ValueError, KeyError):
                     num[f][i] = NAN
-            for f in NUMERIC_USER:
+            for src, f in zip(NUMERIC_USER_SRC, NUMERIC_USER):
                 try:
-                    num[f][i] = float(u.get(f, ""))
+                    num[f][i] = float(u.get(src, ""))
                 except ValueError:
                     num[f][i] = NAN
             i += 1

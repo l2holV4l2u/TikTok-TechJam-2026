@@ -151,10 +151,26 @@ The screen was therefore used only for video metadata columns (item-level, all r
 An earlier analysis also screened `video_features_statistic`, but those columns are now excluded:
 they average outcomes over the full evaluation month and violate the fixed chronological split.
 
-Every remaining raw column is accounted for. Standard-log identifiers, context, duration and
-timestamps are exposed; post-impression outcomes are targets only. User ranges, one-hot fields
-and raw counts are exposed. Basic video author/type/upload/music/tag/duration fields are exposed;
-upload date, aspect ratio and visibility measured at the random-ranking floor. `is_rand` is
-constant in the standard log, and minute-of-hour is constant within each user's impression
-list. Further valid data work therefore has to derive train-only features rather than expose
-another raw field; `pipeline.history` now supplies that mechanism for item and author histories.
+## Every raw column is now accounted for
+
+The data-exposure avenue is exhausted. Each column in the four KuaiRand-Pure files is now either
+reachable by the agent or measured and rejected:
+
+| source | status |
+|---|---|
+| log: `user_id`, `video_id`, `tab`, `duration_ms`, `date`, `time_ms` | exposed |
+| log: `hourmin` | hour is in `s.X`; the minute is **constant within every user's impression list** (0% of users vary), so it cannot reorder anything -- GAUC exactly 0.5000 |
+| log: `is_rand` | 0 on every row of both standard logs |
+| log: post-click columns | `s.aux` only -- they are outcomes of the row being scored |
+| `user_features`: ranges + 18 one-hots | `s.X` |
+| `user_features`: raw counts, `register_days` | `s.num` |
+| `video_features_basic`: author, type, upload/music type, tag, duration | `s.X` |
+| `video_features_basic`: `upload_dt`, aspect, `visible_status` | measured at random (0.4749-0.4808 against a 0.4732 floor) |
+| `video_features_statistic`: all 51 outcome aggregates | excluded; they overlap validation/test |
+
+`hourmin` behaving as a session key rather than a timestamp is consistent with the tied
+timestamps `s.time_ms` shows: 57.9% of users have at least two impressions sharing a millisecond,
+because a feed page is logged as one batch.
+
+Nothing valid remains to expose. Further data work must be derived from training rows;
+`pipeline.history` supplies leakage-safe item and author histories for that purpose.

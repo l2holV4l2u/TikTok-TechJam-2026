@@ -73,8 +73,12 @@ FEATURE_CARDINALITIES: dict[str, int] = {
 # are future information under this repository's date split. Use pipeline.history for equivalent
 # aggregates fitted strictly on the train log.
 NUMERIC_LOG: tuple[str, ...] = ("duration_ms",)
-NUMERIC_USER: tuple[str, ...] = ("follow_user_num", "fans_user_num", "friend_user_num",
-                                 "register_days")
+NUMERIC_USER_SRC: tuple[str, ...] = ("follow_user_num", "fans_user_num", "friend_user_num",
+                                     "register_days")
+NUMERIC_USER: tuple[str, ...] = tuple("user_" + name for name in NUMERIC_USER_SRC)
+# Compatibility name for downstream inventory/tests. It is intentionally empty: the supplied
+# file aggregates outcomes across the evaluation month and is never loaded.
+NUMERIC_VIDEO_STAT: tuple[str, ...] = ()
 NUMERIC_FEATURES: tuple[str, ...] = NUMERIC_LOG + NUMERIC_USER
 
 
@@ -230,8 +234,16 @@ def load(split: str) -> Split:
     # impression time, known before the click, so it is a feature and not an outcome.
     tms_path = split_dir / "time_ms.npy"
     time_ms = np.load(tms_path, mmap_mode="r") if tms_path.exists() else None
-    num = {f: np.load(split_dir / f"num_{f}.npy", mmap_mode="r")
-           for f in NUMERIC_FEATURES if (split_dir / f"num_{f}.npy").exists()} or None
+    num = {}
+    for f in NUMERIC_FEATURES:
+        path = split_dir / f"num_{f}.npy"
+        # Read old caches without forcing a rebuild; newly-built caches use the unambiguous
+        # user_ prefix introduced when the video-statistic name collision was discovered.
+        if not path.exists() and f.startswith("user_"):
+            path = split_dir / f"num_{f.removeprefix('user_')}.npy"
+        if path.exists():
+            num[f] = np.load(path, mmap_mode="r")
+    num = num or None
     return Split(user_id=user_id, video_id=video_id, X=X, y=y, aux=aux, date=date,
                  time_ms=time_ms, num=num)
 
@@ -413,9 +425,9 @@ def _convert(log_path: Path, date_lo: str, date_hi: str, split: str,
             except (ValueError, KeyError):
                 num_arrs[f][i] = float("nan")
         u_rec = users.get(uid, {})
-        for f in NUMERIC_USER:
+        for src, f in zip(NUMERIC_USER_SRC, NUMERIC_USER):
             try:
-                num_arrs[f][i] = float(u_rec.get(f, ""))
+                num_arrs[f][i] = float(u_rec.get(src, ""))
             except ValueError:
                 num_arrs[f][i] = float("nan")
         for f, vocab in vocabs.items():
