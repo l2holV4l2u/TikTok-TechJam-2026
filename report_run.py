@@ -40,6 +40,29 @@ def _all_ledgers(exclude: str):
     return out
 
 
+# Errors from the LLM transport, not from the agent's code. A run that lost its API key did not
+# fail six experiments; it failed to start six. Robustness is judged on how the agent handles a
+# failed step, so counting an outage as an experiment failure misreports it in both directions.
+_INFRA_MARKERS = ("LLMError", "LLMRetryExhausted", "LLMDailyLimit", "LLMKeyRejected",
+                  "proposer returned nothing")
+
+
+def _is_infra(e) -> bool:
+    err = e.get("error") or ""
+    return any(m in err for m in _INFRA_MARKERS)
+
+
+def _infra_kind(e) -> str:
+    """The exception name. _last_err takes the final line, which for a multi-line JSON error
+    body is a lone closing brace -- useless in a report."""
+    err = (e.get("error") or "").strip()
+    head = err.splitlines()[0] if err else ""
+    for m in _INFRA_MARKERS:
+        if m in err:
+            return m
+    return head.split(":")[0][:40] or "unknown"
+
+
 def _last_err(e) -> str:
     lines = (e.get("error") or "").strip().splitlines()
     return lines[-1].strip() if lines else ""
@@ -150,7 +173,7 @@ def main() -> None:
 
     print(f"# Run report - {run_dir.name}\n")
     if infra:
-        kinds = sorted({_last_err(e).split(":")[0][:40] for e in infra})
+        kinds = sorted({_infra_kind(e) for e in infra})
         print(f"> {len(infra)} iteration(s) in this run were lost to the LLM transport rather "
               f"than to the agent ({', '.join(kinds)}). They are excluded from the failure count "
               f"below, which reports experiments the agent actually ran and recovered from.\n")
