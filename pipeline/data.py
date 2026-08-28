@@ -77,17 +77,32 @@ FEATURE_CARDINALITIES: dict[str, int] = {
 # their `counts` field spans 45-181 daily records against a 30-day log -- both consistent with
 # historical attributes rather than anything fitted on the evaluation window.
 NUMERIC_LOG: tuple[str, ...] = ("duration_ms",)
-NUMERIC_USER: tuple[str, ...] = ("follow_user_num", "fans_user_num", "friend_user_num",
-                                 "register_days")
+# Prefixed because `follow_user_num` exists in BOTH user_features (people this user follows)
+# and video_features_statistic (people who followed via this video). They are different
+# quantities; unprefixed, the video column silently overwrote the user column and the brief
+# described one while the cache held the other.
+NUMERIC_USER_SRC: tuple[str, ...] = ("follow_user_num", "fans_user_num", "friend_user_num",
+                                     "register_days")
+NUMERIC_USER: tuple[str, ...] = tuple("user_" + c for c in NUMERIC_USER_SRC)
 NUMERIC_VIDEO_STAT: tuple[str, ...] = (
+    # every column of video_features_statistic. We screened these individually and only
+    # three reach 0.55 as standalone rankers -- but that screen scores each column ALONE,
+    # and a feature can be uninformative by itself and useful in a cross. The FM exists to
+    # find those. Judging them for the agent is the mistake; exposing them is cheap
+    # (~180MB of float32) and lets it decide.
     "counts", "show_cnt", "show_user_num", "play_cnt", "play_user_num", "play_duration",
-    "complete_play_cnt", "valid_play_cnt", "long_time_play_cnt", "short_time_play_cnt",
-    # unique-viewer counts, not event counts. Measured as standalone rankers on validation,
-    # long_time_play_user_num/show_cnt reaches 0.5811 -- above every column exposed before it --
-    # while the other 31 unexposed statistics sit at ~0.50, i.e. random.
-    "complete_play_user_num", "valid_play_user_num", "long_time_play_user_num",
-    "play_progress", "like_cnt", "comment_cnt", "follow_cnt", "share_cnt", "collect_cnt",
-    "download_cnt",
+    "complete_play_cnt", "complete_play_user_num", "valid_play_cnt", "valid_play_user_num",
+    "long_time_play_cnt", "long_time_play_user_num", "short_time_play_cnt",
+    "short_time_play_user_num", "play_progress", "comment_stay_duration", "like_cnt",
+    "like_user_num", "click_like_cnt", "double_click_cnt", "cancel_like_cnt",
+    "cancel_like_user_num", "comment_cnt", "comment_user_num", "direct_comment_cnt",
+    "reply_comment_cnt", "delete_comment_cnt", "delete_comment_user_num", "comment_like_cnt",
+    "comment_like_user_num", "follow_cnt", "follow_user_num", "cancel_follow_cnt",
+    "cancel_follow_user_num", "share_cnt", "share_user_num", "download_cnt",
+    "download_user_num", "report_cnt", "report_user_num", "reduce_similar_cnt",
+    "reduce_similar_user_num", "collect_cnt", "collect_user_num", "cancel_collect_cnt",
+    "cancel_collect_user_num", "direct_comment_user_num", "reply_comment_user_num",
+    "share_all_cnt", "share_all_user_num", "outsite_share_all_cnt",
 )
 NUMERIC_FEATURES: tuple[str, ...] = NUMERIC_LOG + NUMERIC_USER + NUMERIC_VIDEO_STAT
 
@@ -397,9 +412,9 @@ def _convert(log_path: Path, date_lo: str, date_hi: str, split: str,
             except (ValueError, KeyError):
                 num_arrs[f][i] = float("nan")
         u_rec = users.get(uid, {})
-        for f in NUMERIC_USER:
+        for src, f in zip(NUMERIC_USER_SRC, NUMERIC_USER):
             try:
-                num_arrs[f][i] = float(u_rec.get(f, ""))
+                num_arrs[f][i] = float(u_rec.get(src, ""))
             except ValueError:
                 num_arrs[f][i] = float("nan")
         if stats:
