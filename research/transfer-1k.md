@@ -102,3 +102,26 @@ The 1K brief is generated from these measured facts, not from the Pure literals 
 sees 1K's own row counts, ceiling and rungs. Cross-run memory is disabled for the 1K run
 (`--no-memory`): it distils prior runs relative to a baseline score, and Pure's 0.60-scale
 results carry no meaning against a 0.6422 anchor.
+
+## Columns deliberately not exposed
+
+Not every unreached column is a missed opportunity. Measured as standalone rankers on the Pure
+test split, against random at 0.4732 and item popularity at 0.5709:
+
+| column | primary | GAUC |
+|---|---|---|
+| video age at impression (from `upload_dt`) | 0.4808 | 0.5065 |
+| aspect ratio (`server_width`/`server_height`) | 0.4749 | 0.4958 |
+| `visible_status` | 0.4760 | 0.5000 |
+
+All three are at random. `visible_status` scores GAUC exactly 0.5000 because it is effectively
+constant. Video age looks promising in principle -- the YouTube DNN paper in the knowledge base
+argues for feeding item age explicitly -- but every video in KuaiRand-Pure was uploaded inside a
+**three-day** window (2022-04-09 to 04-11) while impressions span thirty days, so age is almost
+entirely a restatement of `s.date`, which the agent already has. The residual that varies within
+a user is a median 1.25-2.12 days, and it carries nothing.
+
+`is_rand` is 0 on every row of both standard logs, so it distinguishes nothing either.
+
+These are recorded so the question is not reopened. The columns that were worth exposing --
+`time_ms` and the 22 in `Split.num` -- earned it on the same measurement.
