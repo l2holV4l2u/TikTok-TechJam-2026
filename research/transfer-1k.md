@@ -149,3 +149,27 @@ with item-side features, which is what the FM is for.
 
 The screen was therefore used only where it is valid: `video_features_statistic` (item-level,
 three columns promoted on it) and the video metadata columns (item-level, all rejected on it).
+
+## Every raw column is now accounted for
+
+The data-exposure avenue is exhausted. Each column in the four KuaiRand-Pure files is now either
+reachable by the agent or measured and rejected:
+
+| source | status |
+|---|---|
+| log: `user_id`, `video_id`, `tab`, `duration_ms`, `date`, `time_ms` | exposed |
+| log: `hourmin` | hour is in `s.X`; the minute is **constant within every user's impression list** (0% of users vary), so it cannot reorder anything -- GAUC exactly 0.5000 |
+| log: `is_rand` | 0 on every row of both standard logs |
+| log: post-click columns | `s.aux` only -- they are outcomes of the row being scored |
+| `user_features`: ranges + 18 one-hots | `s.X` |
+| `user_features`: raw counts, `register_days` | `s.num` (prefixed `user_*`) |
+| `video_features_basic`: author, type, upload/music type, tag, duration | `s.X` |
+| `video_features_basic`: `upload_dt`, aspect, `visible_status` | measured at random (0.4749-0.4808 against a 0.4732 floor) |
+| `video_features_statistic`: all 51 columns | `s.num` |
+
+`hourmin` behaving as a session key rather than a timestamp is consistent with the tied
+timestamps `s.time_ms` shows: 57.9% of users have at least two impressions sharing a millisecond,
+because a feed page is logged as one batch.
+
+Nothing raw remains to expose. Further data work would have to be derived rather than read --
+and everything derivable from these columns, the agent can already compute for itself.
