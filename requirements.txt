@@ -1,0 +1,11 @@
+# Pinned to the versions every reported result in this repo was produced with.
+# The agent and harness are stdlib-only apart from these; the LLM client uses urllib,
+# not an SDK, so no provider package is required.
+
+numpy==2.1.3
+torch==2.12.0
+lightgbm==4.7.0
+
+# torch above is the CPU build. The benchmark is CPU-only by design -- the
+# organizers' baseline runs in ~40s on one core and GPU-hours are reported, not capped.
+# For CUDA, install the matching build from https://download.pytorch.org/whl/cu126

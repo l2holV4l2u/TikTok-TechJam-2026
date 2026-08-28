@@ -602,7 +602,10 @@ VS Code, Python 3.12 on Windows.
 ## APIs used
 OpenAI Chat Completions for the agent's proposer and its belief revision, via a stdlib
 `urllib` client —
-no SDK dependency. The interface is a single injected
+no SDK dependency. The submitted run used **gpt-5.6-sol** for both; later runs route belief
+revision to a second model (`--revision-model`), because rate limits are per-model and revision
+is ~37% of a run's requests. Every call, with its model, prompt, response and token counts, is
+recorded in each run's `llm_calls.jsonl`. The interface is a single injected
 `complete(prompt) -> (text, tokens_in, tokens_out)` callable, so any provider can be swapped in;
 an Anthropic client ships alongside it.
 
