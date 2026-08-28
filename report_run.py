@@ -145,8 +145,15 @@ def main() -> None:
     meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
     scored = [e for e in rows if e["status"] in ("ok", "reverted") and "primary" in e["metrics"]]
     failed = [e for e in rows if e["status"] in ("failed", "blacklisted")]
+    infra = [e for e in failed if _is_infra(e)]
+    failed = [e for e in failed if not _is_infra(e)]
 
     print(f"# Run report - {run_dir.name}\n")
+    if infra:
+        kinds = sorted({_last_err(e).split(":")[0][:40] for e in infra})
+        print(f"> {len(infra)} iteration(s) in this run were lost to the LLM transport rather "
+              f"than to the agent ({', '.join(kinds)}). They are excluded from the failure count "
+              f"below, which reports experiments the agent actually ran and recovered from.\n")
 
     # ---- the three stages of the loop, all performed by the agent
     print("## Loop stages executed by the agent\n")
