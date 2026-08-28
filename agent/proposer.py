@@ -106,6 +106,9 @@ PIPELINE API -- import these, do not reimplement them:
 RULES:
   - Fit on "train" only. Report on "valid". Never fit or select anything on "test",
     and never read test labels.
+  - load("test").y DOES NOT EXIST. Touching it -- .y, .y.sum(), .y.astype(), len(s.y),
+    anything -- raises RuntimeError and the whole iteration is lost. The test split gives
+    you features only; you produce scores for it and the harness scores them for you.
   - Everything in s.aux is an OUTCOME of the row being scored. Using any of it as an input
     feature is label leakage and invalidates the result.
   - No external datasets, and no pretrained weights trained on this benchmark's test labels.
