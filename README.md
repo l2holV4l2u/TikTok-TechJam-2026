@@ -134,6 +134,14 @@ rule (ε = 0.002 over N = 3 iterations). A 6-hour wall-clock backstop is enforce
 
 `python run_agent.py --dry-run` exercises the whole loop with a canned LLM and no network.
 
+**How the convergence rule is read.** The spec says a run is converged when validation
+"has not improved by more than eps = 0.002 over the last N = 3 consecutive iterations".
+We take that as written: the gain ACROSS the three-iteration window, not each single step
+beating the incumbent by eps. A run climbing +0.0008 an iteration has improved by 0.0024
+over three and is not converged. The stricter per-iteration reading is still evaluated and
+recorded as `strict_convergence_iteration` in `run_meta.json`, so a run can be checked
+against either reading.
+
 Other flags: `--epsilon` and `--patience` set the convergence rule (organizer values are the
 defaults), `--wall-clock-s` the 6-hour backstop, `--max-retries` how often a failed script is
 retried before its idea is retired, `--max-misses` how many non-improving children retire a

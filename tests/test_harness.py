@@ -137,6 +137,28 @@ def test_an_exhausted_daily_quota_stops_the_run_instead_of_being_retried():
         assert proposer.calls == 1, f"gave up after {proposer.calls} calls, expected 1"
 
 
+def test_convergence_uses_the_gain_across_the_window_not_each_single_step():
+    """The spec: converged when validation "has not improved by more than eps over the last
+    N = 3 consecutive iterations". A run gaining +0.0008 a step has improved 0.0024 over three
+    and is not converged; the per-step reading stopped r59 at iteration 6 of 50 while it was
+    still setting a record every step.
+    """
+    from agent.loop import converged
+
+    eps, n = 0.002, 3
+    assert not converged([0.6016, 0.6024, 0.6032, 0.6040], n, eps), (
+        "+0.0008 a step is +0.0024 across the window, which is more than eps")
+    assert converged([0.6016, 0.6018, 0.6020, 0.6022], n, eps), (
+        "+0.0002 a step is +0.0006 across the window, which is not more than eps")
+    assert not converged([0.6016, 0.6020, 0.6030], n, eps), (
+        "fewer than N+1 points is not yet a window")
+    flat = [0.6016] * 6
+    assert converged(flat, n, eps), "a flat run must still converge"
+    spike = [0.6016, 0.6100, 0.6100, 0.6100, 0.6100]
+    assert converged(spike, n, eps), (
+        "one big jump followed by three flat iterations is converged")
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_") and callable(v)]
     for test in tests:

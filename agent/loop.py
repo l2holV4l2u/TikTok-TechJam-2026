@@ -53,6 +53,9 @@ class LoopResult:
     llm_tokens_in: int = 0
     llm_tokens_out: int = 0
     candidates_evaluated: int = 0   # alternatives compared inside iterations, not just between
+    # the iteration at which the stricter per-iteration reading of the convergence rule
+    # would have stopped, recorded so a judge can check the run against either reading
+    strict_converged_iter: int | None = None
 
 
 class Proposer(Protocol):
@@ -230,6 +233,14 @@ def _publish_incumbent(evaluator, artifacts: Path, run_dir: Path, iter_id: int,
     return diagnosis
 
 
+def converged(best_curve: list[float], patience: int, epsilon: float) -> bool:
+    """The organizers' rule, read as written: has the validation best improved by more than
+    epsilon ACROSS the last N iterations -- not whether each single step beat it by epsilon.
+    """
+    return (len(best_curve) > patience
+            and best_curve[-1] - best_curve[-1 - patience] <= epsilon)
+
+
 def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
              workdir, primary: str = "primary", epsilon: float = 0.002,
              patience: int = 3, max_iters: int = 50, timeout: float = 300,
@@ -248,6 +259,7 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
     out = LoopResult("max_iters", tree=tree)
     spent = 0.0
     stale = 0
+    best_curve: list[float] = []   # validation best after each scored improve iteration
     best = float("-inf")
     selection_best = float("-inf")
     feedback: str | None = None
@@ -277,12 +289,15 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
             phase = "baseline"
         else:
             phase = "improve"
-            # The organizers' rule -- "validation has not improved by more than eps over the
-            # last N consecutive iterations" -- admits two readings: no SINGLE iteration beats
-            # the incumbent by eps (standard early stopping), or the CUMULATIVE gain across the
-            # window is under eps. We take the first: it is the stricter of the two, it is the
-            # usual convention, and a checkpoint valid under it is valid under either.
-            if stale >= patience:
+            # The organizers' rule: "converged when validation score has not improved by more
+            # than eps over the last N consecutive iterations". We read that as written -- the
+            # gain ACROSS the window, not each single step beating the incumbent by eps. The
+            # per-step reading stops a run climbing +0.0008 an iteration, which under the spec
+            # has improved by 0.0024 over three and is not converged. r59 ended at iteration 6
+            # of 50 still setting a record every step. Both stop points are recorded.
+            if stale >= patience and out.strict_converged_iter is None:
+                out.strict_converged_iter = i
+            if converged(best_curve, patience, epsilon):
                 return finish("converged")
 
         # live budget state: how close the convergence rule is to ending the run
@@ -481,6 +496,7 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
             best, stale = score, 0
         else:
             stale += 1
+        best_curve.append(selection_best)
 
         _revise(revise_fn, ledger, out, context, knowledge, findings, stale, patience)
 

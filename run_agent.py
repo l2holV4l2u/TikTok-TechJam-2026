@@ -278,6 +278,10 @@ def main() -> None:
         "provider": ("replay" if args.replay else "dry-run" if args.dry_run
                      else __import__("os").environ.get("LLM_PROVIDER", "anthropic")),
         "stop_reason": r.stop_reason,
+        # The convergence rule is read as the gain across the N-iteration window, which
+        # is how the spec words it. This records where the stricter per-iteration reading
+        # would have stopped, so the run can be checked against either.
+        "strict_convergence_iteration": r.strict_converged_iter,
         "iterations": len(entries),
         "iteration_cap": args.iters,
         "wall_clock_s": wall,
