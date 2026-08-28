@@ -598,15 +598,18 @@ repay its startup cost; it is not automatically faster on this benchmark.
 Across every eligible run, the variable that tracks the final result is not which capabilities
 the harness exposed. It is how many improve iterations actually finished.
 
-| run | iterations that scored | lost to the API | best validation |
-|---|---|---|---|
-| r35 | **6** | 0 | **0.6049** |
-| r34 | 4 | 0 | 0.6043 |
-| r33 | 3 | 0 | 0.6044 |
-| r36, r37 | 3 | 0 | 0.6037 |
-| r50 | 3 | 0 | 0.6027 |
-| r51 | 3 | 4 | 0.6031 |
-| r49 | 2 | 5 | 0.6025 |
+Measured as gain over each run's own baseline reproduction, which removes the noise in where a
+run happens to start:
+
+| scored improve iterations | runs | gain over that run's baseline |
+|---|---|---|
+| **6** | r35 | **+0.0029** |
+| **4** | r34 | **+0.0030** |
+| 3 | r27, r28, r29, r30, r33, r36, r37, r49, r50, r51, r53 | +0.0000 … +0.0019 |
+
+Every run that completed three improve iterations landed between +0.0000 and +0.0019, across
+four different harness versions and two different feature contracts. The only two runs that
+exceeded +0.0029 are the only two that completed more than three.
 
 The mechanism is compounding. Each iteration edits the best script so far, so a run that
 completes six attempts is refining a much stronger incumbent by the sixth than a run that
