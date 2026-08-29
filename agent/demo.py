@@ -254,7 +254,9 @@ def test_artifacts_dir_persists_across_iterations():
         wd = Path(tmp) / "scripts"
         run_loop(P([]), StdoutJsonEvaluator(), _ledger(tmp), workdir=wd,
                  patience=99, timeout=30, revise_fn=revise_fn)
-        shared = wd.parent / "artifacts" / "shared.txt"
+        # RUN_ARTIFACTS is the slot's own scratch directory: private, so parallel slots cannot
+        # overwrite each other, and persistent across the turns that slot runs.
+        shared = wd.parent / "artifacts" / "slot_0" / "shared.txt"
         assert shared.exists(), "the artifacts directory must outlive a single iteration"
         assert shared.read_text() == "xxx", shared.read_text()
         carried = [f for f in saw if "carried" in f]

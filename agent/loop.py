@@ -15,10 +15,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
+from concurrent.futures import ThreadPoolExecutor
+
 from .executor import RunResult, run_script
 from .ensemble import retain_or_blend
 from .ledger import Entry, Ledger
 from .llm import LLMDailyLimit
+from .portfolio import CORR_ALERT, Slot, log_portfolio, pairwise_rank_correlation
 from .recovery import RETRY, Recovery
 from .critic import review as critic_review
 from .knowledge import Knowledge
@@ -56,6 +59,15 @@ class LoopResult:
     # the iteration at which the stricter per-iteration reading of the convergence rule
     # would have stopped, recorded so a judge can check the run against either reading
     strict_converged_iter: int | None = None
+    # A portfolio turn launches several scripts, so "iteration" has two defensible readings and
+    # the run reports both rather than picking the flattering one. `turns` is the loop pass --
+    # one hypothesis-to-score cycle, the analogue of Figure 1's iteration, and what the
+    # convergence rule is measured against. `scripts` is every executed script, which is what
+    # the 50-iteration cap counts here. At one slot the two are equal.
+    turns: int = 0
+    scripts: int = 0
+    slots: int = 1
+    mean_slot_correlation: float | None = None
 
 
 class Proposer(Protocol):
@@ -238,6 +250,106 @@ def _publish_incumbent(evaluator, artifacts: Path, run_dir: Path, iter_id: int,
     return diagnosis
 
 
+def _artifact_dirs(workdir: Path, slot_id: int) -> tuple[Path, Path]:
+    """(private scratch for this slot, shared directory holding the trusted incumbent).
+
+    A run keeps one artifacts tree so a script does not retrain what an earlier one already
+    fitted -- in one run per-iteration time went 84s -> 368s without it. Under a portfolio
+    several scripts run at once, and they cannot share a scratch directory: two of them writing
+    the same filename is a silent corruption with no error to trace. Each slot therefore gets
+    its own writable `slot_N/`, while the controller's verified incumbent lives in `shared/`,
+    which slots read and only the controller writes.
+    """
+    root = (workdir.parent / "artifacts").resolve()
+    scratch = root / f"slot_{slot_id}"
+    shared = root / "shared"
+    scratch.mkdir(parents=True, exist_ok=True)
+    shared.mkdir(parents=True, exist_ok=True)
+    return scratch, shared
+
+
+def _stage_script(workdir: Path, iter_id: int, code: str) -> tuple[Path, Path]:
+    """Write the script for this iteration and make its output directory."""
+    script = (workdir / f"iter_{iter_id}.py").resolve()
+    script.write_text(code, encoding="utf-8")
+    iter_out = (workdir / f"iter_{iter_id}_out").resolve()
+    iter_out.mkdir(parents=True, exist_ok=True)
+    return script, iter_out
+
+
+def _execute(script: Path, iter_out: Path, slot_id: int, workdir: Path,
+             timeout: float) -> RunResult:
+    """Run one generated script with its slot's private scratch and the shared incumbent."""
+    scratch, shared = _artifact_dirs(workdir, slot_id)
+    return run_script(script, timeout=timeout, cwd=None, pythonpath=_PROJECT_ROOT,
+                      extra_env={"ITER_OUT": str(iter_out),
+                                 "RUN_ARTIFACTS": str(scratch),
+                                 "SHARED_ARTIFACTS": str(shared),
+                                 # Generated code never needs hidden-test labels. The loader
+                                 # still exposes len/shape for allocation, but array access
+                                 # fails instead of silently enabling test selection.
+                                 "AGENT_HIDE_TEST_LABELS": "1"})
+
+
+def _record_proposer_error(exc: Exception, ledger: Ledger, iter_id: int, phase: str,
+                           slot_id: int | None, turn: int | None) -> str | None:
+    """Log a proposer failure. Returns a stop reason when the run cannot continue.
+
+    An LLM outage or rate limit must not kill a long unattended run. Every key being out of
+    daily quota is different: it does not clear on a retry, and retrying it burned 50 minutes
+    of r57 rediscovering the same cap six times.
+    """
+    ledger.append(Entry(iter_id, None, 0, "(proposer unavailable)", "", {}, 0.0, 0, 0,
+                        "failed", f"{type(exc).__name__}: {exc}"[:2000], phase,
+                        slot_id=slot_id, turn=turn))
+    return "llm_daily_limit" if isinstance(exc, LLMDailyLimit) else None
+
+
+def _sibling_note(slots: list[Slot], me: Slot) -> str:
+    """What the other slots are attempting, so a turn does not spend itself three times over.
+
+    A negative constraint, not a positive one: naming architectures for a slot to build would
+    be a human prior on method space, which is the one thing the brief refuses to carry. Saying
+    what is already covered adds no prior -- it is what the broaden instruction already does
+    across time, applied across slots instead.
+    """
+    others = [s for s in slots if s.slot_id != me.slot_id and s.last_hypothesis]
+    if not others:
+        return ""
+    return "\n".join(f"  - slot {s.slot_id}: {s.last_hypothesis[:120]}" for s in others)
+
+
+def _record_turn(run_dir: Path, turn: int, batch: list[dict], slots: list[Slot],
+                 out: "LoopResult", epsilon: float) -> None:
+    """Measure whether the slots actually disagreed, and write it to portfolio.jsonl.
+
+    This is the acceptance test for the portfolio, not decoration. Slots that rank validation
+    the same way cost n times as much and return one slot's worth of information; the run logs
+    already show this benchmark's components sitting at 0.94+ correlation. If the number here
+    stays above CORR_ALERT the honest conclusion is that the extra slots bought nothing.
+    """
+    if len(slots) < 2:
+        return
+    scores = {s.slot_id: s.last_valid_scores for s in slots}
+    if sum(v is not None for v in scores.values()) < 2:
+        return
+    try:
+        from pipeline.data import load
+        user_id = load("valid").user_id
+    except Exception:                      # no cache in a unit test: skip, never crash the run
+        return
+    corr = pairwise_rank_correlation(scores, user_id)
+    out.mean_slot_correlation = corr["mean"]
+    log_portfolio(run_dir, {
+        "turn": turn,
+        "scripts": [b["iter_id"] for b in batch],
+        "slots": [{"slot_id": s.slot_id, "best": s.best, "stale": s.stale,
+                   "origin": s.origin, "hypothesis": s.last_hypothesis[:120]} for s in slots],
+        "correlation": corr,
+        "alert": corr["max"] is not None and corr["max"] >= CORR_ALERT,
+    })
+
+
 def converged(best_curve: list[float], patience: int, epsilon: float) -> bool:
     """The organizers' rule, read as written: has the validation best improved by more than
     epsilon ACROSS the last N iterations -- not whether each single step beat it by epsilon.
@@ -255,14 +367,15 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
              memory: str = "", baseline: float = 0.6016, ceiling: float | None = None,
              baseline_tolerance: float = BASELINE_TOLERANCE,
              max_instant_failures: int = 5, max_proposer_errors: int = 6,
-             force_mode: str = "") -> LoopResult:
+             force_mode: str = "", n_slots: int = 1) -> LoopResult:
     tree = tree if tree is not None else Tree(epsilon=epsilon)
     recovery = recovery or Recovery()
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
+    slots = [Slot(slot_id=k) for k in range(max(1, n_slots))]
 
     t_start = time.perf_counter()
-    out = LoopResult("max_iters", tree=tree)
+    out = LoopResult("max_iters", tree=tree, slots=len(slots))
     spent = 0.0
     stale = 0
     best_curve: list[float] = []   # validation best after each scored improve iteration
@@ -284,7 +397,9 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         out.script_seconds = spent
         return out
 
-    for i in range(max_iters):
+    turn = 0            # one pass of the loop; an improve turn launches one script per slot
+    i = 0               # script counter: the 50-iteration cap counts scripts, the stricter read
+    while i < max_iters:
         if elapsed() >= wall_clock_limit_s:
             return finish("wall_clock")
 
@@ -313,20 +428,7 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         # Adaptive search policy, after FML-bench (arXiv:2605.17373): an agent that switches to
         # broader exploration on detecting stagnation outperformed every fixed strategy, and
         # breadth should track opportunity density -- greedy while gains are dense, broad when
-        # they are sparse. Gains are sparse here: almost nothing clears epsilon. One
-        # non-improving iteration is our switch signal, because with only `patience` of them
-        # before the run ends, waiting for a longer stagnation streak wastes the whole budget.
-        # The first improve iteration is spent on breadth, not depth. Measured on this
-        # dataset, distinct model families differ by 0.0019 primary while two seeds of the
-        # same family differ by 0.0002 -- the choice of family is worth more than anything
-        # tuning it recovers, and the convergence rule charges the same one iteration either
-        # way. Later iterations refine whatever the sweep found.
-        # Sweep again on the FIRST miss, not just at the start. Measured over r70-r74: a
-        # family sweep gains 0.0027-0.0031 and clears epsilon alone, while all 15 refine
-        # iterations gained 0.0000-0.0004 and none did. Three sub-epsilon iterations end the
-        # run, so the runs converged at 6 of 50 iterations having spent 16 min of the 6h
-        # ceiling. Breadth is what buys the budget; a second miss falls through to broaden,
-        # which can leave the model stage entirely.
+        # they are sparse. Gains are sparse here: almost nothing clears epsilon.
         # Every improve iteration sweeps model families. Measured over r76-r78 on the hidden
         # test set, which is what the ranking uses: family sweeps moved it +0.00224, while two
         # tune iterations and a 9->37 field expansion moved it -0.00001 between them. Refine
@@ -339,104 +441,79 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         else:
             mode = "sweep" if phase == "improve" else "refine"
         context["mode"] = mode
-        parent = tree.select(mode) if phase == "improve" else None
 
-        try:
-            p = proposer.propose(phase=phase, history=ledger.read(),
-                                 blacklist=recovery.blacklist, feedback=feedback,
-                                 parent=parent, context=context)
-        except Exception as exc:
-            # an LLM outage or rate limit must not kill a long unattended run
-            proposer_errors += 1
-            ledger.append(Entry(i, None, 0, "(proposer unavailable)", "", {}, 0.0, 0, 0,
-                                "failed", f"{type(exc).__name__}: {exc}"[:2000], phase))
-            # Every key being out of daily quota is not an outage that clears on a retry.
-            # Retrying it burned 50 minutes of r57 rediscovering the same cap six times.
-            if isinstance(exc, LLMDailyLimit):
-                return finish("llm_daily_limit")
-            if proposer_errors >= max_proposer_errors:
-                return finish("proposer_unavailable")
-            time.sleep(min(60.0, 5.0 * proposer_errors))
-            continue
-        proposer_errors = 0
-        if p is None:
-            return finish("exhausted")
-        out.llm_tokens_in += p.tokens_in
-        out.llm_tokens_out += p.tokens_out
+        # ================================================================= eda / baseline
+        # One script, no portfolio: there is nothing to parallelise before a solution exists.
+        if phase != "improve":
+            parent = None
+            try:
+                p = proposer.propose(phase=phase, history=ledger.read(),
+                                     blacklist=recovery.blacklist, feedback=feedback,
+                                     parent=parent, context=context)
+            except Exception as exc:
+                stop = _record_proposer_error(exc, ledger, i, phase, None, None)
+                proposer_errors += 1
+                if stop:
+                    return finish(stop)
+                if proposer_errors >= max_proposer_errors:
+                    return finish("proposer_unavailable")
+                time.sleep(min(60.0, 5.0 * proposer_errors))
+                i += 1
+                continue
+            proposer_errors = 0
+            if p is None:
+                return finish("exhausted")
+            out.llm_tokens_in += p.tokens_in
+            out.llm_tokens_out += p.tokens_out
 
-        script = (workdir / f"iter_{i}.py").resolve()
-        script.write_text(p.code, encoding="utf-8")
-        iter_out = (workdir / f"iter_{i}_out").resolve()
-        iter_out.mkdir(parents=True, exist_ok=True)
-        # a scratch directory shared by every iteration of this run. Without it each script
-        # retrains from cold: in one run the per-iteration time went 84s -> 368s purely because
-        # later iterations rebuilt the components earlier ones had already fitted, which caps
-        # how much an iteration can attempt before it hits the wall-clock limit.
-        artifacts = (workdir.parent / "artifacts").resolve()
-        artifacts.mkdir(parents=True, exist_ok=True)
-        res = run_script(script, timeout=timeout, cwd=None, pythonpath=_PROJECT_ROOT,
-                         extra_env={"ITER_OUT": str(iter_out),
-                                    "RUN_ARTIFACTS": str(artifacts),
-                                    # Generated code never needs hidden-test labels. The loader
-                                    # still exposes len/shape for allocation, but array access
-                                    # fails instead of silently enabling test selection.
-                                    "AGENT_HIDE_TEST_LABELS": "1"})
-        spent += res.seconds
-        parent_id = parent.iter_id if parent is not None else None
-        findings = parse_findings(res.stdout)
+            script, iter_out = _stage_script(workdir, i, p.code)
+            res = _execute(script, iter_out, 0, workdir, timeout)
+            spent += res.seconds
+            findings = parse_findings(res.stdout)
 
-        # ---- EDA produces prose, not a score; judge it on whether it ran and said anything
-        if phase == "eda":
-            eda_attempts += 1
-            if res.ok and res.stdout.strip():
-                context["eda"] = res.stdout.strip()
-                (workdir.parent / "eda_report.txt").write_text(context["eda"], encoding="utf-8")
-                feedback = None
-                ledger.append(Entry(i, None, 0, p.hypothesis, p.code, {}, res.seconds,
-                                    p.tokens_in, p.tokens_out, "ok", None, "eda"))
-                out.eda_ok = True
-            else:
-                feedback = _failure_text(res, timeout, primary)
-                ledger.append(Entry(i, None, 0, p.hypothesis, p.code, {}, res.seconds,
-                                    p.tokens_in, p.tokens_out, "failed", feedback[:2000], "eda"))
-            continue
+            # ---- EDA produces prose, not a score; judge it on whether it ran and said anything
+            if phase == "eda":
+                eda_attempts += 1
+                if res.ok and res.stdout.strip():
+                    context["eda"] = res.stdout.strip()
+                    (workdir.parent / "eda_report.txt").write_text(context["eda"],
+                                                                   encoding="utf-8")
+                    feedback = None
+                    ledger.append(Entry(i, None, 0, p.hypothesis, p.code, {}, res.seconds,
+                                        p.tokens_in, p.tokens_out, "ok", None, "eda",
+                                        turn=turn))
+                    out.eda_ok = True
+                else:
+                    feedback = _failure_text(res, timeout, primary)
+                    ledger.append(Entry(i, None, 0, p.hypothesis, p.code, {}, res.seconds,
+                                        p.tokens_in, p.tokens_out, "failed", feedback[:2000],
+                                        "eda", turn=turn))
+                i += 1
+                continue
 
-        metrics = evaluator.evaluate(res, iter_out) if res.ok else None
-        scored = metrics is not None and primary in metrics
-
-        # ---- a run that produced nothing at all: retry, or declare the box broken
-        if not scored:
-            why = getattr(evaluator, "last_error", None) or _failure_text(res, timeout, primary)
-            action, feedback = recovery.on_failure(p.hypothesis, why)
-            if phase == "baseline":
+            metrics = evaluator.evaluate(res, iter_out) if res.ok else None
+            if metrics is None or primary not in metrics:
+                why = (getattr(evaluator, "last_error", None)
+                       or _failure_text(res, timeout, primary))
+                action, feedback = recovery.on_failure(p.hypothesis, why)
                 baseline_attempts += 1
-            ledger.append(Entry(i, parent_id, 0, p.hypothesis, p.code, {}, res.seconds,
-                                p.tokens_in, p.tokens_out,
-                                "failed" if action == RETRY else "blacklisted", feedback, phase))
-            # a child that crashed is evidence against its parent, not a free retry. Without
-            # this, only scored children ever counted toward retirement, so a node producing
-            # nothing but crashes stayed selectable forever -- r38_1k #8 spent two children and
-            # 78 minutes that way, one of them timing out at 4,373s.
-            tree.record_failure(parent_id, res.seconds)
-            # a script that dies instantly with no output never even started: the interpreter or
-            # the machine is broken, not the code. Grinding on shreds the budget for nothing.
-            if res.seconds < 1.0 and not res.stdout and not res.stderr.strip():
-                instant_failures += 1
-                if instant_failures >= max_instant_failures:
-                    return finish("environment_broken")
-            else:
-                instant_failures = 0
-            continue
+                ledger.append(Entry(i, None, 0, p.hypothesis, p.code, {}, res.seconds,
+                                    p.tokens_in, p.tokens_out,
+                                    "failed" if action == RETRY else "blacklisted", feedback,
+                                    phase, turn=turn))
+                if res.seconds < 1.0 and not res.stdout and not res.stderr.strip():
+                    instant_failures += 1
+                    if instant_failures >= max_instant_failures:
+                        return finish("environment_broken")
+                else:
+                    instant_failures = 0
+                i += 1
+                continue
 
-        instant_failures = 0
-        if phase == "improve":
-            metrics = retain_or_blend(metrics, evaluator, artifacts, workdir.parent, i)
-        score = metrics[primary]
-        cands = parse_candidates(res.stdout)
-
-        # ---- baseline reproduction is checked against the organizers' published number
-        if phase == "baseline":
+            instant_failures = 0
+            score = metrics[primary]
             baseline_attempts += 1
+            # ---- baseline reproduction is checked against the organizers' published number
             if abs(score - baseline) <= baseline_tolerance:
                 out.baseline_primary = score
                 feedback = None
@@ -454,78 +531,203 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
                             + " Fix the pipeline and reproduce it again.")
                 status = "reverted"
             ledger.append(Entry(i, None, 0, p.hypothesis, p.code, metrics, res.seconds,
-                                p.tokens_in, p.tokens_out, status, feedback, "baseline"))
+                                p.tokens_in, p.tokens_out, status, feedback, "baseline",
+                                turn=turn))
             if out.baseline_primary is not None:
-                tree.add(Node(i, None, p.hypothesis, p.code, score))
+                root = Node(i, None, p.hypothesis, p.code, score)
+                tree.add(root)
                 best, stale = score, 0
+                for slot in slots:
+                    slot.parent, slot.best = root, score
                 if status == "ok" and score > selection_best:
                     selection_best = score
+                    _, shared = _artifact_dirs(workdir, 0)
                     context["diagnosis"] = _publish_incumbent(
-                        evaluator, artifacts, workdir.parent, i, score)
-                    context["incumbent_ready"] = getattr(evaluator, "last_scores", None) is not None
+                        evaluator, shared, workdir.parent, i, score)
+                    context["incumbent_ready"] = (
+                        getattr(evaluator, "last_scores", None) is not None)
+            i += 1
             if out.baseline_primary is None and baseline_attempts >= MAX_BASELINE_ATTEMPTS:
                 _revise(revise_fn, ledger, out, context, knowledge, findings, stale, patience)
                 return finish("baseline_not_reproduced")
             _revise(revise_fn, ledger, out, context, knowledge, findings, stale, patience)
             continue
 
-        # ---- improve
-        # Arbor (arXiv:2606.12563) ablates its critic and reports the largest drop of any
-        # component. Ours had none for improve iterations: the leakage warning fires only during
-        # baseline reproduction, so an iteration that scored 0.95 by reading the label would have
-        # been accepted as the leader. Rejection is recoverable: the proposer receives the exact
-        # reason and may re-run a genuine breakthrough without the unsafe access pattern.
-        # Judge the generated candidate itself, before a safe incumbent blend can damp an
-        # implausible or leaky raw score enough to hide it from the integrity thresholds.
-        critic_score = metrics.get("raw_candidate_primary", score)
-        flags = critic_review(p.code, critic_score, best, ceiling)
-        if flags:
-            feedback = ("This result was not accepted as-is. " + " ".join(flags)
-                        + " Re-run the check yourself and either show the result survives it or "
-                          "propose something else.")
-            ledger.append(Entry(i, parent_id, 0, p.hypothesis, p.code, metrics, res.seconds,
-                                p.tokens_in, p.tokens_out, "rejected", feedback, "improve"))
-            # A rejected score is neither a search node nor a submission candidate. Count the
-            # attempt against its parent so integrity failures cannot create an immortal branch.
-            tree.record_child(parent_id, float("-inf"), res.seconds)
-            stale += 1
-            _revise(revise_fn, ledger, out, context, knowledge, "", stale, patience)
-            continue
+        # ================================================================= improve turn
+        turn += 1
+        # 1. PROPOSE, one slot at a time. llm.py enforces a minimum request interval and its
+        #    daily-cap failover mutates shared key state, so these calls must not overlap.
+        batch: list[dict] = []
+        for slot in slots:
+            if i + len(batch) >= max_iters:
+                break
+            slot.parent = tree.select(mode)
+            context["siblings"] = _sibling_note(slots, slot)
+            context["seed_note"] = slot.seed_note
+            iter_id = i + len(batch)
+            try:
+                p = proposer.propose(phase=phase, history=ledger.read(),
+                                     blacklist=recovery.blacklist, feedback=feedback,
+                                     parent=slot.parent, context=context)
+            except Exception as exc:
+                stop = _record_proposer_error(exc, ledger, iter_id, phase, slot.slot_id, turn)
+                proposer_errors += 1
+                if stop:
+                    return finish(stop)
+                if proposer_errors >= max_proposer_errors:
+                    return finish("proposer_unavailable")
+                batch.append({"slot": slot, "proposal": None, "iter_id": iter_id})
+                continue
+            proposer_errors = 0
+            if p is None:
+                if not batch:
+                    return finish("exhausted")
+                break
+            out.llm_tokens_in += p.tokens_in
+            out.llm_tokens_out += p.tokens_out
+            script, iter_out = _stage_script(workdir, iter_id, p.code)
+            batch.append({"slot": slot, "proposal": p, "iter_id": iter_id,
+                          "script": script, "iter_out": iter_out})
+        if not batch:
+            return finish("exhausted")
 
-        recovery.on_success(p.hypothesis)
+        # 2. EXECUTE concurrently. Each slot has its own script, output directory and scratch
+        #    space, so the only shared state is the read-only incumbent in artifacts/shared.
+        runnable = [b for b in batch if b.get("proposal") is not None]
+        if len(runnable) > 1:
+            with ThreadPoolExecutor(max_workers=len(runnable)) as pool:
+                for b, res in zip(runnable, pool.map(
+                        lambda b: _execute(b["script"], b["iter_out"], b["slot"].slot_id,
+                                           workdir, timeout), runnable)):
+                    b["result"] = res
+        elif runnable:
+            b = runnable[0]
+            b["result"] = _execute(b["script"], b["iter_out"], b["slot"].slot_id,
+                                   workdir, timeout)
 
-        if cands:
-            out.candidates_evaluated += len(cands)
-            with (workdir.parent / "candidates.jsonl").open("a", encoding="utf-8") as f:
-                f.write(json.dumps({"iter_id": i, "phase": phase, "candidates": cands}) + "\n")
+        # 3. PROCESS sequentially, in slot order, so a later slot can blend against an earlier
+        #    one's result and the outcome does not depend on which subprocess finished first.
+        turn_scored = turn_improved = False
+        findings_seen: list[str] = []
+        for b in batch:
+            p, res, iter_id = b.get("proposal"), b.get("result"), b["iter_id"]
+            slot = b["slot"]
+            if p is None or res is None:
+                continue
+            spent += res.seconds
+            slot.lineage.append(iter_id)
+            slot.last_hypothesis = p.hypothesis
+            parent_id = slot.parent.iter_id if slot.parent is not None else None
+            findings = parse_findings(res.stdout)
+            if findings:
+                findings_seen.append(findings)
 
-        improved = score > best + epsilon
-        ledger.append(Entry(i, parent_id, 0, p.hypothesis, p.code, metrics, res.seconds,
-                            p.tokens_in, p.tokens_out, "ok" if improved else "kept",
-                            None, "improve"))
-        feedback = None
-        tree.add(Node(i, parent_id, p.hypothesis, p.code, score))
-        tree.record_child(parent_id, score, res.seconds)
+            metrics = evaluator.evaluate(res, b["iter_out"]) if res.ok else None
+            if metrics is None or primary not in metrics:
+                why = (getattr(evaluator, "last_error", None)
+                       or _failure_text(res, timeout, primary))
+                action, feedback = recovery.on_failure(p.hypothesis, why)
+                ledger.append(Entry(iter_id, parent_id, 0, p.hypothesis, p.code, {},
+                                    res.seconds, p.tokens_in, p.tokens_out,
+                                    "failed" if action == RETRY else "blacklisted", feedback,
+                                    "improve", slot_id=slot.slot_id, turn=turn))
+                # a child that crashed is evidence against its parent, not a free retry.
+                # r38_1k #8 spent two children and 78 minutes on crashes that moved it no
+                # closer to retirement, one of them timing out at 4,373s.
+                tree.record_failure(parent_id, res.seconds)
+                slot.stale += 1
+                if res.seconds < 1.0 and not res.stdout and not res.stderr.strip():
+                    instant_failures += 1
+                    if instant_failures >= max_instant_failures:
+                        return finish("environment_broken")
+                else:
+                    instant_failures = 0
+                continue
 
-        if score > selection_best:
-            selection_best = score
-            context["diagnosis"] = _publish_incumbent(
-                evaluator, artifacts, workdir.parent, i, score)
-            context["incumbent_ready"] = getattr(evaluator, "last_scores", None) is not None
+            instant_failures = 0
+            _, shared = _artifact_dirs(workdir, slot.slot_id)
+            metrics = retain_or_blend(metrics, evaluator, shared, workdir.parent, iter_id)
+            score = metrics[primary]
+            cands = parse_candidates(res.stdout)
 
-        # retire an idea only when it is clearly worse; a result that ties or sets a record is
-        # not evidence the idea is a dead end
-        idea_score = metrics.get("raw_candidate_primary", score)
-        if idea_score < best - 2 * epsilon:
-            recovery.on_underperform(p.hypothesis)
+            # Arbor (arXiv:2606.12563) ablates its critic and reports the largest drop of any
+            # component. Judge the generated candidate itself, before a safe incumbent blend
+            # can damp an implausible or leaky raw score below the integrity thresholds.
+            critic_score = metrics.get("raw_candidate_primary", score)
+            flags = critic_review(p.code, critic_score, best, ceiling)
+            if flags:
+                feedback = ("This result was not accepted as-is. " + " ".join(flags)
+                            + " Re-run the check yourself and either show the result survives "
+                              "it or propose something else.")
+                ledger.append(Entry(iter_id, parent_id, 0, p.hypothesis, p.code, metrics,
+                                    res.seconds, p.tokens_in, p.tokens_out, "rejected",
+                                    feedback, "improve", slot_id=slot.slot_id, turn=turn))
+                # A rejected score is neither a search node nor a submission candidate. Count
+                # the attempt against its parent so integrity failures cannot create an
+                # immortal branch.
+                tree.record_child(parent_id, float("-inf"), res.seconds)
+                slot.stale += 1
+                continue
 
-        if improved:
-            best, stale = score, 0
-        else:
-            stale += 1
-        best_curve.append(selection_best)
+            recovery.on_success(p.hypothesis)
+            if cands:
+                out.candidates_evaluated += len(cands)
+                with (workdir.parent / "candidates.jsonl").open("a", encoding="utf-8") as f:
+                    f.write(json.dumps({"iter_id": iter_id, "phase": "improve",
+                                        "slot_id": slot.slot_id, "turn": turn,
+                                        "candidates": cands}) + "\n")
 
-        _revise(revise_fn, ledger, out, context, knowledge, findings, stale, patience)
+            improved = score > best + epsilon
+            ledger.append(Entry(iter_id, parent_id, 0, p.hypothesis, p.code, metrics,
+                                res.seconds, p.tokens_in, p.tokens_out,
+                                "ok" if improved else "kept", None, "improve",
+                                slot_id=slot.slot_id, turn=turn))
+            feedback = None
+            tree.add(Node(iter_id, parent_id, p.hypothesis, p.code, score))
+            tree.record_child(parent_id, score, res.seconds)
+            slot.last_valid_scores = getattr(evaluator, "last_scores", None)
+            turn_scored = True
+
+            if score > selection_best:
+                selection_best = score
+                context["diagnosis"] = _publish_incumbent(
+                    evaluator, shared, workdir.parent, iter_id, score)
+                context["incumbent_ready"] = (
+                    getattr(evaluator, "last_scores", None) is not None)
+
+            # retire an idea only when it is clearly worse; a result that ties or sets a
+            # record is not evidence the idea is a dead end
+            idea_score = metrics.get("raw_candidate_primary", score)
+            if idea_score < best - 2 * epsilon:
+                recovery.on_underperform(p.hypothesis)
+
+            if improved:
+                best = score
+                turn_improved = True
+            if score > slot.best + epsilon:
+                slot.best, slot.stale = score, 0
+            else:
+                slot.best = max(slot.best, score)
+                slot.stale += 1
+
+        i += len(batch)
+
+        # 4. ONE convergence step per turn. The turn's score is the best of its slots, and that
+        #    single curve is what the organizers' rule is measured against -- no slot carries a
+        #    counter of its own. Both readings are recorded: `turn` here, and the stricter
+        #    per-script reading in strict_convergence_script, so a judge can check either.
+        if turn_scored:
+            best_curve.append(selection_best)
+            if turn_improved:
+                stale = 0
+            else:
+                stale += 1
+        out.turns = turn
+        out.scripts = i
+        _record_turn(workdir.parent, turn, batch, slots, out, epsilon)
+
+        _revise(revise_fn, ledger, out, context, knowledge,
+                "\n".join(findings_seen)[:MAX_FINDINGS_CHARS], stale, patience)
 
     return finish("max_iters")
 

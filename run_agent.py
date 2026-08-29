@@ -131,6 +131,13 @@ def main() -> None:
                     help="pin every improve iteration to one mode; diagnostic, not for scoring")
     ap.add_argument("--max-misses", type=int, default=2,
                     help="non-improving children before a search node is retired")
+    # Capped at 3 deliberately. Selecting the max of k candidates on 124,909 validation rows is
+    # inflated by selection alone -- about +0.00114 at k=8, +0.00145 at k=18 and +0.00180 at
+    # k=50 against the baseline's reported 5-seed sigma of 0.0008. Three slots over a typical
+    # run costs ~+0.0003 of validation that will not transfer, which is affordable against a
+    # ~+0.005 effect; eight would start eating the result it is trying to measure.
+    ap.add_argument("--slots", type=int, default=1, choices=[1, 2, 3],
+                    help="solution lineages advanced per turn. 1 is the sequential loop")
     ap.add_argument("--baseline-valid", type=float, default=BASELINE_VALID,
                     help="validation score the agent must reproduce; measure it with research.baseline_reference on a non-Pure variant")
     ap.add_argument("--baseline-test", type=float, default=BASELINE_TEST,
@@ -251,6 +258,7 @@ def main() -> None:
             # the perfect-ranking ceiling, measured by agent.facts. The critic needs it to
             # tell an extraordinary result from an impossible one.
             ceiling=facts.get("ceiling"),
+            n_slots=args.slots,
         )
     except BaseException as exc:
         # A run that dies mid-flight has still measured real experiments, but memory keys off
@@ -296,6 +304,14 @@ def main() -> None:
         "strict_convergence_iteration": r.strict_converged_iter,
         "iterations": len(entries),
         "iteration_cap": args.iters,
+        # A turn is one hypothesis-to-score cycle -- Figure 1's iteration, and what the
+        # convergence rule is measured against. `scripts` counts every script executed, which
+        # is the stricter reading of the 50-iteration cap. Both are reported so a judge can
+        # check the run against either; at one slot they are equal.
+        "slots": r.slots,
+        "turns": r.turns,
+        "scripts": r.scripts,
+        "mean_slot_correlation": r.mean_slot_correlation,
         "wall_clock_s": wall,
         "wall_clock_h": wall / 3600.0,
         "script_seconds": r.script_seconds,

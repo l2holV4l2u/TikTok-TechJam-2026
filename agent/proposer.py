@@ -170,11 +170,16 @@ OUTPUT CONTRACT -- the harness reads stdout:
 
     Producing test SCORES is required. Fitting or selecting on test is forbidden.
 
-REUSING WORK BETWEEN ITERATIONS: os.environ["RUN_ARTIFACTS"] is a directory that persists for
-the whole run, shared by every iteration. $ITER_OUT is per-iteration; RUN_ARTIFACTS is not.
-Anything you save there -- fitted predictions, arrays, parameters -- is still there next
-iteration, and reloading is free where refitting is not. Name files so you can recognise them
-later, and check a file exists before trusting it: earlier iterations may have crashed.
+REUSING WORK BETWEEN ITERATIONS: three directories, with different lifetimes.
+  $ITER_OUT          this iteration only. Where scores_valid.npy and scores_test.npy go.
+  $RUN_ARTIFACTS     yours for the whole run, and not shared with any experiment running
+                     beside you. Anything you save there -- fitted predictions, arrays,
+                     parameters -- is still there next iteration, and reloading is free where
+                     refitting is not. Name files so you can recognise them later, and check a
+                     file exists before trusting it: earlier iterations may have crashed.
+  $SHARED_ARTIFACTS  read-only to you. The controller publishes the trusted incumbent's
+                     verified predictions here; see the REUSABLE TRUSTED INCUMBENT note when
+                     one exists. Do not write to it.
 """
 
 # ---------------------------------------------------------------- phase instructions
@@ -512,7 +517,7 @@ class LLMProposer:
                               "controller from its saved predictions):\n" + diagnosis)
             if context.get("incumbent_ready"):
                 blocks.append(
-                    "REUSABLE TRUSTED INCUMBENT: RUN_ARTIFACTS contains "
+                    "REUSABLE TRUSTED INCUMBENT: $SHARED_ARTIFACTS contains "
                     "incumbent_valid_scores.npy and incumbent_test_scores.npy plus "
                     "incumbent.json. You may load and blend these exact predictions instead "
                     "of retraining the incumbent; choose every blend weight on validation "
