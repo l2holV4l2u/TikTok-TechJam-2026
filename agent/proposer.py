@@ -270,6 +270,26 @@ Return the COMPLETE script."""
 
 _DRAFT = """No prior solution has survived, so write this script from scratch."""
 
+_SWEEP = """This is the run's FIRST experiment, and it buys breadth rather than depth.
+
+Train several structurally DIFFERENT model families on the same inputs in this one script,
+score each on validation, and return the best. Different family means a different way of
+forming the prediction, not the same model at another width, depth or learning rate.
+
+Why here: one script is one iteration however many models it contains, so comparing five
+families costs exactly what comparing one does. Later iterations can only refine whatever
+this one finds, and refinement recovers less than the gap between families.
+
+Print `CANDIDATES {{"family_name": score, ...}}` so the comparison is recorded, save the
+winner's validation and test scores, and report its metrics. Keep each fit short enough
+that all of them finish inside the time limit -- a rough comparison of five is worth more
+than one polished fit.
+
+THE BASELINE TO BEAT -- iteration #{iid}, validation primary {score:.4f}:
+```python
+{code}
+```"""
+
 
 def _fmt_metrics(metrics: dict) -> str:
     if not metrics:
@@ -436,6 +456,9 @@ class LLMProposer:
                 blocks.append(f"RETIRED -- do not propose again: {bl}")
             if parent is None:
                 blocks.append(_DRAFT)
+            elif context.get("mode") == "sweep":
+                blocks.append(_SWEEP.format(iid=parent.iter_id, score=parent.score,
+                                            code=parent.code[:MAX_CODE_CHARS]))
             elif context.get("mode") == "broaden":
                 tried = "\n".join(f"  - {e.hypothesis[:100]}" for e in history
                                   if e.phase == "improve") or "  - nothing yet"

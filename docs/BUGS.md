@@ -47,3 +47,25 @@ and comparing them across scripts costs a life:
 A 4x spread means that search was incidental, not designed. The brief now states the
 economics explicitly. The cross-iteration tree remains as an audit trail and as the mechanism
 that survives crash-heavy branches, which is what it is actually good for here.
+
+## Parent code truncation silently corrupts the reference script
+
+`agent/proposer.py` sends the selected parent node's source in full, hard-truncated at
+`MAX_CODE_CHARS = 14000` (`parent.code[:MAX_CODE_CHARS]`, a plain slice with no boundary
+awareness). Measured across `runs/`: 35 of 442 generated scripts (8%) exceed 14,000 characters.
+
+When one of those is selected as parent, the proposer is told "here is the parent script, make
+a targeted edit" and shown a slice that ends mid-statement. Confirmed on
+`runs/r39/scripts/iter_6.py` (22,889 chars): the cut lands inside a numpy slice expression,
+`1:])`, mid-token. The model cannot see whatever runs after that point -- which may include the
+`scores_test.npy` save, the leakage-safe aggregate, or the metrics line -- while being asked to
+edit it as if it saw the whole thing.
+
+Later, more-evolved scripts (which accumulate feature engineering across iterations) are the
+ones most likely to cross the cap, so this disproportionately hits exactly the highest-value
+parents. Measured prompt size overall already reaches ~12,000 tokens uncapped
+(`agent/proposer.py:27-29`), so this is one symptom of a broader context-budget problem, not
+an isolated one.
+
+**Not yet fixed.** A smarter truncation (cut at a line/def boundary, or summarize the tail
+instead of dropping it) would at least make the loss legible instead of silent.

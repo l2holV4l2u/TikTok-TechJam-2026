@@ -312,6 +312,25 @@ def test_the_static_head_of_the_prompt_is_identical_across_calls():
         "the catalogue is static and belongs inside the cacheable prefix")
 
 
+def test_the_first_improve_iteration_asks_for_breadth():
+    """Measured on this data: distinct families differ by 0.0019 primary, two seeds of one
+    family by 0.0002. The family is worth more than the tuning, and one script is one
+    iteration however many models it holds -- so the first experiment sweeps families and
+    later ones refine the winner.
+    """
+    proposer, prompts = _capture()
+    parent = Node(1, None, "baseline", "print(1)", 0.6016)
+    proposer.propose(phase="improve", history=[_entry(1)], parent=parent,
+                     context={"mode": "sweep"})
+    assert "FIRST experiment" in prompts[0] and "breadth" in prompts[0], prompts[0][:200]
+    assert "CANDIDATES" in prompts[0], "the comparison has to be recorded"
+
+    proposer2, p2 = _capture()
+    proposer2.propose(phase="improve", history=[_entry(1)], parent=parent,
+                      context={"mode": "refine"})
+    assert "FIRST experiment" not in p2[0], "later iterations refine, they do not re-sweep"
+
+
 if __name__ == "__main__":
     for t in (
         test_brief_carries_no_human_findings,
@@ -339,6 +358,7 @@ if __name__ == "__main__":
         test_history_reports_the_score_outcome_not_the_loop_status,
         test_a_prompt_budget_trims_context_but_never_the_contracts,
         test_the_static_head_of_the_prompt_is_identical_across_calls,
+        test_the_first_improve_iteration_asks_for_breadth,
     ):
         t()
         print(f"ok  {t.__name__}")

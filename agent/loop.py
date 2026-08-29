@@ -315,7 +315,15 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         # they are sparse. Gains are sparse here: almost nothing clears epsilon. One
         # non-improving iteration is our switch signal, because with only `patience` of them
         # before the run ends, waiting for a longer stagnation streak wastes the whole budget.
-        mode = "refine" if stale == 0 else "broaden"
+        # The first improve iteration is spent on breadth, not depth. Measured on this
+        # dataset, distinct model families differ by 0.0019 primary while two seeds of the
+        # same family differ by 0.0002 -- the choice of family is worth more than anything
+        # tuning it recovers, and the convergence rule charges the same one iteration either
+        # way. Later iterations refine whatever the sweep found.
+        if phase == "improve" and not best_curve:
+            mode = "sweep"
+        else:
+            mode = "refine" if stale == 0 else "broaden"
         context["mode"] = mode
         parent = tree.select(mode) if phase == "improve" else None
 
