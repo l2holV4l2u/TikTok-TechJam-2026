@@ -72,9 +72,32 @@ def _write_submission(run_dir: Path, ledger: Ledger, baseline_test: float) -> di
         print("no scored iteration; nothing to submit")
         return {}
     best = max(scored, key=lambda e: e.metrics["primary"])
+    source = f"iteration #{best.iter_id}"
+    best_primary = best.metrics["primary"]
+    best_hypothesis = best.hypothesis
     path = run_dir / "scripts" / f"iter_{best.iter_id}_out" / "scores_test.npy"
+
+    # A portfolio run also produces a controller-side blend of the incumbent, the live slots and
+    # every archived line, with its weights chosen on one validation fold and confirmed on the
+    # other. It competes for the submission on exactly the same terms as an iteration -- highest
+    # VALIDATION primary wins, and the hidden test set is never consulted to choose.
+    blend_meta = run_dir / "portfolio_blend" / "blend.json"
+    blend_test = run_dir / "portfolio_blend" / "scores_test.npy"
+    if blend_meta.exists() and blend_test.exists():
+        try:
+            info = json.loads(blend_meta.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            info = {}
+        if isinstance(info.get("valid_primary"), (int, float)) \
+                and info["valid_primary"] > best_primary:
+            best_primary = float(info["valid_primary"])
+            path = blend_test
+            source = f"portfolio blend (turn {info.get('turn')})"
+            best_hypothesis = ("controller blend of " + ", ".join(info.get("members", []))
+                               + " with the trusted incumbent")
+
     if not path.exists():
-        print(f"best iteration #{best.iter_id} left no scores_test.npy; cannot build submission")
+        print(f"best source {source} left no scores_test.npy; cannot build submission")
         return {}
 
     from pipeline.data import load
@@ -95,14 +118,13 @@ def _write_submission(run_dir: Path, ledger: Ledger, baseline_test: float) -> di
 
     from pipeline.evaluate import evaluate
     r = evaluate(te.user_id, te.y, scores)
-    print(f"\nsubmission from iteration #{best.iter_id} "
-          f"(validation primary {best.metrics['primary']:.4f}) -> {out}")
-    print(f"  hypothesis: {best.hypothesis[:90]}")
+    print(f"\nsubmission from {source} (validation primary {best_primary:.4f}) -> {out}")
+    print(f"  hypothesis: {best_hypothesis[:90]}")
     print(f"  test primary {r['primary']:.4f}  gauc {r['gauc']:.4f}  ndcg@5 {r['ndcg@5']:.4f}"
           f"   delta vs baseline {r['primary'] - baseline_test:+.4f}")
-    return {"iter_id": best.iter_id, "valid_primary": best.metrics["primary"],
+    return {"iter_id": best.iter_id, "source": source, "valid_primary": best_primary,
             "test_primary": r["primary"], "test_gauc": r["gauc"], "test_ndcg@5": r["ndcg@5"],
-            "test_delta": r["primary"] - baseline_test, "hypothesis": best.hypothesis}
+            "test_delta": r["primary"] - baseline_test, "hypothesis": best_hypothesis}
 
 
 def main() -> None:

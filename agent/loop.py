@@ -74,6 +74,10 @@ class LoopResult:
     # the most recent turn's full correlation record, so the consultant sees the pairs and not
     # only their mean -- "0 and 2 agree, 1 is doing something else" is the actionable form
     last_correlation: dict | None = None
+    # the best portfolio blend so far and what went into it. Kept out of the ledger on purpose:
+    # it is a controller decision, not an experiment the agent proposed.
+    portfolio_blend_primary: float = float("-inf")
+    portfolio_blend_members: list = field(default_factory=list)
 
 
 class Proposer(Protocol):
@@ -323,6 +327,82 @@ def _sibling_note(slots: list[Slot], me: Slot) -> str:
     if not others:
         return ""
     return "\n".join(f"  - slot {s.slot_id}: {s.last_hypothesis[:120]}" for s in others)
+
+
+def _blend_portfolio_turn(run_dir: Path, turn: int, slots: list[Slot], archive: Archive,
+                          out: "LoopResult", epsilon: float) -> None:
+    """Blend incumbent + live slots + archive, gated on a held-out fold. Never raises.
+
+    The result is written to run_dir/portfolio_blend/ with its validation primary, and
+    run_agent's submission step takes it only if it beats every single iteration on validation.
+    It is not injected into the ledger as a pseudo-iteration: it is not an experiment the agent
+    proposed, and a run log that says otherwise would be wrong.
+    """
+    import numpy as np
+
+    from .ensemble import blend_portfolio
+    from .selection import split_validation
+
+    try:
+        from pipeline.data import load
+        from pipeline.evaluate import evaluate
+        valid, test = load("valid"), load("test")
+    except Exception:
+        return
+
+    shared = (run_dir / "artifacts" / "shared")
+    inc_valid_path = shared / "incumbent_valid_scores.npy"
+    inc_test_path = shared / "incumbent_test_scores.npy"
+    if not inc_valid_path.exists():
+        return
+    try:
+        inc_valid = np.load(inc_valid_path, allow_pickle=False)
+        inc_test = np.load(inc_test_path, allow_pickle=False) if inc_test_path.exists() else None
+    except (OSError, ValueError):
+        return
+    if len(inc_valid) != len(valid.y):
+        return
+
+    members: dict = {}
+    for s in slots:
+        if s.last_valid_scores is not None and len(s.last_valid_scores) == len(valid.y):
+            members[f"slot_{s.slot_id}"] = (s.last_valid_scores, s.last_test_scores)
+    for e in archive.entries:
+        v = archive.valid_scores(e)
+        if v is not None and len(v) == len(valid.y):
+            members[f"archive_{e.entry_id}"] = (v, archive.test_scores(e))
+    if not members:
+        return
+
+    fold_a, fold_b = split_validation(valid.user_id)
+    try:
+        got = blend_portfolio(members, inc_valid, inc_test, valid.user_id, valid.y,
+                              fold_a, fold_b, epsilon=epsilon,
+                              test_user_id=test.user_id if inc_test is not None else None)
+    except Exception:
+        return
+
+    record = {"event": "portfolio_blend", "turn": turn, "accepted": got["accepted"],
+              "members": got.get("members", []), "reason": got.get("reason"),
+              "fold_a_gain": got.get("fold_a_gain"), "fold_b_gain": got.get("fold_b_gain"),
+              "pool_size": len(members)}
+    if got["accepted"] and got["valid"] is not None:
+        primary = float(evaluate(valid.user_id, valid.y, got["valid"])["primary"])
+        record["valid_primary"] = primary
+        if primary > out.portfolio_blend_primary:
+            out.portfolio_blend_primary = primary
+            out.portfolio_blend_members = list(got["members"])
+            d = run_dir / "portfolio_blend"
+            d.mkdir(parents=True, exist_ok=True)
+            np.save(d / "scores_valid.npy", np.asarray(got["valid"], dtype=np.float64))
+            if got["test"] is not None:
+                np.save(d / "scores_test.npy", np.asarray(got["test"], dtype=np.float64))
+            (d / "blend.json").write_text(json.dumps({
+                "turn": turn, "valid_primary": primary, "members": got["members"],
+                "fold_a_gain": got["fold_a_gain"], "fold_b_gain": got["fold_b_gain"],
+                "has_test_scores": got["test"] is not None,
+            }, indent=2, default=float), encoding="utf-8")
+    log_portfolio(run_dir, record)
 
 
 def _stall_note(slot: Slot) -> str:
@@ -794,6 +874,15 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
 
         out.archived = len(archive) if archive is not None else 0
         out.revivals = refill_state.revivals
+
+        # 5b. BLEND the whole portfolio: the incumbent, every live slot's predictions and every
+        #     archived line. This is what the archive is for. The measured bottleneck on this
+        #     benchmark is not search breadth but that everything found correlates, and a set of
+        #     converged decorrelated models is the one input the blender has never had.
+        #     Weights are chosen on validation fold A and confirmed on fold B, so a wider search
+        #     cannot buy a validation score that will not transfer.
+        if len(slots) > 1 and turn_scored:
+            _blend_portfolio_turn(workdir.parent, turn, slots, archive, out, epsilon)
 
         # 6. ONE synthesis per turn. With several lineages running, what a slot most lacks is
         #    not literature -- it already receives the whole catalogue -- but knowledge of the
