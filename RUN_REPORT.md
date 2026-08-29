@@ -1,32 +1,32 @@
-# Run report - r74
+# Run report - r79
 
 ## Loop stages executed by the agent
 
 - **Inspect data (EDA):** completed at iteration #0 - the agent wrote and ran its own exploratory script; its findings are in `eda_report.txt` and were carried into every later prompt.
-- **Reproduce official baseline (Requirement 1):** 1 attempt(s); the agent's own pipeline reached validation primary **0.6013** against the official 0.6016 (delta -0.0003, inside the baseline's 5-seed noise). That script became the root of the search tree.
+- **Reproduce official baseline (Requirement 1):** 1 attempt(s); the agent's own pipeline reached validation primary **0.6022** against the official 0.6016 (delta +0.0006, inside the baseline's 5-seed noise). That script became the root of the search tree.
 - **Iterate:** 4 experiments proposed, executed and evaluated by the agent, each branching from a node of its own search tree.
 
 ## Iteration log
 
 | # | phase | parent | status | secs | primary | vs baseline | hypothesis |
 |---|---|---|---|---|---|---|---|
-| 0 | eda | - | ok | 5 | n/a | - | In the data-inspection stage, temporal drift, entity cold-start, per-u |
-| 1 | baseline | - | ok | 112 | 0.6013 | -0.0003 | Reproduce the official baseline by training a k=16 Factorization Machi |
-| 2 | improve | #1 | ok | 258 | 0.6044 | +0.0028 | Target model-family and score-fusion stages by comparing additive memo |
-| 3 | improve | #2 | kept | 20 | 0.6048 | +0.0032 | Target the post-model personalization stage by adding smoothed user×au |
-| 4 | improve | #3 | kept | 66 | 0.6048 | +0.0032 | Target the ranking-loss and temporal-context stages: a LightGBM model  |
-| 5 | improve | #3 | kept | 34 | 0.6049 | +0.0033 | Target the behavior-history representation stage with low-rank collabo |
+| 0 | eda | - | ok | 4 | n/a | - | In the data-inspection stage, quantify temporal drift, entity cold-sta |
+| 1 | baseline | - | ok | 116 | 0.6022 | +0.0006 | Reproduce the official baseline end-to-end using a k=16 Factorization  |
+| 2 | improve | #1 | kept | 149 | 0.6040 | +0.0024 | Target model-family breadth and score aggregation by comparing expande |
+| 3 | improve | #2 | ok | 136 | 0.6043 | +0.0027 | Target prediction formation with three structurally distinct families— |
+| 4 | improve | #3 | kept | 159 | 0.6053 | +0.0037 | Target prediction formation and training objective breadth by comparin |
+| 5 | improve | #4 | kept | 206 | 0.6053 | +0.0037 | Target prediction formation with a breadth sweep over AutoInt attentio |
 
 ## Search tree
 
 Each line is an executed script; indentation is the edit it was derived from. A node marked `[retired]` produced three children that failed to improve on it, so the search abandoned that branch and backtracked.
 
 ```
-#1 0.6013  Reproduce the official baseline by training a k=16 Factorization Machi
-  #2 0.6044  Target model-family and score-fusion stages by comparing additive memo
-    #3 0.6048 [retired]  Target the post-model personalization stage by adding smoothed user×au
-      #4 0.6048  Target the ranking-loss and temporal-context stages: a LightGBM model 
-      #5 0.6049  Target the behavior-history representation stage with low-rank collabo
+#1 0.6022  Reproduce the official baseline end-to-end using a k=16 Factorization 
+  #2 0.6040  Target model-family breadth and score aggregation by comparing expande
+    #3 0.6043  Target prediction formation with three structurally distinct families—
+      #4 0.6053  Target prediction formation and training objective breadth by comparin
+        #5 0.6053  Target prediction formation with a breadth sweep over AutoInt attentio
 ```
 
 ## What the agent established
@@ -34,32 +34,32 @@ Each line is an executed script; indentation is the edit it was derived from. A 
 The agent's belief set, revised after every scored iteration rather than appended to, so later evidence can demote an earlier conclusion instead of piling up beside it. A claim marked `(invalidated)` was contradicted by a later result. Machine-readable form with per-claim evidence in `knowledge.json`.
 
 ```
-- (active) A k=16 Factorization Machine trained with Adam at lr=0.001 on user_id, video_id, author_id, tab, and duration_bucket reproduces the official baseline within seed noise: primary 0.6013 versus 0.6016, a difference of 0.0003. [iters 1]
-- (active) The validation-selected blend of 35% prior FM incumbent and 65% epoch-3 DeepFM established a meaningful improvement over the FM baseline, reaching primary 0.6044 for a gain of 0.0031; the subsequently tested residual, LightGBM, and latent-history pipelines produced no further gain above the 0.002 evidence threshold. [iters 1,2,3,4,5]
-- (qualified) For the iteration-2 incumbent-plus-DeepFM candidate, harness-level fusion with the prior incumbent added no measurable value: the harness selected alpha 1.0 and retained primary 0.6044. [iters 2]
-- (active) Adding validation-selected smoothed user-pair target-encoding residuals to the trusted DeepFM blend produced no measurable ranking gain: beta 3.0, residual weight 0.08, and author_id, tag, and duration_bucket fields scored 0.604797 versus the 0.604385 incumbent, a difference of 0.000412 inside seed noise. [iters 3]
-- (active) User-pair residual coverage is high for duration_bucket (0.9017) and tag (0.7744) but very sparse for author_id (0.0338) and video_id (0.0162), limiting direct validation support for user-by-entity memorization on authors and videos. [iters 3]
-- (active) In th
+- (qualified) The iteration-2 comparison of FM, DeepFM, categorical gradient boosting, and empirical-Bayes variants found no measurable gain over the reproduced FM baseline: its winning primary of 0.6040 was only 0.0018 above 0.6022; this conclusion is limited to those iteration-2 candidates. [iters 1,2,3]
+- (active) Within-user rank blending with the incumbent has not produced a measurable gain: iterations 2 and 3 retained raw candidates, iteration 4's alpha=0.5 blend added only 0.0001, and iteration 5 selected the incumbent alone with alpha=0.0. [iters 2,3,4,5]
+- (active) The iteration-3 auxiliary-MMoE winner using is_click and is_like auxiliary tasks scored 0.6043, only 0.0003 above the iteration-2 incumbent at 0.6040, so it showed no measurable gain. [iters 2,3]
+- (active) In iteration 4, the DCN-based incumbent blend was selected over the tested NFM and within-user BPR-FM alternatives, but its final primary of 0.6053 was only 0.0010 above the iteration-3 incumbent, so none of those tested interaction or pairwise-objective mechanisms demonstrated a measurable gain. [iters 3,4]
+- (active) The iteration-5 breadth sweep over AutoInt attention, PNN product interactions, FiBiNET field reweighting, and DCNv2 low-rank matrix crosses produced no measurable gain over the 0.6053 incumbent; validation selected the incumbent with family=None and blend alpha=0.0. [iters 4,5]
+- (active) 
 ```
 
 ## Alternatives compared inside iterations
 
-29 candidate solutions were built and scored across 4 iteration(s). The convergence rule charges one iteration per experiment, so searching inside an iteration buys comparisons the iteration budget cannot.
+80 candidate solutions were built and scored across 4 iteration(s). The convergence rule charges one iteration per experiment, so searching inside an iteration buys comparisons the iteration budget cannot.
 
 | iteration | candidates (validation primary) |
 |---|---|
-| #2 | deepfm 0.6037, empirical_bayes 0.5799, expanded_fm 0.6014, incumbent_plus_deepfm 0.6044, incumbent_plus_empirical_bayes 0.6022, incumbent_plus_expanded_fm 0.6026, incumbent_plus_lightgbm 0.6031, incumbent_plus_wide_additive 0.6025 |
-| #3 | personalized_author_id 0.6044, personalized_author_id+tag 0.6044, personalized_author_id+tag+duration_bucket 0.6048, personalized_author_id+video_id 0.6044, personalized_author_id+video_id+tag 0.6044, personalized_tag 0.6044, personalized_video_id 0.6044, trusted_incumbent 0.6044 |
-| #4 | incumbent 0.6048, temporal_binary_lgbm_best_fusion 0.6048, temporal_binary_lgbm_best_weight 0.0000, temporal_binary_lgbm_standalone 0.5887, temporal_lambdarank_best_fusion 0.6048, temporal_lambdarank_best_weight 0.0000, temporal_lambdarank_standalone 0.5932 |
-| #5 | latent_content 0.6048, latent_video 0.6049, trusted_incumbent 0.6048 |
+| #2 | deepfm 0.6031, deepfm_blend_25 0.6028, deepfm_blend_40 0.6034, deepfm_blend_55 0.6040, deepfm_blend_70 0.6036, deepfm_blend_85 0.6034, empirical_bayes 0.5895, empirical_bayes_blend_25 0.6024 |
+| #3 | auxiliary_mmoe 0.6038, auxiliary_mmoe_blend_20 0.6041, auxiliary_mmoe_blend_35 0.6042, auxiliary_mmoe_blend_50 0.6043, auxiliary_mmoe_blend_65 0.6042, auxiliary_mmoe_blend_80 0.6039, hierarchical_empirical_bayes 0.5762, hierarchical_empirical_bayes_blend_20 0.6034 |
+| #4 | bpr_fm 0.6009, bpr_fm_inc_blend_20 0.6042, bpr_fm_inc_blend_35 0.6040, bpr_fm_inc_blend_50 0.6033, bpr_fm_inc_blend_65 0.6025, bpr_fm_inc_blend_80 0.6013, dcn 0.6044, dcn_inc_blend_20 0.6041 |
+| #5 | autoint 0.5974, autoint_blend_0.25 0.6047, autoint_blend_0.50 0.6024, autoint_blend_0.75 0.5987, dcnv2 0.6029, dcnv2_blend_0.25 0.6051, dcnv2_blend_0.50 0.6040, dcnv2_blend_0.75 0.6031 |
 
 ## Resource usage (Feasibility & Practicality)
 
-- **Agent wall-clock to converged result: 0.27 h (16 min)**
-- Total LLM tokens: **90,618** (56,878 in / 33,740 out), including the knowledge-revision stage
+- **Agent wall-clock to converged result: 0.34 h (20 min)**
+- Total LLM tokens: **96,359** (59,833 in / 36,526 out), including the knowledge-revision stage
 - Iterations used: **6 of 50** (5 accepted scores, 0 failed, 0 rejected)
-- Compute inside generated scripts: **0.14 h (8 min)** on CPU.
-- Mean tokens per iteration: 15,103
+- Compute inside generated scripts: **0.21 h (13 min)** on CPU.
+- Mean tokens per iteration: 16,060
 - Stop reason: `converged`
 
 ## Autonomy (Impact & Relevance)
@@ -77,7 +77,7 @@ The loop never stalled, crashed, or escalated to a human. Guards in place: retry
 
 ### Evidence from development runs
 
-Across 51 development runs of this agent, 446 iterations were executed and 184 failed. Every one was handled in-loop; none was escalated to a human. Failure taxonomy:
+Across 55 development runs of this agent, 477 iterations were executed and 185 failed. Every one was handled in-loop; none was escalated to a human. Failure taxonomy:
 
 - `(no output)`: 92
 - `IndexError`: 30
@@ -85,7 +85,7 @@ Across 51 development runs of this agent, 446 iterations were executed and 184 f
 - `TypeError`: 12
 - `}`: 7
 - `TIMEOUT`: 6
-- `AttributeError`: 4
+- `AttributeError`: 5
 - `SyntaxError`: 3
 
 Each recovery path, with a concrete instance:
@@ -97,20 +97,20 @@ Each recovery path, with a concrete instance:
 
 ## Result
 
-- Best validation primary: **0.6049** (baseline 0.6016, delta +0.0033)
-- From iteration #5: Target the behavior-history representation stage with low-rank collaborative filtering over each user’s centered long-view affinities to videos and content attributes; latent factors can generalize sparse user–entity histories to related candidates, while validation-selected within-user fusion preserves the incumbent wherever this signal is unhelpful.
+- Best validation primary: **0.6053** (baseline 0.6016, delta +0.0037)
+- From iteration #4: Target prediction formation and training objective breadth by comparing nonlinear bi-interaction pooling (NFM), explicit bounded-degree feature crosses (DCN), and pairwise within-user BPR-FM; these mechanisms can capture higher-order context interactions or directly optimize positive-over-negative ordering, and validation-selected rank blends can preserve complementary incumbent orderings.
 - Selection is on validation only, per the scoring rules; the hidden test set was never used to choose between iterations.
-- Submission: written to `runs\r74\submission.csv`
+- Submission: written to `runs\r79\submission.csv`
 
 ### Results table
 
 | split | GAUC | nDCG@5 | primary |
 |---|---|---|---|
-| validation (best iteration) | 0.6719 | 0.5380 | 0.6049 |
+| validation (best iteration) | 0.6719 | 0.5387 | 0.6053 |
 | official baseline (validation) | 0.6674 | 0.5357 | 0.6016 |
-| hidden test (this submission) | 0.6665 | 0.5317 | **0.5991** |
+| hidden test (this submission) | 0.6673 | 0.5321 | **0.5997** |
 | official baseline (test) | 0.6610 | 0.5282 | 0.5946 |
 
-**Absolute delta over baseline on hidden test: GAUC +0.0055, nDCG@5 +0.0035, mean +0.0045** (primary +0.0045).
+**Absolute delta over baseline on hidden test: GAUC +0.0063, nDCG@5 +0.0039, mean +0.0051** (primary +0.0051).
 
 Per the scoring formula, delta(m) = score_agent(m) - score_baseline(m), averaged over metrics.

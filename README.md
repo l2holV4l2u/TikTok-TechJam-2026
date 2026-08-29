@@ -12,17 +12,17 @@ try, and why, has to come from the agent, or the Autonomy and Innovation claims 
 
 ## Result
 
-`submission_best.csv` is the submission. It is `runs/r74/submission.csv`, written by the harness
+`submission_best.csv` is the submission. It is `runs/r79/submission.csv`, written by the harness
 from that run's validation-best iteration — no human rebuilt it, and selection never looked at
 the test split.
 
 | | GAUC | nDCG@5 | primary |
 |---|---|---|---|
 | official baseline, hidden test | 0.6610 | 0.5282 | 0.59460 |
-| **this submission, hidden test** | **0.6657** | **0.5312** | **0.59847** |
-| delta | +0.0047 | +0.0030 | **+0.00387** |
+| **this submission, hidden test** | **0.6673** | **0.5321** | **0.59969** |
+| delta | +0.0063 | +0.0039 | **+0.00509** |
 
-Validation 0.6049 against the baseline's 0.6016. Test always runs below validation on this
+Validation 0.6053 against the baseline's 0.6016. Test always runs below validation on this
 benchmark — a later date window — and the baseline shows the same drop.
 
 Some later runs scored higher, but they read the supplied `video_features_statistic` fields,
@@ -228,7 +228,7 @@ and the other logged signals are outcomes of the row being scored; they are expo
 excluded entirely — its counts are aggregated over the whole log period, including the
 validation and test windows. Historical r39/r41/r43/r44 scores that used that file are retained as
 an audit trail but excluded from memory, comparison, and submission; `submission_best.csv` is
-restored to the strongest eligible run, r74.
+restored to the strongest eligible run, r79.
 
 ## What we would do with more time
 
