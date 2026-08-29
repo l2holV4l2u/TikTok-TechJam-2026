@@ -61,6 +61,10 @@ class Slot:
     # A revived slot must start from the node it was revived onto, not from whatever
     # tree.select would hand it; cleared once it has been used for one proposal.
     pending_parent: object | None = None
+    # Crash and rejection feedback belongs to the lineage that produced it. Shared across the
+    # portfolio it would tell a slot to "fix" a traceback from a script it never wrote, and
+    # to keep a hypothesis that was never its own.
+    feedback: str | None = None
 
 
 @dataclass

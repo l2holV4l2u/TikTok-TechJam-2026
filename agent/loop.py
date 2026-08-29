@@ -681,7 +681,7 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
             iter_id = i + len(batch)
             try:
                 p = proposer.propose(phase=phase, history=ledger.read(),
-                                     blacklist=recovery.blacklist, feedback=feedback,
+                                     blacklist=recovery.blacklist, feedback=slot.feedback,
                                      parent=slot.parent, context=context)
             except Exception as exc:
                 stop = _record_proposer_error(exc, ledger, iter_id, phase, slot.slot_id, turn)
@@ -742,11 +742,11 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
             if metrics is None or primary not in metrics:
                 why = (getattr(evaluator, "last_error", None)
                        or _failure_text(res, timeout, primary))
-                action, feedback = recovery.on_failure(p.hypothesis, why)
+                action, slot.feedback = recovery.on_failure(p.hypothesis, why)
                 ledger.append(Entry(iter_id, parent_id, 0, p.hypothesis, p.code, {},
                                     res.seconds, p.tokens_in, p.tokens_out,
-                                    "failed" if action == RETRY else "blacklisted", feedback,
-                                    "improve", slot_id=slot.slot_id, turn=turn))
+                                    "failed" if action == RETRY else "blacklisted",
+                                    slot.feedback, "improve", slot_id=slot.slot_id, turn=turn))
                 # a child that crashed is evidence against its parent, not a free retry.
                 # r38_1k #8 spent two children and 78 minutes on crashes that moved it no
                 # closer to retirement, one of them timing out at 4,373s.
@@ -774,12 +774,12 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
             critic_score = metrics.get("raw_candidate_primary", score)
             flags = critic_review(p.code, critic_score, best, ceiling)
             if flags:
-                feedback = ("This result was not accepted as-is. " + " ".join(flags)
-                            + " Re-run the check yourself and either show the result survives "
-                              "it or propose something else.")
+                slot.feedback = ("This result was not accepted as-is. " + " ".join(flags)
+                                 + " Re-run the check yourself and either show the result "
+                                   "survives it or propose something else.")
                 ledger.append(Entry(iter_id, parent_id, 0, p.hypothesis, p.code, metrics,
                                     res.seconds, p.tokens_in, p.tokens_out, "rejected",
-                                    feedback, "improve", slot_id=slot.slot_id, turn=turn))
+                                    slot.feedback, "improve", slot_id=slot.slot_id, turn=turn))
                 # A rejected score is neither a search node nor a submission candidate. Count
                 # the attempt against its parent so integrity failures cannot create an
                 # immortal branch.
@@ -802,7 +802,7 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
                                 res.seconds, p.tokens_in, p.tokens_out,
                                 "ok" if improved else "kept", None, "improve",
                                 slot_id=slot.slot_id, turn=turn))
-            feedback = None
+            slot.feedback = None
             tree.add(Node(iter_id, parent_id, p.hypothesis, p.code, score))
             tree.record_child(parent_id, score, res.seconds)
             slot.last_valid_scores = getattr(evaluator, "last_scores", None)

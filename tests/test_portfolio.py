@@ -487,6 +487,37 @@ def test_consultant_tokens_are_counted_in_the_run_total():
         assert r.llm_tokens_out >= 7 * len(calls)
 
 
+def test_crash_feedback_goes_only_to_the_slot_that_crashed():
+    """Shared feedback would tell a slot to fix a traceback from a script it never wrote."""
+    seen: list[tuple[int, str | None]] = []
+
+    class Watcher(SlotProposer):
+        def propose(self, *, phase, history, blacklist, feedback, parent, context):
+            if phase == "improve":
+                # slot order within a turn is stable, so index by call count
+                seen.append((len(self.parents) % 3, feedback))
+                if len(self.parents) % 3 == 0 and len(self.parents) < 3:
+                    self.parents.append(parent.iter_id if parent else None)
+                    self.modes.append(context.get("mode"))
+                    self.siblings.append(context.get("siblings") or "")
+                    self.notes.append(context.get("seed_note") or "")
+                    self.n += 1
+                    return Proposal("crasher", CRASH, 100, 50)
+            return super().propose(phase=phase, history=history, blacklist=blacklist,
+                                   feedback=feedback, parent=parent, context=context)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        run_loop(Watcher([0.61] * 12), ArrayEvaluator(spread=0.9), _ledger(tmp),
+                 workdir=Path(tmp) / "scripts", patience=99, timeout=30, n_slots=3)
+    # slot 0 crashed on turn 1; on turn 2 only slot 0 may carry failure feedback
+    turn2 = seen[3:6]
+    assert turn2, seen
+    got = {slot: fb for slot, fb in turn2}
+    assert got.get(0), "the slot that crashed must receive its own traceback"
+    assert not got.get(1) and not got.get(2), (
+        f"feedback leaked to slots that did not fail: {got}")
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_") and callable(v)]
     for test in tests:
