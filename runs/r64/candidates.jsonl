@@ -1,0 +1,2 @@
+{"iter_id": 5, "phase": "improve", "candidates": {"lgb_raw": 0.5818697315978776, "blend_with_incumbent_best_alpha": 0.5, "blend_with_incumbent_primary": 0.6009592322811805}}
+{"iter_id": 8, "phase": "improve", "candidates": {"lgb_with_pair_stats": 0.583438512818518, "blend_with_incumbent_best_alpha": 0.55, "blend_with_incumbent_primary": 0.60099701742884}}

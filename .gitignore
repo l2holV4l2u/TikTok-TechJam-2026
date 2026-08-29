@@ -21,6 +21,17 @@ runs/*
 !runs/r39/
 !runs/r40/
 !runs/r41/
+# the sol runs under the current contracts: the memory fix (r59), the train+valid
+# refit (r70, the submission) and the runs they are compared against.
+!runs/r57/
+!runs/r59/
+!runs/r60/
+!runs/r64/
+!runs/r66/
+!runs/r68/
+!runs/r69/
+!runs/r70/
+!runs/r71/
 runs/*/scripts/*
 !runs/*/scripts/*.py
 *.npy

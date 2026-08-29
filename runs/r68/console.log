@@ -1,0 +1,14 @@
+cross-run memory: 50 lines from this agent's prior runs
+dataset: KuaiRand-Pure  train 1,141,112 / valid 124,909 / test 170,588
+
+submission from iteration #3 (validation primary 0.6045) -> runs\r68\submission.csv
+  hypothesis: Target the memorization stage by adding a sparse hashed wide tower of explicit user×author
+  test primary 0.5988  gauc 0.6657  ndcg@5 0.5320   delta vs baseline +0.0042
+
+stopped: llm_daily_limit
+iterations: 5 of 50   failures: 1
+agent wall-clock: 8.6 min   script time: 3.9 min
+tokens (incl. knowledge revision): 40,001
+EDA completed: True   baseline reproduced: 0.6018215518991388
+manual interventions: 0
+run log: runs\r68

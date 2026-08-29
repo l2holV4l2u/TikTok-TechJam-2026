@@ -1,0 +1,14 @@
+cross-run memory: 46 lines from this agent's prior runs
+dataset: KuaiRand-Pure  train 1,141,112 / valid 124,909 / test 170,588
+
+submission from iteration #8 (validation primary 0.6010) -> runs\r64\submission.csv
+  hypothesis: Target the feature-statistics stage by adding train-only user×author and user×video leave-
+  test primary 0.5936  gauc 0.6593  ndcg@5 0.5279   delta vs baseline -0.0010
+
+stopped: converged
+iterations: 9 of 50   failures: 2
+agent wall-clock: 15.1 min   script time: 2.2 min
+tokens (incl. knowledge revision): 154,212
+EDA completed: True   baseline reproduced: 0.600051744326663
+manual interventions: 0
+run log: runs\r64

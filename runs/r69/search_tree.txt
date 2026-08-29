@@ -1,0 +1,5 @@
+#1 0.6034  Reproduce the official baseline by training a k=16 Factorization Machi
+  #2 0.6047  Target the feature-interaction representation stage by replacing the f
+    #3 0.6049  Target the leakage-free feature-statistics and rank-aggregation stages
+      #4 0.6050  Target the post-model personalization stage with a direct empirical-Ba
+        #5 0.6053  Target the feature-interaction representation stage with a low-rank DC

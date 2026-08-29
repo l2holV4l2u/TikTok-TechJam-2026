@@ -1,0 +1,25 @@
+SHAPES train=1141112 valid=124909 test=170588 Xfields=37 num=5
+ARRAYS X_scalar=True uid=(1141112,)/int64 time=(1141112,)/int64
+LABEL train_rate=0.33662 train_pos=384121 valid_rate=0.31328 valid_pos=39132
+TR_DATE 20220409:0.336 20220410:0.341 20220411:0.333 20220412:0.332 20220413:0.317 20220414:0.319 20220415:0.363 20220416:0.377 20220417:0.364 20220418:0.331 20220419:0.323 20220420:0.311 20220421:0.315
+VA_DATE 20220422:0.319 20220423:0.338 20220424:0.303 20220425:0.312 20220426:0.311 20220427:0.297 20220428:0.290
+TR_USER users=26210 rows_q=1/13/31/59/97/207/809 pos_q=0/4/10/21/34/67/155 zero=0.051 all=0.023 mixed=0.927
+VA_USER users=22377 rows_q=1/2/4/7/12/26/74 pos_q=0/0/1/2/4/9/24 zero=0.303 all=0.119 mixed=0.578
+OVERLAP user_id/va row_unseen=0.0159 zero=0.0159 uniq=21956 card=30000
+OVERLAP user_id/te row_unseen=0.0362 zero=0.0362 uniq=23099 card=30000
+OVERLAP video_id/va row_unseen=0.0001 zero=0.0001 uniq=5945 card=8000
+OVERLAP video_id/te row_unseen=0.0001 zero=0.0001 uniq=5974 card=8000
+OVERLAP author_id/va row_unseen=0.0001 zero=0.0001 uniq=5311 card=7000
+OVERLAP author_id/te row_unseen=0.0000 zero=0.0000 uniq=5333 card=7000
+TIME train_unique_ms=1052464 adjacent_same_timestamp_given_user=0.0785
+CAT_SIGNAL_TOP name:etaV/etaT user_id:0.155/0.146 video_id:0.107/0.107 author_id:0.106/0.104 tab:0.065/0.077 tag:0.025/0.026 onehot_feat3:0.017/0.015 onehot_feat8:0.008/0.008 upload_type:0.007/0.011 onehot_feat1:0.005/0.005 duration_bucket:0.005/0.005 user_active_degree:0.004/0.004 onehot_feat7:0.003/0.004 music_type:0.003/0.004 register_days_bucket:0.002/0.003 onehot_feat11:0.002/0.001
+CAT_SIGNAL_BOTTOM onehot_feat5:0.000/0.000 onehot_feat16:0.000/0.000 follow_user_num_range:0.000/0.000 onehot_feat10:0.000/0.000 onehot_feat14:0.000/0.000 onehot_feat15:0.000/0.000 onehot_feat13:0.000/0.000 is_video_author:0.000/0.000 is_lowactive_period:0.000/0.000 onehot_feat17:-0.000/-0.000
+CAT_NOVELTY name:unseenV,uniqT/uniqV/card user_id:0.02,26210/21956/30000 onehot_feat3:0.00,1436/1330/1600 video_id:0.00,7538/5945/8000 author_id:0.00,6482/5311/7000 register_days_range:0.00,7/8/16 onehot_feat8:0.00,452/438/512 onehot_feat5:0.00,33/31/48 onehot_feat7:0.00,117/105/160 tab:0.00,15/15/20 hour:0.00,24/24/32 user_active_degree:0.00,9/9/16 is_lowactive_period:0.00,1/1/4
+CAT_DOMINANT is_lowactive_period:1.000 onehot_feat5:0.995 video_type:0.987 onehot_feat17:0.968 onehot_feat15:0.955 onehot_feat13:0.937 onehot_feat16:0.933 onehot_feat14:0.884 music_type:0.881 is_video_author:0.854 is_live_streamer:0.771 user_active_degree:0.770
+NUM duration_ms missT/V=0.000/0.000 logcorrT=0.074 miss_y=nan q0/50/90/99/max=0.0/70233.0/235766.0/420483.0/1177720.0
+NUM user_follow_user_num missT/V=0.000/0.000 logcorrT=0.016 miss_y=nan q0/50/90/99/max=0.0/146.0/918.0/3827.0/5003.0
+NUM user_fans_user_num missT/V=0.000/0.000 logcorrT=-0.043 miss_y=nan q0/50/90/99/max=0.0/60.0/710.0/4094.0/1986249.0
+NUM user_friend_user_num missT/V=0.000/0.000 logcorrT=-0.030 miss_y=nan q0/50/90/99/max=0.0/20.0/318.0/1587.0/4995.0
+NUM user_register_days missT/V=0.000/0.000 logcorrT=-0.053 miss_y=nan q0/50/90/99/max=17.0/1223.0/2125.0/2702.0/3624.0
+HIST_video_id n=12 top_abs_corr video_id_long_view_rate:0.313,miss=0.00,shape=(124909,) video_id_is_click_rate:0.292,miss=0.00,shape=(124909,) video_id_play_time_ms_logmean:0.227,miss=0.00,shape=(124909,) video_id_comment_stay_time_logmean:0.110,miss=0.00,shape=(124909,) video_id_train_count_log1p:0.107,miss=0.00,shape=(124909,) video_id_is_profile_enter_rate:0.054,miss=0.00,shape=(124909,) video_id_is_comment_rate:0.043,miss=0.00,shape=(124909,) video_id_is_hate_rate:0.026,miss=0.00,shape=(124909,)
+HIST_author_id n=12 top_abs_corr author_id_long_view_rate:0.309,miss=0.00,shape=(124909,) author_id_is_click_rate:0.288,miss=0.00,shape=(124909,) author_id_play_time_ms_logmean:0.223,miss=0.00,shape=(124909,) author_id_comment_stay_time_logmean:0.110,miss=0.00,shape=(124909,) author_id_train_count_log1p:

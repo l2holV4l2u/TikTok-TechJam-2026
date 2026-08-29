@@ -1,0 +1,15 @@
+execution device: cpu
+cross-run memory: 45 lines from this agent's prior runs
+dataset: KuaiRand-Pure  train 1,141,112 / valid 124,909 / test 170,588
+
+submission from iteration #5 (validation primary 0.6056) -> runs\r59\submission.csv
+  hypothesis: Target the memorization stage with a jointly trained Wide & DeepFM model whose hashed expl
+  test primary 0.5989  gauc 0.6665  ndcg@5 0.5313   delta vs baseline +0.0043
+
+stopped: converged
+iterations: 6 of 50   failures: 0
+agent wall-clock: 15.2 min   script time: 8.3 min
+tokens (incl. knowledge revision): 84,834
+EDA completed: True   baseline reproduced: 0.6015728448461122
+manual interventions: 0
+run log: runs\r59

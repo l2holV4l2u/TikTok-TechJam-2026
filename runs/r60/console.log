@@ -1,0 +1,14 @@
+cross-run memory: 45 lines from this agent's prior runs
+dataset: KuaiRand-Pure  train 1,141,112 / valid 124,909 / test 170,588
+
+submission from iteration #8 (validation primary 0.6057) -> runs\r60\submission.csv
+  hypothesis: Target the personalized feature-statistics stage with hierarchical Bayesian user×duration/
+  test primary 0.5993  gauc 0.6668  ndcg@5 0.5319   delta vs baseline +0.0047
+
+stopped: converged
+iterations: 9 of 50   failures: 1
+agent wall-clock: 22.3 min   script time: 11.4 min
+tokens (incl. knowledge revision): 143,297
+EDA completed: True   baseline reproduced: 0.6020282660984161
+manual interventions: 0
+run log: runs\r60

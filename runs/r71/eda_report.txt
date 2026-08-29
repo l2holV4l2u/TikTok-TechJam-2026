@@ -1,0 +1,53 @@
+SHAPE train=1141112 valid=124909 test=170588 Xfields=37 num=5 scalarX=True
+LABEL train pos=384121 rate=0.3366 valid pos=39132 rate=0.3133
+DATE tr 20220409:0.336,20220410:0.341,20220411:0.333,20220412:0.332,20220413:0.317,20220414:0.319,20220415:0.363,20220416:0.377,20220417:0.364,20220418:0.331,20220419:0.323,20220420:0.311,20220421:0.315
+DATE va 20220422:0.319,20220423:0.338,20220424:0.303,20220425:0.312,20220426:0.311,20220427:0.297,20220428:0.290
+USER tr U=26210 rowsQ=1/13/31/59/97/207/809 posQ=0/4/10/21/34/67/155 zero=0.051 all=0.023 mixed=0.927
+USER va U=22377 rowsQ=1/2/4/7/12/26/74 posQ=0/0/1/2/4/9/24 zero=0.303 all=0.119 mixed=0.578
+COLD user_id valid_vs_tr=0.016 test_vs_trva=0.000
+COLD video_id valid_vs_tr=0.000 test_vs_trva=0.000
+COLD author_id valid_vs_tr=0.000 test_vs_trva=0.000
+NUM duration_ms miss=0.000/0.000 q=0.0,70233.0,235766.0,420483.0,1177720.0 logcorr=0.074
+NUM user_fans_user_num miss=0.000/0.000 q=0.0,60.0,710.0,4094.0,1986249.0 logcorr=-0.043
+NUM user_follow_user_num miss=0.000/0.000 q=0.0,146.0,918.0,3827.0,5003.0 logcorr=0.016
+NUM user_friend_user_num miss=0.000/0.000 q=0.0,20.0,318.0,1587.0,4995.0 logcorr=-0.030
+NUM user_register_days miss=0.000/0.000 q=17.0,1223.0,2125.0,2702.0,3624.0 logcorr=-0.053
+F author_id C=7000 tr=6482 va=5311 top=0.008 s1=0.009 uv=0.000 ut=0.000 nmi=0.0957
+F duration_bucket C=12 tr=10 va=10 top=0.103 s1=0.000 uv=0.000 ut=0.000 nmi=0.0040
+F fans_user_num_range C=16 tr=9 va=9 top=0.379 s1=0.000 uv=0.000 ut=0.000 nmi=0.0014
+F follow_user_num_range C=16 tr=8 va=8 top=0.198 s1=0.000 uv=0.000 ut=0.000 nmi=0.0003
+F friend_user_num_range C=16 tr=7 va=7 top=0.278 s1=0.000 uv=0.000 ut=0.000 nmi=0.0007
+F hour C=32 tr=24 va=24 top=0.078 s1=0.000 uv=0.000 ut=0.000 nmi=0.0007
+F is_live_streamer C=4 tr=2 va=2 top=0.771 s1=0.000 uv=0.000 ut=0.000 nmi=0.0006
+F is_lowactive_period C=4 tr=1 va=1 top=1.000 s1=0.000 uv=0.000 ut=0.000 nmi=0.0000
+F is_video_author C=4 tr=2 va=2 top=0.854 s1=0.000 uv=0.000 ut=0.000 nmi=0.0002
+F music_type C=12 tr=6 va=6 top=0.881 s1=0.000 uv=0.000 ut=0.000 nmi=0.0033
+F onehot_feat0 C=8 tr=2 va=2 top=0.500 s1=0.000 uv=0.000 ut=0.000 nmi=0.0017
+F onehot_feat1 C=12 tr=7 va=7 top=0.272 s1=0.000 uv=0.000 ut=0.000 nmi=0.0034
+F onehot_feat10 C=8 tr=5 va=5 top=0.400 s1=0.000 uv=0.000 ut=0.000 nmi=0.0001
+F onehot_feat11 C=8 tr=5 va=5 top=0.749 s1=0.200 uv=0.000 ut=0.000 nmi=0.0011
+F onehot_feat12 C=8 tr=3 va=3 top=0.677 s1=0.000 uv=0.000 ut=0.000 nmi=0.0015
+F onehot_feat13 C=8 tr=3 va=3 top=0.937 s1=0.000 uv=0.000 ut=0.000 nmi=0.0001
+F onehot_feat14 C=8 tr=3 va=3 top=0.884 s1=0.000 uv=0.000 ut=0.000 nmi=0.0001
+F onehot_feat15 C=8 tr=3 va=3 top=0.955 s1=0.000 uv=0.000 ut=0.000 nmi=0.0001
+F onehot_feat16 C=8 tr=3 va=3 top=0.933 s1=0.000 uv=0.000 ut=0.000 nmi=0.0003
+F onehot_feat17 C=8 tr=3 va=3 top=0.968 s1=0.000 uv=0.000 ut=0.000 nmi=0.0000
+F onehot_feat2 C=64 tr=50 va=50 top=0.248 s1=0.020 uv=0.000 ut=0.000 nmi=0.0009
+F onehot_feat3 C=1600 tr=1436 va=1330 top=0.042 s1=0.015 uv=0.001 ut=0.000 nmi=0.0129
+F onehot_feat4 C=24 tr=16 va=16 top=0.369 s1=0.000 uv=0.000 ut=0.000 nmi=0.0002
+F onehot_feat5 C=48 tr=33 va=31 top=0.995 s1=0.030 uv=0.000 ut=0.000 nmi=0.0002
+F onehot_feat6 C=8 tr=3 va=3 top=0.527 s1=0.000 uv=0.000 ut=0.000 nmi=0.0009
+F onehot_feat7 C=160 tr=117 va=105 top=0.087 s1=0.009 uv=0.000 ut=0.000 nmi=0.0029
+F onehot_feat8 C=512 tr=452 va=438 top=0.020 s1=0.002 uv=0.000 ut=0.000 nmi=0.0066
+F onehot_feat9 C=12 tr=7 va=7 top=0.228 s1=0.000 uv=0.000 ut=0.000 nmi=0.0005
+F register_days_bucket C=12 tr=10 va=10 top=0.100 s1=0.000 uv=0.000 ut=0.000 nmi=0.0025
+F register_days_range C=16 tr=7 va=8 top=0.751 s1=0.000 uv=0.000 ut=0.000 nmi=0.0021
+F tab C=20 tr=15 va=15 top=0.732 s1=0.000 uv=0.000 ut=0.000 nmi=0.0767
+F tag C=64 tr=44 va=43 top=0.264 s1=0.000 uv=0.000 ut=0.000 nmi=0.0214
+F upload_type C=20 tr=14 va=11 top=0.430 s1=0.000 uv=0.000 ut=0.000 nmi=0.0105
+F user_active_degree C=16 tr=9 va=9 top=0.770 s1=0.000 uv=0.000 ut=0.000 nmi=0.0028
+F user_id C=30000 tr=26210 va=21956 top=0.001 s1=0.023 uv=0.016 ut=0.000 nmi=0.1393
+F video_id C=8000 tr=7538 va=5945 top=0.008 s1=0.011 uv=0.000 ut=0.000 nmi=0.0990
+F video_type C=8 tr=3 va=3 top=0.987 s1=0.000 uv=0.000 ut=0.000 nmi=0.0001
+HIST video_id n=12 video_id_train_count_log1p:(124909,)/float32,video_id_long_view_rate:(124909,)/float32,video_id_is_like_rate:(124909,)/float32,video_id_is_follow_rate:(124909,)/float32,video_id_is_comment_rate:(124909,)/float32,video_id_is_forward_rate:(124909,)/float32,video_id_is_hate_rate:(124909,)/float32,video_id_is_click_rate:(124909,)/flo
+HIST author_id n=12 author_id_train_count_log1p:(124909,)/float32,author_id_long_view_rate:(124909,)/float32,author_id_is_like_rate:(124909,)/float32,author_id_is_follow_rate:(124909,)/float32,author_id_is_comment_rate:(124909,)/float32,author_id_is_forward_rate:(124909,)/float32,author_id_is_hate_rate:(124909,)/float32,author_id_is_click_rate:(124

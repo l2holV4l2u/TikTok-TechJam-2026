@@ -1,0 +1,14 @@
+cross-run memory: 50 lines from this agent's prior runs
+dataset: KuaiRand-Pure  train 1,141,112 / valid 124,909 / test 170,588
+
+submission from iteration #5 (validation primary 0.6034) -> runs\r66\submission.csv
+  hypothesis: Target behavior-history feature construction by learning smoothed user-specific preference
+  test primary 0.5967  gauc 0.6630  ndcg@5 0.5303   delta vs baseline +0.0021
+
+stopped: converged
+iterations: 6 of 50   failures: 0
+agent wall-clock: 12.6 min   script time: 3.9 min
+tokens (incl. knowledge revision): 71,449
+EDA completed: True   baseline reproduced: 0.6018030714400835
+manual interventions: 0
+run log: runs\r66

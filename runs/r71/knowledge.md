@@ -1,0 +1,8 @@
+# What the agent established
+
+- (active) A 16-dimensional Factorization Machine trained with Adam at lr=0.001 on user_id, video_id, author_id, tab, and duration_bucket reproduces the official baseline within seed noise: primary 0.6006 versus 0.6016, a difference of -0.0010. [iters 1]
+- (active) The validation-selected DeepFM candidate using a 0.7 DeepFM weight with the trusted incumbent improves primary from 0.6006 to 0.6033 (+0.0027) over the reproduced five-field FM, exceeding the seed-noise threshold, although the experiment does not isolate nonlinear interactions from added fields or blending. [iters 1,2]
+- (active) Neither the selected DeepFM candidate nor its DCN-V2-augmented blend measurably outperforms the official 0.6016 baseline: their primaries of 0.6033 and 0.6035 are only +0.0017 and +0.0019 higher, respectively, both inside seed noise. [iters 2,3]
+- (active) Adding a two-layer rank-32 DCN-V2 cross tower to the working DeepFM and blending it with the incumbent produces no measurable gain over DeepFM alone: primary changes from 0.6033 to 0.6035 (+0.0002), while the raw candidate scores 0.6034. [iters 2,3]
+- (active) Leakage-free empirical-Bayes user-by-content/context affinity features do not improve the incumbent: validation selection assigns the new model zero weight and retains primary 0.6035, unchanged within noise from the prior incumbent. [iters 3,4]
+- (active) The tested personalization models are not competitive as standalone rankers: the 41-feature personal LightGBM scores primary 0.4670 and the direct affinity score scores 0.5019, both far below the incumbent's 0.6035. [iters 4]

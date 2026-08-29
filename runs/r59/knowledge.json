@@ -1,0 +1,98 @@
+[
+  {
+    "text": "A k=16 Factorization Machine using user_id, video_id, author_id, tab, and duration_bucket with Adam at lr=0.001 reproduces the official validation baseline at primary=0.6016.",
+    "status": "active",
+    "evidence": [
+      1
+    ]
+  },
+  {
+    "text": "The tested DeepFM feature-interaction configuration achieves primary=0.6049, improving over the FM baseline by 0.0033, which exceeds the 0.002 seed-noise threshold.",
+    "status": "active",
+    "evidence": [
+      1,
+      2
+    ]
+  },
+  {
+    "text": "Within the DeepFM candidate, validation selected deep weight 0.7 with primary=0.604857, but its advantage over the pure DeepFM score of 0.604363 is only 0.000494 and therefore is not measurable beyond seed noise.",
+    "status": "active",
+    "evidence": [
+      2
+    ]
+  },
+  {
+    "text": "Incumbent blending is configuration-dependent: harness_blend_alpha was 1.0 for the original DeepFM and Wide & DeepFM candidates, while the DCN-V2 and LightGBM-enhanced candidates selected 0.75; none of the tested post-DeepFM blends improved its incumbent by more than 0.002.",
+    "status": "qualified",
+    "evidence": [
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  {
+    "text": "Adding the tested low-rank DCN-V2 cross branch does not measurably improve the working DeepFM configuration: validation selected DCN weight 0.3 and primary=0.605118, only about 0.0003 above the 0.604857 incumbent.",
+    "status": "active",
+    "evidence": [
+      2,
+      3
+    ]
+  },
+  {
+    "text": "The tested DCN-V2 augmentation is less compute-efficient than the DeepFM incumbent, increasing GPU time from 81.8564 to 116.3724 seconds without a measurable primary-metric gain.",
+    "status": "active",
+    "evidence": [
+      2,
+      3
+    ]
+  },
+  {
+    "text": "The tested pointwise LightGBM over train-only entity histories, heavy-tailed numeric features, and leakage-free feed-position/session context is substantially weaker as a standalone ranker than the DeepFM incumbent, scoring primary=0.587698 versus 0.605123.",
+    "status": "active",
+    "evidence": [
+      4
+    ]
+  },
+  {
+    "text": "A rank blend assigning 0.10 weight to the tested LightGBM raises validation primary only from 0.605123 to 0.605319, a 0.000196 change within seed noise; these tree-based history and context features add no measurable gain in the tested configuration.",
+    "status": "active",
+    "evidence": [
+      4
+    ]
+  },
+  {
+    "text": "The tested jointly trained Wide & DeepFM model with hashed user\u00d7video, user\u00d7author, and user\u00d7context crosses adds no measurable gain: validation selected wide scale 1.5 and a z-score blend with model weight 0.5, reaching 0.605608 versus the 0.605323 incumbent, a difference of only 0.000285.",
+    "status": "active",
+    "evidence": [
+      5
+    ]
+  },
+  {
+    "text": "The tested Wide & DeepFM candidate is less compute-efficient than the DeepFM incumbent, using 147.1306 GPU-seconds versus 81.8564 without a measurable primary-metric gain.",
+    "status": "active",
+    "evidence": [
+      2,
+      5
+    ]
+  },
+  {
+    "text": "DeepFM remains the evidence-backed working model: the higher observed primary scores from DCN-V2, LightGBM blending, and Wide & DeepFM are all less than 0.002 above the DeepFM result and therefore do not establish improvements beyond seed noise.",
+    "status": "active",
+    "evidence": [
+      2,
+      3,
+      4,
+      5
+    ]
+  },
+  {
+    "text": "Three consecutive post-DeepFM attempts targeting cross interactions, tree-based history/context modeling, and explicit memorization each failed to gain more than 0.002 over their incumbent, satisfying the run's stopping condition.",
+    "status": "active",
+    "evidence": [
+      3,
+      4,
+      5
+    ]
+  }
+]
