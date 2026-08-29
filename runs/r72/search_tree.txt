@@ -1,0 +1,5 @@
+#1 0.6036  Reproduce the official baseline by training a k=16 logistic Factorizat
+  #2 0.6041  Target the feature-representation stage by adding tag, upload_type, mu
+    #3 0.6041  Target leakage-free temporal personalization and post-model reranking 
+      #4 0.6041  Target the model/loss stage with a boosted-tree context model using al
+      #5 0.6041  Target the supervision stage with a multi-task Factorization Machine w

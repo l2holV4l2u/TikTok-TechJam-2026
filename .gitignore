@@ -32,6 +32,20 @@ runs/*
 !runs/r69/
 !runs/r70/
 !runs/r71/
+# the sweep-only ladder and the measurements behind it. r79 is the submission; r77 and r78 are
+# the diagnostic runs (--patience 999) whose per-iteration valid/test scores showed that refine
+# and tune move validation without moving test. r75 and r80 were killed mid-run and are kept as
+# the audit trail says they were.
+!runs/r72/
+!runs/r73/
+!runs/r74/
+!runs/r75/
+!runs/r76/
+!runs/r77/
+!runs/r78/
+!runs/r79/
+!runs/r80/
+!runs/r81/
 # the KuaiRand-1K bonus run behind RUN_REPORT_1K.md (logs only; its 532MB of scores,
 # submission CSV and cached artifacts stay out).
 !runs/r38_1k/

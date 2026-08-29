@@ -1,0 +1,14 @@
+cross-run memory: 50 lines from this agent's prior runs
+dataset: KuaiRand-Pure  train 1,141,112 / valid 124,909 / test 170,588
+
+submission from iteration #5 (validation primary 0.6040) -> runs\r73\submission.csv
+  hypothesis: Target the behavior-sequence representation stage with a causal DIN-style model whose atte
+  test primary 0.5993  gauc 0.6665  ndcg@5 0.5320   delta vs baseline +0.0047
+
+stopped: converged
+iterations: 6 of 50   failures: 0
+agent wall-clock: 12.3 min   script time: 5.2 min
+tokens (incl. knowledge revision): 81,674
+EDA completed: True   baseline reproduced: 0.6024031941647807
+manual interventions: 0
+run log: runs\r73

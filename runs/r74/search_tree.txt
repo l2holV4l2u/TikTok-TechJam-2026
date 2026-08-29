@@ -1,0 +1,5 @@
+#1 0.6013  Reproduce the official baseline by training a k=16 Factorization Machi
+  #2 0.6044  Target model-family and score-fusion stages by comparing additive memo
+    #3 0.6048 [retired]  Target the post-model personalization stage by adding smoothed user×au
+      #4 0.6048  Target the ranking-loss and temporal-context stages: a LightGBM model 
+      #5 0.6049  Target the behavior-history representation stage with low-rank collabo

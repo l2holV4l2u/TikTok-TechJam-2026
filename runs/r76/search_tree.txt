@@ -1,0 +1,5 @@
+#1 0.6012  Reproduce the official baseline at the modeling stage by training a ra
+  #2 0.6043  Target the prediction-formation stage by comparing additive memorizati
+    #3 0.6043  Target the feature-cross modeling stage by replacing DCN’s rank-one ve
+      #4 0.6044  Target prediction formation with a breadth sweep over expanded-field F
+        #5 0.6044  Target the expanded-FM training configuration stage with successive ha

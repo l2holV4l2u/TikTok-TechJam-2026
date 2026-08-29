@@ -1,0 +1,45 @@
+SHAPE train=1141112 valid=124909 test=170588 fields=37 nums=5 scalar1d=True
+LABEL train=0.3366 (384121) valid=0.3133 (39132)
+USR T U=26210 n50/90/99=31.0/97.0/207.0 p50/90/99=10.0/34.0/67.0 zero=0.051 all=0.023 mixed=0.927
+USR V U=22377 n50/90/99=4.0/12.0/26.0 p50/90/99=1.0/4.0/9.0 zero=0.303 all=0.119 mixed=0.578
+DATE T 20220409:52736/0.336 20220410:227808/0.341 20220411:278835/0.333 20220412:166076/0.332 20220413:94711/0.317 20220414:71252/0.319 20220415:58892/0.363 20220416:60904/0.377 20220417:44023/0.364 20220418:24560/0.331 20220419:20443/0.323 20220420:20851/0.311 20220421:20021/0.315
+DATE V 20220422:22283/0.319 20220423:26645/0.338 20220424:18240/0.303 20220425:14911/0.312 20220426:14530/0.311 20220427:14328/0.297 20220428:13972/0.290
+OVERLAP user:Vseen=0.984,EseenTV=0.980 video:Vseen=1.000,EseenTV=1.000 author:Vseen=1.000,EseenTV=1.000
+COLD valid_rate user:seen=0.313,new=0.361 video:seen=0.313,new=0.412 author:seen=0.313,new=0.500
+SEQ T transitions=1114902 tie=0.078 gap_s50/90=1276.6/52390.8 P1|prev1=0.468 P1|prev0=0.267
+SEQ V transitions=102532 tie=0.036 gap_s50/90=21523.4/167258.4 P1|prev1=0.423 P1|prev0=0.251
+HIST video_id video_id_train_count_log1p:(124909,),video_id_long_view_rate:(124909,),video_id_is_like_rate:(124909,),video_id_is_follow_rate:(124909,),video_id_is_comment_rate:(124909,),video_id_is_forward_rate:(124909,),video_id_is_hate_rate:(124909,),video_id_is_click_rat
+HIST author_id author_id_train_count_log1p:(124909,),author_id_long_view_rate:(124909,),author_id_is_like_rate:(124909,),author_id_is_follow_rate:(124909,),author_id_is_comment_rate:(124909,),author_id_is_forward_rate:(124909,),author_id_is_hate_rate:(124909,),author_id_is_c
+NUM duration_ms missT/V=0.000/0.000 q50/95=70233.0/286166.0 logcorrT/V=0.074/0.049
+NUM user_fans_user_num missT/V=0.000/0.000 q50/95=60.0/1172.0 logcorrT/V=-0.043/-0.033
+NUM user_follow_user_num missT/V=0.000/0.000 q50/95=146.0/1557.0 logcorrT/V=0.016/0.009
+NUM user_friend_user_num missT/V=0.000/0.000 q50/95=20.0/574.0 logcorrT/V=-0.030/-0.021
+NUM user_register_days missT/V=0.000/0.000 q50/95=1223.0/2408.0 logcorrT/V=-0.053/-0.044
+F author_id C=7000 A=6482/5311/5333 Z=0.00/0.00 top=0.01 S=0.1045/0.1060
+F duration_bucket C=12 A=10/10/10 Z=0.00/0.00 top=0.10 S=0.0051/0.0050
+F fans_user_num_range C=16 A=9/9/9 Z=0.00/0.00 top=0.38 S=0.0018/0.0010
+F follow_user_num_range C=16 A=8/8/8 Z=0.00/0.00 top=0.20 S=0.0004/0.0002
+F friend_user_num_range C=16 A=7/7/7 Z=0.00/0.00 top=0.28 S=0.0009/0.0004
+F hour C=32 A=24/24/24 Z=0.00/0.00 top=0.08 S=0.0009/0.0004
+F is_live_streamer C=4 A=2/2/2 Z=0.00/0.00 top=0.77 S=0.0008/0.0009
+F is_lowactive_period C=4 A=1/1/1 Z=0.00/0.00 top=1.00 S=0.0000/0.0000
+F is_video_author C=4 A=2/2/2 Z=0.00/0.00 top=0.85 S=0.0002/0.0001
+F music_type C=12 A=6/6/6 Z=0.00/0.00 top=0.88 S=0.0040/0.0032
+F onehot_feat0 C=8 A=2/2/2 Z=0.00/0.00 top=0.50 S=0.0022/0.0015
+F onehot_feat1 C=12 A=7/7/7 Z=0.00/0.00 top=0.27 S=0.0045/0.0055
+F onehot_feat10 C=8 A=5/5/5 Z=0.00/0.00 top=0.40 S=0.0002/0.0002
+F onehot_feat11 C=8 A=5/5/4 Z=0.00/0.00 top=0.75 S=0.0014/0.0019
+F onehot_feat12 C=8 A=3/3/3 Z=0.00/0.00 top=0.68 S=0.0019/0.0015
+F onehot_feat13 C=8 A=3/3/3 Z=0.00/0.00 top=0.94 S=0.0001/0.0001
+F onehot_feat14 C=8 A=3/3/3 Z=0.00/0.00 top=0.88 S=0.0001/0.0001
+F onehot_feat15 C=8 A=3/3/3 Z=0.00/0.00 top=0.95 S=0.0002/0.0001
+F onehot_feat16 C=8 A=3/3/3 Z=0.00/0.00 top=0.93 S=0.0004/0.0003
+F onehot_feat17 C=8 A=3/3/3 Z=0.00/0.00 top=0.97 S=0.0000/0.0000
+F onehot_feat2 C=64 A=50/50/49 Z=0.00/0.00 top=0.25 S=0.0011/0.0012
+F onehot_feat3 C=1600 A=1436/1330/1359 Z=0.00/0.00 top=0.04 S=0.0151/0.0166
+F onehot_feat4 C=24 A=16/16/16 Z=0.00/0.00 top=0.37 S=0.0003/0.0005
+F onehot_feat5 C=48 A=33/31/31 Z=0.00/0.00 top=0.99 S=0.0002/0.0003
+F onehot_feat6 C=8 A=3/3/3 Z=0.00/0.00 top=0.53 S=0.0011/0.0009
+F onehot_feat7 C=160 A=117/105/106 Z=0.00/0.00 top=0.09 S=0.0036/0.0034
+F onehot_feat8 C=512 A=452/438/439 Z=0.00/0.00 top=0.02 S=0.0081/0.0076
+F onehot_feat9 C=12 A=7/7/7 Z=0.00/

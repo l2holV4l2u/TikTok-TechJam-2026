@@ -1,0 +1,8 @@
+# What the agent established
+
+- (active) A k=16 five-field Factorization Machine using user, video, author, tab, and duration fields, trained with Adam at lr=0.001, reproduces the official validation baseline but provides no measurable improvement: primary=0.6024 versus 0.6016, a +0.0008 difference within seed noise. [iters 1]
+- (active) Adding tag, upload type, music type, and hour categorical fields to the five-field FM produces no measurable validation change: primary=0.6028 versus 0.6024, a +0.0004 difference within seed noise. [iters 1,2]
+- (active) A nonlinear LightGBM trained on the tested safe categorical and numeric inputs plus leave-one-out entity and user-content rates performs substantially worse alone than the incumbent FM: primary=0.4998 versus 0.6028. [iters 3]
+- (active) Blending the tested LightGBM with the incumbent FM provides no measurable validation improvement: the selected rank blend retained raw primary=0.6028, and the harness-blended score of 0.6030 is only +0.0002 over the incumbent, within seed noise. [iters 3]
+- (active) Adding recency-weighted hierarchical user-by-content preferences for authors, tags, duration, and upload style and blending their within-user residuals with the incumbent produces no measurable validation improvement: primary=0.6031 versus 0.6030, about +0.0001 within seed noise. [iters 4]
+- (active) A causal DIN-style model attending over the eight most recent positive impressions does not measurably improve within-user ranking over the incumbent: DIN alone reached primary=0.6033 and the selected incumbent blend reached 0.6040 versus incumbent=0.6031, gains of about +0.0002 and +0.0009 respectively, both within seed noise. This null  [iters 5]

@@ -1,0 +1,66 @@
+[
+  {
+    "text": "A k=16 logistic Factorization Machine using user_id, video_id, author_id, tab, and duration_bucket reproduces the official validation baseline within seed noise (primary 0.6036 versus 0.6016) but does not establish a measurable improvement.",
+    "status": "active",
+    "evidence": [
+      1
+    ]
+  },
+  {
+    "text": "Adding tag, upload_type, music_type, and hour to the five-field k=16 Factorization Machine produces no measurable validation improvement under the current setup (primary 0.6041 versus 0.6036, a difference of 0.0005).",
+    "status": "active",
+    "evidence": [
+      1,
+      2
+    ]
+  },
+  {
+    "text": "Blending the incumbent with the tested leakage-free, recency-weighted, Bayesian-smoothed user-author, user-video, and user-tag preference residuals produces no measurable validation improvement; internal selection retained the incumbent with residual blend alpha 0.",
+    "status": "active",
+    "evidence": [
+      3
+    ]
+  },
+  {
+    "text": "User-entity pair history is sparse for broad author- or video-level personalization in this validation setup (3.38% user-author coverage and 1.62% user-video coverage), while user-tag history is substantially denser (77.44% coverage); nevertheless, the tested tag-backed residual reranker showed no measurable gain.",
+    "status": "active",
+    "evidence": [
+      3
+    ]
+  },
+  {
+    "text": "The tested boosted-tree context model using 64 features, including safe categorical fields, heavy-tail numeric transforms, and leave-one-out entity response statistics, does not improve the incumbent through validation-selected blending; the selector retained the incumbent with tree alpha 0.",
+    "status": "active",
+    "evidence": [
+      4
+    ]
+  },
+  {
+    "text": "As a standalone ranker, the tested boosted-tree context model is substantially worse than the incumbent in this setup (primary 0.4581 versus 0.6041), so this tree formulation is not a competitive replacement for the Factorization Machine.",
+    "status": "active",
+    "evidence": [
+      4
+    ]
+  },
+  {
+    "text": "The tested multi-task Factorization Machine with embeddings shared across long_view and train-only click, like, follow, and comment objectives produces no measurable validation improvement over the incumbent; validation selection retained the incumbent with blend alpha 0 and the scored primary remained 0.6041.",
+    "status": "active",
+    "evidence": [
+      5
+    ]
+  },
+  {
+    "text": "In the tested multi-task formulation, the unblended model was measurably worse than the incumbent (internal raw primary 0.5996 versus 0.6041), so na\u00efvely sharing interaction embeddings with these auxiliary objectives is not a competitive replacement under the current loss weighting and training setup.",
+    "status": "active",
+    "evidence": [
+      5
+    ]
+  },
+  {
+    "text": "All four auxiliary labels have full training coverage, but their positive rates are highly imbalanced: click is dense at 46.34%, while like, comment, and follow occur at only 1.87%, 0.26%, and 0.10%, respectively; any further multi-task attempt should account for this imbalance rather than treating the auxiliary tasks uniformly.",
+    "status": "active",
+    "evidence": [
+      5
+    ]
+  }
+]
