@@ -18,6 +18,7 @@ from agent.memory import distil
 from agent.proposer import LLMProposer
 from agent.recovery import Recovery
 from agent.knowledge import Knowledge
+from agent.consultant import revise as consultant_revise
 from agent.tree import Tree
 
 # KuaiRand-Pure's published baseline. Other variants have no published number, so a run on one
@@ -259,6 +260,12 @@ def main() -> None:
             # tell an extraordinary result from an impossible one.
             ceiling=facts.get("ceiling"),
             n_slots=args.slots,
+            # With several lineages running, one synthesis per turn replaces one belief
+            # revision per experiment: same budget, and it can see what the slots share.
+            consult_fn=(lambda k, slots, results, archive, corr, stale, patience:
+                        consultant_revise(revise_complete, k, slots, results, archive=archive,
+                                          correlation=corr, stale=stale, patience=patience,
+                                          epsilon=args.epsilon)) if args.slots > 1 else None,
         )
     except BaseException as exc:
         # A run that dies mid-flight has still measured real experiments, but memory keys off

@@ -57,6 +57,7 @@ class Slot:
     lineage: list[int] = field(default_factory=list)   # iter_ids it has produced
     last_hypothesis: str = ""
     last_valid_scores: object | None = None           # np.ndarray, for correlation
+    last_test_scores: object | None = None            # np.ndarray, for the portfolio blend
     # A revived slot must start from the node it was revived onto, not from whatever
     # tree.select would hand it; cleared once it has been used for one proposal.
     pending_parent: object | None = None

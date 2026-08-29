@@ -399,6 +399,94 @@ def test_archive_persists_predictions_for_the_ensemble_pool():
         assert "retired" in arch.summary().lower()
 
 
+def _consult_recorder(notes_by_slot=None, claims=None):
+    """A consult_fn that records its calls and returns canned notes."""
+    calls = []
+
+    def fn(knowledge, slots, results, archive, correlation, stale, patience):
+        calls.append({"slots": [s.slot_id for s in slots], "results": list(results),
+                      "correlation": correlation, "stale": stale,
+                      "archive_size": len(archive) if archive else 0})
+        if claims is not None:
+            knowledge.claims = list(claims)
+        return 11, 7, dict(notes_by_slot or {})
+
+    return fn, calls
+
+
+def test_consultant_is_called_exactly_once_per_turn():
+    with tempfile.TemporaryDirectory() as tmp:
+        fn, calls = _consult_recorder()
+        led = _ledger(tmp)
+        pr = SlotProposer([0.61] * 9)
+        r = run_loop(pr, ArrayEvaluator(spread=0.9), led, workdir=Path(tmp) / "scripts",
+                     patience=99, timeout=30, n_slots=3, consult_fn=fn)
+        assert len(calls) == r.turns, (len(calls), r.turns)
+        assert all(c["slots"] == [0, 1, 2] for c in calls), calls
+
+
+def test_consultant_sees_every_slots_result_for_the_turn():
+    with tempfile.TemporaryDirectory() as tmp:
+        fn, calls = _consult_recorder()
+        run_loop(SlotProposer([0.61] * 9), ArrayEvaluator(spread=0.9), _ledger(tmp),
+                 workdir=Path(tmp) / "scripts", patience=99, timeout=30, n_slots=3,
+                 consult_fn=fn)
+        assert calls and all(len(c["results"]) == 3 for c in calls), (
+            [len(c["results"]) for c in calls])
+        assert all("primary" in r for c in calls for r in c["results"]), calls[0]
+        assert calls[0]["correlation"] is not None, "the correlation record must reach it"
+
+
+def test_every_live_slot_receives_its_note():
+    notes = {0: "slot 1 covers recency", 1: "slot 0 covers crosses", 2: "try the loss stage"}
+    with tempfile.TemporaryDirectory() as tmp:
+        fn, _ = _consult_recorder(notes)
+        pr = SlotProposer([0.61] * 12)
+        run_loop(pr, ArrayEvaluator(spread=0.9), _ledger(tmp),
+                 workdir=Path(tmp) / "scripts", patience=99, timeout=30, n_slots=3,
+                 consult_fn=fn)
+        # turn 1 has no note yet; from turn 2 each slot carries the one addressed to it
+        assert set(pr.notes[3:6]) == set(notes.values()), pr.notes[3:6]
+
+
+def test_the_consultant_replaces_per_experiment_revision_not_adds_to_it():
+    """One call per turn, not n. Belief revision is already about a third of a run's
+    requests and Feasibility is scored on tokens."""
+    with tempfile.TemporaryDirectory() as tmp:
+        revisions = []
+        fn, calls = _consult_recorder()
+        run_loop(SlotProposer([0.61] * 9), ArrayEvaluator(spread=0.9), _ledger(tmp),
+                 workdir=Path(tmp) / "scripts", patience=99, timeout=30, n_slots=3,
+                 consult_fn=fn,
+                 revise_fn=lambda *a: (revisions.append(a) or (0, 0)))
+        improve_turns = len(calls)
+        assert improve_turns > 0
+        # revise_fn still runs for the baseline phase, but never for an improve turn
+        assert len(revisions) <= 1, f"{len(revisions)} per-experiment revisions alongside the consultant"
+
+
+def test_one_slot_keeps_the_single_trajectory_belief_revision():
+    with tempfile.TemporaryDirectory() as tmp:
+        revisions = []
+        fn, calls = _consult_recorder()
+        run_loop(SlotProposer([0.61] * 4), ArrayEvaluator(spread=0.9), _ledger(tmp),
+                 workdir=Path(tmp) / "scripts", patience=99, timeout=30, n_slots=1,
+                 consult_fn=fn,
+                 revise_fn=lambda *a: (revisions.append(a) or (0, 0)))
+        assert calls == [], "a single slot has nothing to synthesise across"
+        assert len(revisions) > 1, "and must keep its own per-experiment revision"
+
+
+def test_consultant_tokens_are_counted_in_the_run_total():
+    with tempfile.TemporaryDirectory() as tmp:
+        fn, calls = _consult_recorder()
+        r = run_loop(SlotProposer([0.61] * 9), ArrayEvaluator(spread=0.9), _ledger(tmp),
+                     workdir=Path(tmp) / "scripts", patience=99, timeout=30, n_slots=3,
+                     consult_fn=fn)
+        assert r.llm_tokens_in >= 11 * len(calls), (r.llm_tokens_in, len(calls))
+        assert r.llm_tokens_out >= 7 * len(calls)
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_") and callable(v)]
     for test in tests:
@@ -408,3 +496,6 @@ if __name__ == "__main__":
 
 
 # ------------------------------------------------------------------ Phase 3: archive & refill
+
+
+# ------------------------------------------------------------------ Phase 4: the consultant

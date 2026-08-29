@@ -428,6 +428,22 @@ def test_sibling_and_seed_blocks_carry_no_human_findings():
         assert not leaked, f"{name} carries human findings: {leaked}"
 
 
+def test_consultant_prompt_carries_no_human_findings():
+    """The no-priors guard extends to every prompt the harness sends, not only the proposer's.
+
+    A consultant seeded with what works on this dataset would be a human prior wearing a robe,
+    and it is the channel most likely to acquire one because its whole job is to advise.
+    """
+    import agent.consultant as mod
+
+    banned = ["blend", "ensembl", "rank aggregation", "decorrelat", "lambdarank", "deepfm",
+              "already measured", "exhibit", "0.6045", "0.6021", "0.5935", "target encoding"]
+    low = mod._PROMPT.lower()
+    leaked = [w for w in banned if w in low]
+    assert not leaked, f"human findings leaked into the consultant prompt: {leaked}"
+    assert "may not assert a fact about this dataset that no iteration measured" in low
+
+
 if __name__ == "__main__":
     # Discovered, not listed. A hand-maintained list drifted three times: it named a test that
     # had been renamed (crashing the module on import) while three real tests defined below it

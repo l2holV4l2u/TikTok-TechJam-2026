@@ -71,6 +71,9 @@ class LoopResult:
     mean_slot_correlation: float | None = None
     archived: int = 0        # lineages retired and kept, not lineages lost
     revivals: int = 0        # refills that resumed an archived line rather than drafting
+    # the most recent turn's full correlation record, so the consultant sees the pairs and not
+    # only their mean -- "0 and 2 agree, 1 is doing something else" is the actionable form
+    last_correlation: dict | None = None
 
 
 class Proposer(Protocol):
@@ -363,6 +366,7 @@ def _record_turn(run_dir: Path, turn: int, batch: list[dict], slots: list[Slot],
         return
     corr = pairwise_rank_correlation(scores, user_id)
     out.mean_slot_correlation = corr["mean"]
+    out.last_correlation = corr
     log_portfolio(run_dir, {
         "event": "turn",
         "turn": turn,
@@ -392,7 +396,7 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
              baseline_tolerance: float = BASELINE_TOLERANCE,
              max_instant_failures: int = 5, max_proposer_errors: int = 6,
              force_mode: str = "", n_slots: int = 1,
-             slot_patience: int = SLOT_PATIENCE) -> LoopResult:
+             slot_patience: int = SLOT_PATIENCE, consult_fn=None) -> LoopResult:
     tree = tree if tree is not None else Tree(epsilon=epsilon)
     recovery = recovery or Recovery()
     workdir = Path(workdir)
@@ -640,6 +644,7 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         #    one's result and the outcome does not depend on which subprocess finished first.
         turn_scored = turn_improved = False
         findings_seen: list[str] = []
+        turn_results: list[dict] = []
         for b in batch:
             p, res, iter_id = b.get("proposal"), b.get("result"), b["iter_id"]
             slot = b["slot"]
@@ -667,6 +672,8 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
                 # closer to retirement, one of them timing out at 4,373s.
                 tree.record_failure(parent_id, res.seconds)
                 slot.stale += 1
+                turn_results.append({"slot_id": slot.slot_id, "iter_id": iter_id,
+                                     "hypothesis": p.hypothesis, "status": "failed"})
                 if res.seconds < 1.0 and not res.stdout and not res.stderr.strip():
                     instant_failures += 1
                     if instant_failures >= max_instant_failures:
@@ -698,6 +705,8 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
                 # immortal branch.
                 tree.record_child(parent_id, float("-inf"), res.seconds)
                 slot.stale += 1
+                turn_results.append({"slot_id": slot.slot_id, "iter_id": iter_id,
+                                     "hypothesis": p.hypothesis, "status": "rejected"})
                 continue
 
             recovery.on_success(p.hypothesis)
@@ -717,7 +726,11 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
             tree.add(Node(iter_id, parent_id, p.hypothesis, p.code, score))
             tree.record_child(parent_id, score, res.seconds)
             slot.last_valid_scores = getattr(evaluator, "last_scores", None)
+            slot.last_test_scores = getattr(evaluator, "last_test_scores", None)
             turn_scored = True
+            turn_results.append({"slot_id": slot.slot_id, "iter_id": iter_id,
+                                 "hypothesis": p.hypothesis, "primary": score,
+                                 "status": "ok" if improved else "kept"})
 
             if score > selection_best:
                 selection_best = score
@@ -782,8 +795,23 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         out.archived = len(archive) if archive is not None else 0
         out.revivals = refill_state.revivals
 
-        _revise(revise_fn, ledger, out, context, knowledge,
-                "\n".join(findings_seen)[:MAX_FINDINGS_CHARS], stale, patience)
+        # 6. ONE synthesis per turn. With several lineages running, what a slot most lacks is
+        #    not literature -- it already receives the whole catalogue -- but knowledge of the
+        #    others. The consultant reads only what the agent's own experiments produced and
+        #    returns the shared belief set plus one note per slot. One call, not n: belief
+        #    revision is already about a third of a run's requests and Feasibility is scored.
+        findings_text = "\n".join(findings_seen)[:MAX_FINDINGS_CHARS]
+        if consult_fn is not None and len(slots) > 1:
+            ti, to, notes = consult_fn(knowledge, slots, turn_results, archive,
+                                       out.last_correlation, stale, patience)
+            out.llm_tokens_in += ti
+            out.llm_tokens_out += to
+            for slot in slots:
+                if slot.slot_id in notes:
+                    slot.seed_note = notes[slot.slot_id]
+            context["knowledge"] = knowledge.render()
+        else:
+            _revise(revise_fn, ledger, out, context, knowledge, findings_text, stale, patience)
 
     return finish("max_iters")
 
