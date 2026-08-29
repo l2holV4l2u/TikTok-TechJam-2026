@@ -1,0 +1,9 @@
+#3 0.6384  In the baseline-reproduction stage, using the exact five categorical X
+  #4 0.6568  Expand the FM feature stage with tag, upload type, music type, and hou
+    #5 0.6535  Change the training-loss stage to inverse-square-root user-frequency w
+    #6 0.6694  Target the post-model ranking stage by augmenting the best expanded FM
+      #7 0.6704  Extend the post-model reranking stage with a sparse train-only user–au
+        #8 0.6730 [retired]  Target the model family and feature-interaction stage by blending the 
+          #10 0.6704  Change only the LightGBM loss stage from pointwise binary log-loss to 
+          #12 0.6644  Target score combination via vectorized within-user rank aggregation; 
+          #13 0.6730  Target the representation-learning stage with train-only multi-task su
