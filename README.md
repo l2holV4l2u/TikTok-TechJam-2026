@@ -12,7 +12,7 @@ try, and why, has to come from the agent, or the Autonomy and Innovation claims 
 
 ## Result
 
-`submission_best.csv` is the submission. It is `runs/r59/submission.csv`, written by the harness
+`submission_best.csv` is the submission. It is `runs/r70/submission.csv`, written by the harness
 from that run's validation-best iteration — no human rebuilt it, and selection never looked at
 the test split.
 
@@ -228,7 +228,7 @@ and the other logged signals are outcomes of the row being scored; they are expo
 excluded entirely — its counts are aggregated over the whole log period, including the
 validation and test windows. Historical r39/r41/r43/r44 scores that used that file are retained as
 an audit trail but excluded from memory, comparison, and submission; `submission_best.csv` is
-restored to the strongest eligible run, r59.
+restored to the strongest eligible run, r70.
 
 ## What we would do with more time
 

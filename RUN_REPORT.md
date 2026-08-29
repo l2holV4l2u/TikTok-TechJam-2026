@@ -1,32 +1,32 @@
-# Run report - r59
+# Run report - r70
 
 ## Loop stages executed by the agent
 
 - **Inspect data (EDA):** completed at iteration #0 - the agent wrote and ran its own exploratory script; its findings are in `eda_report.txt` and were carried into every later prompt.
-- **Reproduce official baseline (Requirement 1):** 1 attempt(s); the agent's own pipeline reached validation primary **0.6016** against the official 0.6016 (delta -0.0000, inside the baseline's 5-seed noise). That script became the root of the search tree.
+- **Reproduce official baseline (Requirement 1):** 1 attempt(s); the agent's own pipeline reached validation primary **0.6026** against the official 0.6016 (delta +0.0010, inside the baseline's 5-seed noise). That script became the root of the search tree.
 - **Iterate:** 4 experiments proposed, executed and evaluated by the agent, each branching from a node of its own search tree.
 
 ## Iteration log
 
 | # | phase | parent | status | secs | primary | vs baseline | hypothesis |
 |---|---|---|---|---|---|---|---|
-| 0 | eda | - | ok | 8 | n/a | - | INSPECT DATA stage: quantify user/label structure, split novelty, scal |
-| 1 | baseline | - | ok | 43 | 0.6016 | -0.0000 | Reproduce the official baseline by training a k=16 Factorization Machi |
-| 2 | improve | #1 | ok | 87 | 0.6049 | +0.0033 | Target the feature-interaction representation stage by replacing the f |
-| 3 | improve | #2 | reverted | 122 | 0.6051 | +0.0035 | Target the feature-interaction representation stage by adding a low-ra |
-| 4 | improve | #3 | reverted | 84 | 0.6053 | +0.0037 | Target the tabular numeric/context modeling stage by blending the incu |
-| 5 | improve | #4 | reverted | 153 | 0.6056 | +0.0040 | Target the memorization stage with a jointly trained Wide & DeepFM mod |
+| 0 | eda | - | ok | 4 | n/a | - | INSPECT DATA stage: quantify label/user structure, temporal drift, cat |
+| 1 | baseline | - | ok | 40 | 0.6026 | +0.0010 | Reproduce the official baseline at the end-to-end modeling stage by tr |
+| 2 | improve | #1 | kept | 99 | 0.6039 | +0.0023 | Target the feature-interaction representation stage by replacing the f |
+| 3 | improve | #2 | kept | 29 | 0.6043 | +0.0027 | Target the personalized feature-statistics and score-correction stage  |
+| 4 | improve | #3 | kept | 208 | 0.6045 | +0.0029 | Target behavior-sequence feature construction with leakage-free, targe |
+| 5 | improve | #4 | kept | 113 | 0.6045 | +0.0029 | Target the candidate-set representation stage with transductive, label |
 
 ## Search tree
 
 Each line is an executed script; indentation is the edit it was derived from. A node marked `[retired]` produced three children that failed to improve on it, so the search abandoned that branch and backtracked.
 
 ```
-#1 0.6016  Reproduce the official baseline by training a k=16 Factorization Machi
-  #2 0.6049  Target the feature-interaction representation stage by replacing the f
-    #3 0.6051  Target the feature-interaction representation stage by adding a low-ra
-      #4 0.6053  Target the tabular numeric/context modeling stage by blending the incu
-        #5 0.6056  Target the memorization stage with a jointly trained Wide & DeepFM mod
+#1 0.6026  Reproduce the official baseline at the end-to-end modeling stage by tr
+  #2 0.6039  Target the feature-interaction representation stage by replacing the f
+    #3 0.6043  Target the personalized feature-statistics and score-correction stage 
+      #4 0.6045  Target behavior-sequence feature construction with leakage-free, targe
+        #5 0.6045  Target the candidate-set representation stage with transductive, label
 ```
 
 ## What the agent established
@@ -34,33 +34,32 @@ Each line is an executed script; indentation is the edit it was derived from. A 
 The agent's belief set, revised after every scored iteration rather than appended to, so later evidence can demote an earlier conclusion instead of piling up beside it. A claim marked `(invalidated)` was contradicted by a later result. Machine-readable form with per-claim evidence in `knowledge.json`.
 
 ```
-- (active) A k=16 Factorization Machine using user_id, video_id, author_id, tab, and duration_bucket with Adam at lr=0.001 reproduces the official validation baseline at primary=0.6016. [iters 1]
-- (active) The tested DeepFM feature-interaction configuration achieves primary=0.6049, improving over the FM baseline by 0.0033, which exceeds the 0.002 seed-noise threshold. [iters 1,2]
-- (active) Within the DeepFM candidate, validation selected deep weight 0.7 with primary=0.604857, but its advantage over the pure DeepFM score of 0.604363 is only 0.000494 and therefore is not measurable beyond seed noise. [iters 2]
-- (qualified) Incumbent blending is configuration-dependent: harness_blend_alpha was 1.0 for the original DeepFM and Wide & DeepFM candidates, while the DCN-V2 and LightGBM-enhanced candidates selected 0.75; none of the tested post-DeepFM blends improved its incumbent by more than 0.002. [iters 2,3,4,5]
-- (active) Adding the tested low-rank DCN-V2 cross branch does not measurably improve the working DeepFM configuration: validation selected DCN weight 0.3 and primary=0.605118, only about 0.0003 above the 0.604857 incumbent. [iters 2,3]
-- (active) The tested DCN-V2 augmentation is less compute-efficient than the DeepFM incumbent, increasing GPU time from 81.8564 to 116.3724 seconds without a measurable primary-metric gain. [iters 2,3]
-- (active) The tested pointwise LightG
+- (active) A k=16 Adam-trained Factorization Machine using user_id, video_id, author_id, tab, and duration_bucket reproduces the official baseline within seed noise (primary 0.6026 versus 0.6016) but provides no measurable improvement. [iters 1]
+- (active) Replacing the five-field Factorization Machine with the tested DeepFM and validation-selected blending does not measurably improve within-user ranking over the reproduced FM baseline (primary 0.6039 versus 0.6026, a difference of 0.0013). [iters 1,2]
+- (active) For the tested DeepFM, blending with the trusted FM at weight 0.75 changes primary by only 0.0001 relative to the raw candidate (0.6039 versus 0.6038), so this blending step has no measurable effect. [iters 2]
+- (active) Adding the tested hierarchical empirical-Bayes user-content affinities and robust entity-rate residual corrections to the DeepFM incumbent does not measurably improve within-user ranking (primary 0.6043 versus 0.6039, a difference of 0.0004). [iters 2,3]
+- (active) The correction-selection procedure retained only user-pair corrections for hour, tag, and author, with weights 0.2, 0.1, and 0.05 respectively; entity-rate residuals and pair corrections for duration, upload context, and video were not retained in the final scored correction set. [iters 3]
+- (active) Adding the tested leakage-free, target-conditioned user-history features for video, author, 
 ```
 
 ## Alternatives compared inside iterations
 
-161 candidate solutions were built and scored across 4 iteration(s). The convergence rule charges one iteration per experiment, so searching inside an iteration buys comparisons the iteration budget cannot.
+39 candidate solutions were built and scored across 4 iteration(s). The convergence rule charges one iteration per experiment, so searching inside an iteration buys comparisons the iteration budget cannot.
 
 | iteration | candidates (validation primary) |
 |---|---|
-| #2 | blend_deep_0.0 0.6016, blend_deep_0.1 0.6023, blend_deep_0.2 0.6031, blend_deep_0.3 0.6031, blend_deep_0.4 0.6037, blend_deep_0.5 0.6038, blend_deep_0.6 0.6045, blend_deep_0.7 0.6049 |
-| #3 | blend_dcn_0.0 0.6049, blend_dcn_0.1 0.6050, blend_dcn_0.2 0.6050, blend_dcn_0.3 0.6051, blend_dcn_0.4 0.6048, blend_dcn_0.5 0.6046, blend_dcn_0.6 0.6044, blend_dcn_0.7 0.6046 |
-| #4 | incumbent 0.6051, lightgbm_raw 0.5877, rankblend_tree_0.00 0.6051, rankblend_tree_0.05 0.6052, rankblend_tree_0.10 0.6053, rankblend_tree_0.15 0.6052, rankblend_tree_0.20 0.6051, rankblend_tree_0.25 0.6047 |
-| #5 | incumbent 0.6053, wide_scale_0.0_raw 0.6029, wide_scale_0.5_raw 0.6026, wide_scale_1.0_raw 0.6019, wide_scale_1.5_raw 0.6007, ws0.0_rankblend_0.0 0.6053, ws0.0_rankblend_0.1 0.6053, ws0.0_rankblend_0.2 0.6054 |
+| #2 | deep_weight_0.00 0.6026, deep_weight_0.25 0.6033, deep_weight_0.50 0.6038, deep_weight_0.75 0.6038, deep_weight_1.00 0.6036 |
+| #3 | best_single 0.6040, greedy_stage_1 0.6040, greedy_stage_2 0.6043, greedy_stage_3 0.6043, incumbent 0.6039 |
+| #4 | incumbent 0.6044, lgb_raw 0.5981, rank_blend_0.00 0.6044, rank_blend_0.10 0.6045, rank_blend_0.20 0.6044, rank_blend_0.30 0.6043, rank_blend_0.40 0.6037, rank_blend_0.50 0.6023 |
+| #5 | incumbent 0.6045, rank_blend_0.00 0.6045, rank_blend_0.05 0.6045, rank_blend_0.10 0.6042, rank_blend_0.15 0.6032, rank_blend_0.20 0.6011, rank_blend_0.25 0.5979, rank_blend_0.30 0.5932 |
 
 ## Resource usage (Feasibility & Practicality)
 
-- **Agent wall-clock to converged result: 0.25 h (15 min)**
-- Total LLM tokens: **84,834** (54,192 in / 30,642 out), including the knowledge-revision stage
+- **Agent wall-clock to converged result: 0.24 h (15 min)**
+- Total LLM tokens: **86,951** (56,321 in / 30,630 out), including the knowledge-revision stage
 - Iterations used: **6 of 50** (5 accepted scores, 0 failed, 0 rejected)
 - Compute inside generated scripts: **0.14 h (8 min)** on CPU.
-- Mean tokens per iteration: 14,139
+- Mean tokens per iteration: 14,492
 - Stop reason: `converged`
 
 ## Autonomy (Impact & Relevance)
@@ -78,13 +77,13 @@ The loop never stalled, crashed, or escalated to a human. Guards in place: retry
 
 ### Evidence from development runs
 
-Across 33 development runs of this agent, 203 iterations were executed and 58 failed. Every one was handled in-loop; none was escalated to a human. Failure taxonomy:
+Across 40 development runs of this agent, 243 iterations were executed and 61 failed. Every one was handled in-loop; none was escalated to a human. Failure taxonomy:
 
-- `}`: 33
+- `}`: 35
 - `IndexError`: 4
 - `TypeError`: 4
 - `KeyError`: 4
-- `RuntimeError`: 3
+- `RuntimeError`: 4
 - `ValueError`: 2
 - `Self-reported primary=0.469728 does not matc`: 2
 - `TIMEOUT`: 1
@@ -96,20 +95,20 @@ Each recovery path, with a concrete instance:
 
 ## Result
 
-- Best validation primary: **0.6056** (baseline 0.6016, delta +0.0040)
-- From iteration #5: Target the memorization stage with a jointly trained Wide & DeepFM model whose hashed explicit user×video, user×author, and user×context crosses can memorize recurring user-specific preferences that generalized latent interactions smooth away, thereby improving within-user ordering while retaining the trusted DeepFM incumbent through validation-selected blending.
+- Best validation primary: **0.6045** (baseline 0.6016, delta +0.0029)
+- From iteration #5: Target the candidate-set representation stage with transductive, label-free within-user relative features—candidate percentiles, deviations, and repeated-exposure frequencies—so the ranker can judge each video against the user’s other logged impressions rather than only estimate an absolute response probability.
 - Selection is on validation only, per the scoring rules; the hidden test set was never used to choose between iterations.
-- Submission: written to `runs\r59\submission.csv`
+- Submission: written to `runs\r70\submission.csv`
 
 ### Results table
 
 | split | GAUC | nDCG@5 | primary |
 |---|---|---|---|
-| validation (best iteration) | 0.6726 | 0.5386 | 0.6056 |
+| validation (best iteration) | 0.6712 | 0.5378 | 0.6045 |
 | official baseline (validation) | 0.6674 | 0.5357 | 0.6016 |
-| hidden test (this submission) | 0.6665 | 0.5313 | **0.5989** |
+| hidden test (this submission) | 0.6667 | 0.5322 | **0.5995** |
 | official baseline (test) | 0.6610 | 0.5282 | 0.5946 |
 
-**Absolute delta over baseline on hidden test: GAUC +0.0055, nDCG@5 +0.0031, mean +0.0043** (primary +0.0043).
+**Absolute delta over baseline on hidden test: GAUC +0.0057, nDCG@5 +0.0040, mean +0.0049** (primary +0.0049).
 
 Per the scoring formula, delta(m) = score_agent(m) - score_baseline(m), averaged over metrics.
