@@ -28,12 +28,10 @@ MAX_DELAY_S = 90.0
 # minutes with no child process and no progress. The loop cannot recover from a call that never
 # returns, so the call has to give up on its own.
 TOTAL_DEADLINE_S = 420.0
-# Free-tier accounts allow 3 requests per minute. An iteration costs two calls (propose, then
-# revise beliefs) and every retry counts, so a run breaches the limit within a couple of
-# iterations and then loses whole iterations to 429s -- measured across r45/r49/r51, which each
-# lost 2-5 iterations that way. Waiting our turn is strictly cheaper than retrying into a wall:
-# a 21s spacing costs ~40s per iteration, while one lost iteration costs the whole experiment.
-MIN_REQUEST_INTERVAL_S = float(os.environ.get("LLM_MIN_INTERVAL_S", "21"))
+# No artificial pacing. The 21s default here existed for a 3-requests-per-minute free tier;
+# the key in use allows 500/min, where spacing only makes runs slower. Set the env var to
+# re-enable throttling if a free-tier key is ever primary again.
+MIN_REQUEST_INTERVAL_S = float(os.environ.get("LLM_MIN_INTERVAL_S", "0"))
 MAX_TRANSIENT_WAITS = 4  # a per-minute limit is worth waiting out; a daily cap is not
 _last_request_at = 0.0
 

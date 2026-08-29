@@ -266,27 +266,6 @@ def test_history_reports_the_score_outcome_not_the_loop_status():
     assert "failed" in next(l for l in out.splitlines() if "a crash" in l)
 
 
-def test_a_prompt_budget_trims_context_but_never_the_contracts():
-    """A free-tier key allows 10,000 tokens a minute; prompts reach 12,000 unaided.
-
-    r63 completed three calls and spent 28 of its 31 daily requests in retries discovering
-    that. Trimming context is survivable; dropping the task contracts or the response format
-    is not, and neither is a call that can never be served.
-    """
-    from agent.proposer import _fit_budget
-
-    blocks = ["TASK BRIEF " + "x" * 5000,
-              "AVAILABLE LITERATURE " + "y" * 3000,
-              "PRIOR RUNS OF THIS AGENT " + "z" * 4000,
-              "Respond EXACTLY as: HYPOTHESIS"]
-    assert len(_fit_budget(list(blocks), 0)) > 12000, "budget 0 means no trimming at all"
-    out = _fit_budget(list(blocks), 6000)
-    assert len(out) <= 6000, len(out)
-    assert "TASK BRIEF" in out and "x" * 5000 in out, "the contracts are never trimmed"
-    assert "Respond EXACTLY as" in out, "the response format is never trimmed"
-    assert "[trimmed" in out, "context blocks are what gives way"
-
-
 def test_the_static_head_of_the_prompt_is_identical_across_calls():
     """Providers discount input that repeats as a stable PREFIX, and only as a prefix.
 
@@ -331,6 +310,37 @@ def test_the_first_improve_iteration_asks_for_breadth():
     assert "FIRST experiment" not in p2[0], "later iterations refine, they do not re-sweep"
 
 
+def test_the_parent_script_sits_inside_the_cacheable_prefix():
+    """The parent script is the largest block and repeats whenever the search stays on one
+    node, so it belongs in front of the blocks rewritten every iteration. Measured on a
+    same-parent pair: 20,012 shared characters before the reorder, 25,830 after -- about
+    1,600 tokens a call that no longer have to be re-sent uncached.
+    """
+    code = "# parent script" + chr(10) + ("x = 1" + chr(10)) * 900
+    parent = Node(3, None, "the parent hypothesis", code, 0.6045)
+
+    def build(hist, know):
+        proposer, prompts = _capture()
+        proposer.propose(phase="improve", history=hist, parent=parent,
+                         context={"mode": "refine", "eda": "eda " * 400,
+                                  "memory": "PRIOR RUNS " * 300, "knowledge": know,
+                                  "diagnosis": "gap table " * 40})
+        return prompts[0]
+
+    a = build([_entry(1, "first")], "claim one")
+    b = build([_entry(1, "first"), _entry(2, "second"), _entry(3, "third")],
+              "claim one" + chr(10) + "claim two")
+    shared = 0
+    for x, y in zip(a, b):
+        if x != y:
+            break
+        shared += 1
+    starts_at = a.index("# parent script")
+    assert shared > starts_at + len(code) - 50, (
+        f"parent code spans {starts_at}..{starts_at + len(code)} but only {shared} chars are "
+        "shared; a volatile block was moved in front of it and the cache prefix broke")
+
+
 if __name__ == "__main__":
     for t in (
         test_brief_carries_no_human_findings,
@@ -356,9 +366,9 @@ if __name__ == "__main__":
         test_detailed_retrieval_rotates_instead_of_repeating,
         test_token_counts_summed_across_retries,
         test_history_reports_the_score_outcome_not_the_loop_status,
-        test_a_prompt_budget_trims_context_but_never_the_contracts,
         test_the_static_head_of_the_prompt_is_identical_across_calls,
         test_the_first_improve_iteration_asks_for_breadth,
+        test_the_parent_script_sits_inside_the_cacheable_prefix,
     ):
         t()
         print(f"ok  {t.__name__}")

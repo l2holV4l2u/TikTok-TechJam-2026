@@ -27,11 +27,6 @@ MAX_KB = 3
 MAX_ATTEMPTS = 2
 MAX_CODE_CHARS = 14000     # a parent script is sent in full; truncating it produces bad edits
 MAX_EDA_CHARS = 4000
-# Off by default. A free-tier key allows 10,000 tokens per minute while prompts reach 12,000
-# on their own, so every call 429s and each retry spends one of the 50 daily requests: r63
-# completed 3 calls and burned 28. A budget makes those keys usable, at the cost of less
-# context per call. Measured at ~3.6 characters per token on real prompts.
-PROMPT_CHAR_BUDGET = int(os.environ.get("LLM_PROMPT_CHAR_BUDGET", "0"))
 
 # ---------------------------------------------------------------- task specification only
 
@@ -249,22 +244,25 @@ Make ONE targeted change to this script and return the COMPLETE modified script.
 working. If you believe this line of attack is exhausted, say so in your hypothesis and write
 something structurally different instead."""
 
-_BROADEN_PARENT = """The last {stale} experiment(s) produced no gain above 0.002. Refining the
-same line of attack again is the most common way a run ends with nothing.
+_BROADEN_CODE = """THE BEST SCRIPT SO FAR -- iteration #{iid}, validation primary {score:.4f}.
+Keep what makes it work and build the new direction on top of it; do not restart from
+something weaker just to be different. Changing direction means changing the method, not
+discarding the best result:
+```python
+{code}
+```"""
+
+# Split from the script above so the script -- which repeats whenever the search stays on one
+# node -- sits in the cacheable prefix, while the parts that change every iteration do not.
+_BROADEN_INSTRUCTION = """The last {stale} experiment(s) produced no gain above 0.002. Refining
+the same line of attack again is the most common way a run ends with nothing.
 
 Change DIRECTION, not detail. Target a different stage of the pipeline, or a different family
-of method, from everything listed below. A variation on an approach already in that list is not
-a new direction, however it is described.
+of method, from everything listed above. A variation on an approach already in that list is
+not a new direction, however it is described.
 
 ALREADY TRIED THIS RUN:
 {tried}
-
-THE BEST SCRIPT SO FAR -- iteration #{iid}, validation primary {score:.4f}. Keep what makes it
-work and build the new direction on top of it; do not restart from something weaker just to be
-different. Changing direction means changing the method, not discarding the best result:
-```python
-{code}
-```
 
 Return the COMPLETE script."""
 
@@ -296,29 +294,6 @@ def _fmt_metrics(metrics: dict) -> str:
         return "-"
     return ",".join(f"{k}={v:.4f}" if isinstance(v, float) else f"{k}={v}"
                     for k, v in metrics.items())
-
-
-def _fit_budget(blocks: list[str], budget: int) -> str:
-    """Join the prompt, trimming the least load-bearing blocks first if it is over budget.
-
-    The task brief carries the contracts, the parent script is what the agent edits, and the
-    response format is what makes the reply parseable -- none of those may go. The catalogue,
-    the EDA dump and the prior-run record are context, and a shorter version of each beats a
-    call that can never be served.
-    """
-    joined = "\n\n".join(blocks)
-    if budget <= 0 or len(joined) <= budget:
-        return joined
-    for head in ("AVAILABLE LITERATURE", "DETAIL ON A FEW OF THEM",
-                 "WHAT YOU MEASURED WHEN YOU INSPECTED", "PRIOR RUNS OF THIS AGENT",
-                 "WHAT YOU CURRENTLY BELIEVE"):
-        for i, b in enumerate(blocks):
-            if b.startswith(head) and len(b) > 400:
-                blocks[i] = b[:400].rstrip() + "\n[trimmed to fit the request budget]"
-        joined = "\n\n".join(blocks)
-        if len(joined) <= budget:
-            return joined
-    return joined
 
 
 def _summarize_history(history, n: int) -> str:
@@ -428,9 +403,27 @@ class LLMProposer:
             blocks.append(f"WHAT YOU MEASURED WHEN YOU INSPECTED THE DATA:\n{eda[:MAX_EDA_CHARS]}")
 
         if phase == "improve":
+            # Ordered for prompt caching, which matches on the longest common PREFIX. What
+            # repeats across a run goes first -- memory, then the parent script, the largest
+            # single block and identical whenever the search stays on the same node. Blocks
+            # rewritten every iteration follow. Same text; only the order differs.
             mem = context.get("memory")
             if mem:
                 blocks.append(mem)
+
+            if parent is None:
+                blocks.append(_DRAFT)
+            elif context.get("mode") == "sweep":
+                blocks.append(_SWEEP.format(iid=parent.iter_id, score=parent.score,
+                                            code=parent.code[:MAX_CODE_CHARS]))
+            elif context.get("mode") == "broaden":
+                blocks.append(_BROADEN_CODE.format(iid=parent.iter_id, score=parent.score,
+                                                   code=parent.code[:MAX_CODE_CHARS]))
+            else:
+                blocks.append(_EDIT_PARENT.format(iid=parent.iter_id, score=parent.score,
+                                                  hyp=parent.hypothesis,
+                                                  code=parent.code[:MAX_CODE_CHARS]))
+
             diagnosis = context.get("diagnosis")
             if diagnosis:
                 blocks.append("WHERE THE TRUSTED INCUMBENT LOSES ON VALIDATION (computed by the "
@@ -454,21 +447,11 @@ class LLMProposer:
             bl = ", ".join(sorted(blacklist))
             if bl:
                 blocks.append(f"RETIRED -- do not propose again: {bl}")
-            if parent is None:
-                blocks.append(_DRAFT)
-            elif context.get("mode") == "sweep":
-                blocks.append(_SWEEP.format(iid=parent.iter_id, score=parent.score,
-                                            code=parent.code[:MAX_CODE_CHARS]))
-            elif context.get("mode") == "broaden":
+            if parent is not None and context.get("mode") == "broaden":
                 tried = "\n".join(f"  - {e.hypothesis[:100]}" for e in history
                                   if e.phase == "improve") or "  - nothing yet"
-                blocks.append(_BROADEN_PARENT.format(
-                    stale=context.get("stale", 1), tried=tried, iid=parent.iter_id,
-                    score=parent.score, code=parent.code[:MAX_CODE_CHARS]))
-            else:
-                blocks.append(_EDIT_PARENT.format(iid=parent.iter_id, score=parent.score,
-                                                  hyp=parent.hypothesis,
-                                                  code=parent.code[:MAX_CODE_CHARS]))
+                blocks.append(_BROADEN_INSTRUCTION.format(
+                    stale=context.get("stale", 1), tried=tried))
             kb = retrieve(_kb_query(history, refl, feedback), k=MAX_KB, papers=self.kb_papers,
                           seen=self._seen_papers)
             if kb:
@@ -497,7 +480,7 @@ class LLMProposer:
             "<complete runnable script>\n"
             "```"
         )
-        return _fit_budget(blocks, PROMPT_CHAR_BUDGET)
+        return "\n\n".join(blocks)
 
     def _parse(self, text: str) -> tuple[str, str] | None:
         hm = _HYP_RE.search(text)
