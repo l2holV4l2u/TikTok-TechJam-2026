@@ -208,8 +208,10 @@ def test_a_stalled_iteration_sweeps_families_again_instead_of_refining():
 
     Over r70-r74 a family sweep gained 0.0027-0.0031 while all 15 refine iterations gained
     0.0000-0.0004, so three refines in a row ended every run at iteration 6 of 50, having
-    spent 16 minutes of the 6 h ceiling. The first miss now re-sweeps; a second falls
-    through to broaden, which may leave the model stage entirely.
+    spent 16 minutes of the 6 h ceiling. The first miss re-sweeps for new families; the
+    second stops exploring and tunes the best architecture, because a run has to spend
+    `patience` sub-epsilon iterations before it can stop and that tail is better spent
+    exploiting than wandering.
     """
     from agent.ledger import Ledger
     from agent.loop import run_loop
@@ -235,4 +237,5 @@ def test_a_stalled_iteration_sweeps_families_again_instead_of_refining():
     assert modes[0] == "sweep", f"the first improve iteration sweeps, got {modes}"
     assert modes[1] == "sweep", (
         f"the first stalled iteration re-sweeps rather than refining, got {modes}")
-    assert "broaden" in modes[2:], f"a second miss leaves the model stage, got {modes}"
+    assert modes[2] == "tune", (
+        f"the convergence tail exploits the best architecture, got {modes}")

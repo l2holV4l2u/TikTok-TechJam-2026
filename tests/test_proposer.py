@@ -377,3 +377,20 @@ if __name__ == "__main__":
         t()
         print(f"ok  {t.__name__}")
     print("all passed")
+
+
+def test_the_tune_rung_exploits_one_architecture_instead_of_adding_families():
+    """Explore-then-exploit: once breadth stops clearing epsilon the remaining convergence
+    tail is spent searching the winner's configuration space, as successive halving inside
+    one script rather than a grid that will not fit the timeout.
+    """
+    proposer, prompts = _capture()
+    parent = Node(4, None, "deepfm plus empirical bayes", "print(1)", 0.6048)
+    proposer.propose(phase="improve", history=[_entry(1)], parent=parent,
+                     context={"mode": "tune", "stale": 2})
+    tune = prompts[0]
+    assert "EXPLOITS" in tune and "do NOT introduce another model family".upper() in tune.upper()
+    assert "SUCCESSIVE HALVING" in tune, "a grid does not fit the per-script timeout"
+    assert all(w in tune for w in ("rung 1", "rung 2", "rung 3"))
+    assert "0.0008" in tune, "a gain inside seed noise is not a gain"
+    assert "structurally DIFFERENT" not in tune, "tune must not also ask for breadth"

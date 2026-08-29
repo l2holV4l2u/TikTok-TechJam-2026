@@ -301,6 +301,39 @@ winner's validation and test scores, and report its metrics.
 FAMILIES AND DIRECTIONS ALREADY TRIED THIS RUN -- choose ones that are not here:
 {tried}"""
 
+_TUNE_CODE = """This experiment EXPLOITS the best architecture found so far rather than
+looking for a new one.
+
+THE ARCHITECTURE TO TUNE -- iteration #{iid}, validation primary {score:.4f}:
+```python
+{code}
+```"""
+
+_TUNE_INSTRUCTION = """Breadth has stopped paying: the last {stale} experiments gained less than
+0.002. Do NOT introduce another model family. Take the architecture above and search its
+CONFIGURATION space hard, in this one script.
+
+What counts as configuration here: embedding width k, MLP depth and widths, dropout, L2 and
+embedding regularisation, learning rate and schedule, batch size, epoch count and early
+stopping, negative weighting, feature-field subsets, and the blend weights between the
+components it already fuses.
+
+Search it as SUCCESSIVE HALVING, not as a grid -- the timeout is {timeout:.0f}s and a full
+grid will not fit:
+  rung 1  ~16 configurations at a short budget (1 epoch, or a subsample of train)
+  rung 2  the best ~6 of them at a medium budget
+  rung 3  the best ~2 at the full budget
+Report the rung-3 winner. This costs one iteration however many configurations it holds.
+
+Two cautions from this run's own history. Selecting the max over many configurations on
+124,909 validation rows overfits that split: prefer a configuration that is good across its
+neighbours over an isolated peak. And a gain under 0.0008 is inside seed noise -- if nothing
+clears that, say so and return the incumbent unchanged rather than shipping noise.
+
+CONFIGURATIONS AND DIRECTIONS ALREADY TRIED THIS RUN:
+{tried}"""
+
+
 _DRAFT = """No prior solution has survived, so write this script from scratch."""
 
 _SWEEP_CODE = """This experiment buys BREADTH across model families, not depth on one.
@@ -444,6 +477,9 @@ class LLMProposer:
             elif context.get("mode") == "sweep":
                 blocks.append(_SWEEP_CODE.format(iid=parent.iter_id, score=parent.score,
                                             code=parent.code[:MAX_CODE_CHARS]))
+            elif context.get("mode") == "tune":
+                blocks.append(_TUNE_CODE.format(iid=parent.iter_id, score=parent.score,
+                                                code=parent.code[:MAX_CODE_CHARS]))
             elif context.get("mode") == "broaden":
                 blocks.append(_BROADEN_CODE.format(iid=parent.iter_id, score=parent.score,
                                                    code=parent.code[:MAX_CODE_CHARS]))
@@ -475,6 +511,10 @@ class LLMProposer:
             bl = ", ".join(sorted(blacklist))
             if bl:
                 blocks.append(f"RETIRED -- do not propose again: {bl}")
+            if parent is not None and context.get("mode") == "tune":
+                blocks.append(_TUNE_INSTRUCTION.format(
+                    stale=context.get("stale", 2), timeout=self.timeout,
+                    tried=_tried(history)))
             if parent is not None and context.get("mode") == "sweep":
                 blocks.append(_SWEEP_INSTRUCTION.format(tried=_tried(history)))
             if parent is not None and context.get("mode") == "broaden":

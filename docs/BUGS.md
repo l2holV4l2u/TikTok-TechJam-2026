@@ -105,3 +105,38 @@ this convergence rule" was argued from "a run gets roughly three to six iteratio
 premise was self-inflicted, not imposed by the rule. If sweeping keeps clearing epsilon the
 run reaches the budget it was actually given, and node retirement and backtracking have the
 sample count they need. The conclusion stands only for a run that stops sweeping.
+
+## The convergence tail was spent wandering instead of exploiting
+
+Follow-on from the entry above. Making stalls re-sweep fixes the wrong half of the schedule
+on its own: a run must still spend `patience` = 3 sub-epsilon iterations before it is allowed
+to stop, so that tail is spent either way. Across r70-r74 it went on unfocused refinement and
+banked about 0.0005 in total.
+
+The mode ladder is now explore-then-exploit, which is the standard schedule for a search
+whose two loops are priced differently:
+
+| stale | mode | what it searches |
+|---|---|---|
+| 0 | refine | the direction that just gained |
+| 1 | sweep | model families not yet tried this run |
+| >= 2 | tune | the best architecture's configuration space |
+
+The two loops: an ITERATION costs one of three convergence lives and there are 5-30 of them;
+a model inside a script costs only wall clock against the per-script timeout and is free
+under the convergence rule. Every search strategy therefore belongs in the inner loop, and
+the outer loop only picks which inner search to run.
+
+`_TUNE_INSTRUCTION` asks for successive halving rather than a grid, because a grid does not
+fit the timeout: ~16 configurations at one epoch, the best ~6 at a medium budget, the best ~2
+at full. It also states the two failure modes -- taking the max over many configurations on
+124,909 validation rows overfits that split, so a configuration good across its neighbours
+beats an isolated peak; and a gain under 0.0008 is inside the baseline's own 5-seed std, so
+the honest move is to return the incumbent unchanged.
+
+**Correcting an earlier claim in this file and in the run reports.** "Tuning recovers less
+than the gap between families" was argued from two measurements that do not cover this: the
+0.0002 figure is seed-to-seed variation, and the 0.0000-0.0042 range is single-edit refine
+iterations. Neither is a configuration sweep, which the harness had never run. The family gap
+being larger than seed noise is still measured and still true; the claim that tuning cannot
+pay was not.

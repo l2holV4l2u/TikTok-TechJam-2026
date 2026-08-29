@@ -326,8 +326,14 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         # run, so the runs converged at 6 of 50 iterations having spent 16 min of the 6h
         # ceiling. Breadth is what buys the budget; a second miss falls through to broaden,
         # which can leave the model stage entirely.
+        # Explore while breadth pays, then exploit into the convergence tail. A run must
+        # spend `patience` sub-epsilon iterations before it can stop, so that tail is going to
+        # be spent either way -- r70-r74 spent it wandering and banked 0.0005 total. The last
+        # rung tunes the best architecture instead, as a config search inside one script.
         if phase == "improve" and (not best_curve or stale == 1):
             mode = "sweep"
+        elif phase == "improve" and stale >= 2:
+            mode = "tune"
         else:
             mode = "refine" if stale == 0 else "broaden"
         context["mode"] = mode
