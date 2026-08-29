@@ -359,6 +359,20 @@ CONFIGURATIONS AND DIRECTIONS ALREADY TRIED THIS RUN:
 
 _DRAFT = """No prior solution has survived, so write this script from scratch."""
 
+_SIBLINGS = """RUNNING IN PARALLEL WITH YOU THIS TURN -- other lines of work are writing these
+scripts right now, and all of them will be scored against the same validation split:
+{siblings}
+
+Propose something in a different family, or targeting a different stage, from every line above.
+A variation on one of them is not a different direction however it is described, and if two of
+us return the same idea this turn the second one bought nothing.
+
+This is not a hint about what works. It is the list of what is already covered."""
+
+_SEED_NOTE = """WHY THIS LINE WAS RESTARTED HERE -- carried over from the archived attempt this
+slot is resuming:
+{note}"""
+
 _SWEEP_CODE = """This experiment buys BREADTH across model families, not depth on one.
 
 THE BASELINE TO BEAT -- iteration #{iid}, validation primary {score:.4f}:
@@ -534,6 +548,16 @@ class LLMProposer:
             bl = ", ".join(sorted(blacklist))
             if bl:
                 blocks.append(f"RETIRED -- do not propose again: {bl}")
+            # What the other slots are attempting this turn. A negative constraint only: naming
+            # architectures to build would be a prior on method space, which the brief refuses
+            # to carry. This is the broaden instruction's "already tried" list applied across
+            # slots instead of across time.
+            siblings = context.get("siblings")
+            if siblings:
+                blocks.append(_SIBLINGS.format(siblings=siblings))
+            seed_note = context.get("seed_note")
+            if seed_note:
+                blocks.append(_SEED_NOTE.format(note=seed_note))
             if parent is not None and context.get("mode") == "tune":
                 blocks.append(_TUNE_INSTRUCTION.format(
                     stale=context.get("stale", 2), timeout=self.timeout,

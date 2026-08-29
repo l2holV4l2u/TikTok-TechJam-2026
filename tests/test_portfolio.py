@@ -37,10 +37,50 @@ class SlotProposer(ScriptedProposer):
         return Proposal(f"h{self.n}", OK % s, 100, 50)
 
 
-def _run(scores, slots, tmp, **kw):
+class ArrayEvaluator(StdoutJsonEvaluator):
+    """Scores from stdout, plus the prediction arrays the correlation gate needs.
+
+    StdoutJsonEvaluator exposes no `last_scores`, so a portfolio driven by it has nothing to
+    correlate -- correct, but it means the gate cannot be exercised without something that
+    supplies arrays. `spread` controls how much the slots disagree, which is the axis the whole
+    Phase 2 decision turns on.
+    """
+
+    def __init__(self, spread: float = 0.0, n_rows: int | None = None):
+        self.spread = spread
+        self.calls = 0
+        self.last_scores = None
+        self.last_test_scores = None
+        self._n = n_rows
+
+    def _rows(self) -> int:
+        if self._n is None:
+            try:
+                from pipeline.data import load
+                self._n = len(load("valid").user_id)
+            except Exception:
+                self._n = 64
+        return self._n
+
+    def evaluate(self, result, iter_out=None):
+        metrics = super().evaluate(result, iter_out)
+        if metrics is None:
+            self.last_scores = self.last_test_scores = None
+            return None
+        n = self._rows()
+        base = np.random.default_rng(0).random(n)
+        noise = np.random.default_rng(1000 + self.calls).random(n)
+        self.last_scores = (1.0 - self.spread) * base + self.spread * noise
+        self.last_test_scores = self.last_scores[: max(1, n // 2)]
+        self.calls += 1
+        return metrics
+
+
+def _run(scores, slots, tmp, evaluator=None, **kw):
     led = _ledger(tmp)
     pr = SlotProposer(scores)
-    r = run_loop(pr, StdoutJsonEvaluator(), led, workdir=Path(tmp) / "scripts",
+    r = run_loop(pr, evaluator or StdoutJsonEvaluator(), led,
+                 workdir=Path(tmp) / "scripts",
                  patience=kw.pop("patience", 99), timeout=30, n_slots=slots, **kw)
     return pr, led, r
 
@@ -168,6 +208,64 @@ def test_slot_defaults_are_a_fresh_unstarted_lineage():
     s = Slot(slot_id=2)
     assert s.parent is None and s.stale == 0 and s.origin == "fresh"
     assert s.lineage == [] and s.seed_note == "" and s.last_valid_scores is None
+
+
+def test_siblings_are_disclosed_to_every_slot_and_never_to_itself():
+    with tempfile.TemporaryDirectory() as tmp:
+        pr, _, _ = _run([0.61] * 9, 3, tmp)
+        # turn 1 has nothing to disclose; from turn 2 each slot sees the other two
+        later = pr.siblings[3:6]
+        assert later and all(s for s in later), f"siblings missing after turn 1: {later}"
+        for slot_id, text in enumerate(later):
+            assert f"slot {slot_id}:" not in text, f"slot {slot_id} was told about itself"
+            others = {0, 1, 2} - {slot_id}
+            for o in others:
+                assert f"slot {o}:" in text, f"slot {slot_id} was not told about slot {o}"
+
+
+def _portfolio_records(tmp):
+    path = Path(tmp) / "portfolio.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(l) for l in path.read_text().splitlines() if l.strip()]
+
+
+def test_correlation_is_logged_once_per_turn():
+    with tempfile.TemporaryDirectory() as tmp:
+        _run([0.61] * 9, 3, tmp, evaluator=ArrayEvaluator(spread=0.9))
+        recs = _portfolio_records(tmp)
+        assert recs, "no portfolio record written"
+        turns = [x["turn"] for x in recs]
+        assert turns == sorted(set(turns)), f"one record per turn, got {turns}"
+        for rec in recs:
+            assert set(rec["correlation"]["pairs"]) == {"0-1", "0-2", "1-2"}, rec
+            assert len(rec["scripts"]) == 3
+
+
+def test_identical_slots_raise_the_alert_flag():
+    """The gate has to fire on the case it exists for: three copies of one agent."""
+    with tempfile.TemporaryDirectory() as tmp:
+        _, _, r = _run([0.61] * 9, 3, tmp, evaluator=ArrayEvaluator(spread=0.0))
+        recs = _portfolio_records(tmp)
+        assert recs and all(rec["alert"] for rec in recs), recs
+        assert r.mean_slot_correlation is not None
+        assert r.mean_slot_correlation > CORR_ALERT, r.mean_slot_correlation
+
+
+def test_disagreeing_slots_do_not_raise_the_alert():
+    """The complement: the gate must not fire on a portfolio that is actually working."""
+    with tempfile.TemporaryDirectory() as tmp:
+        _, _, r = _run([0.61] * 9, 3, tmp, evaluator=ArrayEvaluator(spread=1.0))
+        recs = _portfolio_records(tmp)
+        assert recs and not any(rec["alert"] for rec in recs), recs
+        assert r.mean_slot_correlation < CORR_ALERT, r.mean_slot_correlation
+
+
+def test_one_slot_writes_no_portfolio_log():
+    with tempfile.TemporaryDirectory() as tmp:
+        _run([0.61] * 4, 1, tmp, evaluator=ArrayEvaluator(spread=0.5))
+        assert not (Path(tmp) / "portfolio.jsonl").exists(), (
+            "a single slot has no pair to correlate and must not write an empty log")
 
 
 if __name__ == "__main__":

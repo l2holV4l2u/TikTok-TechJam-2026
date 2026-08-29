@@ -379,6 +379,55 @@ def test_the_sweep_offers_a_training_distribution_axis_not_only_families():
     assert "AutoInt" in sweep, "the family list still stands alongside it"
 
 
+def test_sibling_slots_are_disclosed_so_a_turn_does_not_duplicate_itself():
+    """Three slots given the same brief and the same EDA converge on the same family.
+
+    The fix is a NEGATIVE constraint -- here is what is already covered -- because naming
+    architectures for a slot to build would be a human prior on method space, which is exactly
+    what the brief refuses to carry.
+    """
+    p, prompts = _capture()
+    p.propose(phase="improve", context={
+        "mode": "sweep",
+        "siblings": "  - slot 1: DCN-V2 low-rank crosses\n  - slot 2: recency-weighted FM",
+    })
+    t = prompts[0]
+    assert "RUNNING IN PARALLEL WITH YOU THIS TURN" in t
+    assert "DCN-V2 low-rank crosses" in t and "recency-weighted FM" in t
+    assert "not a hint about what works" in t, "the block must not read as a recommendation"
+
+
+def test_no_sibling_block_when_the_portfolio_holds_one_slot():
+    p, prompts = _capture()
+    p.propose(phase="improve", context={"mode": "sweep", "siblings": ""})
+    assert "RUNNING IN PARALLEL" not in prompts[0]
+
+
+def test_a_revived_slot_is_told_why_its_line_was_restarted():
+    p, prompts = _capture()
+    p.propose(phase="improve", context={
+        "mode": "sweep", "seed_note": "stalled at 0.6041; its author features were never tried"})
+    assert "WHY THIS LINE WAS RESTARTED HERE" in prompts[0]
+    assert "author features were never tried" in prompts[0]
+
+
+def test_sibling_and_seed_blocks_carry_no_human_findings():
+    """The no-priors guard covers every prompt constant, not only TASK_BRIEF.
+
+    The project's own hardest-won lesson is that the brief is not the only channel into the
+    prompt -- measured results were once found sitting in the knowledge base instead. Any new
+    prompt string is a new channel and gets scanned the same way.
+    """
+    import agent.proposer as mod
+
+    banned = ["blend", "ensembl", "rank aggregation", "decorrelat", "lambdarank", "deepfm",
+              "already measured", "0.6045", "0.6021", "target encoding"]
+    for name in ("_SIBLINGS", "_SEED_NOTE"):
+        low = getattr(mod, name).lower()
+        leaked = [w for w in banned if w in low]
+        assert not leaked, f"{name} carries human findings: {leaked}"
+
+
 if __name__ == "__main__":
     # Discovered, not listed. A hand-maintained list drifted three times: it named a test that
     # had been renamed (crashing the module on import) while three real tests defined below it
