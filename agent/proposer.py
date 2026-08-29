@@ -42,6 +42,8 @@ the result. Nobody edits your code and nobody advises you: what to try, and why,
 DATA: Kuaishou short-video feed, date-split. train {train_rows:,} rows ({train_lo}-{train_hi}),
 validation {valid_rows:,} ({valid_lo}-{valid_hi}), hidden test {test_rows:,} ({test_lo}-{test_hi}).
 The scored relevance label is the native column `long_view` (0/1), fixed by the organizers.
+The split boundary is a date, and the distribution moves across it:
+{drift_note}
 
 METRIC: primary = mean(GAUC, nDCG@5), ranking within each user's logged impressions
 (NOT full-catalog retrieval).
@@ -347,6 +349,9 @@ class LLMProposer:
         from pipeline.data import FEATURE_CARDINALITIES
         categorical = sorted(FEATURE_CARDINALITIES)
         self.facts.setdefault("n_categorical", len(categorical))
+        # run_agent measures this from the splits; a proposer built without it still
+        # formats, rather than dying on a missing key.
+        self.facts.setdefault("drift_note", "(not measured for this dataset)")
         self.facts.setdefault("categorical_names", ", ".join(categorical))
         self._seen_papers: set[str] = set()   # so retrieval widens instead of repeating
 

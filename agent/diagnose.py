@@ -51,6 +51,33 @@ def segment_report(user_id, labels, scores) -> str:
     return "\n".join(rows)
 
 
+def drift_report() -> str:
+    """How far train differs from validation, measured on the splits themselves.
+
+    A deliberately over-powered model reaches 0.9245 primary in-sample on train and 0.5868 on
+    validation -- worse than the five-field baseline it dwarfs in capacity. Capacity and
+    feature expressiveness are therefore not the limit; transfer across the date boundary is.
+    The controller measured that boundary and said nothing about it, so every proposal was
+    aimed at capacity. These are distribution facts about the splits, not a recommendation.
+    """
+    import numpy as np
+    from pipeline.data import load
+
+    rows = ["split   rows        users   rows/user(med)  users with no positive"]
+    for name in ("train", "valid"):
+        s = load(name)
+        u = np.asarray(s.user_id)
+        order = np.argsort(u, kind="stable")
+        us, ys = u[order], np.asarray(s.y)[order]
+        starts = np.flatnonzero(np.r_[True, us[1:] != us[:-1]])
+        sizes = np.diff(np.r_[starts, us.size])
+        pos = np.add.reduceat(ys.astype(np.int64), starts)
+        rows.append(f"{name:<7} {us.size:>9,}  {sizes.size:>6,}  {np.median(sizes):>13.0f}  "
+                    f"{100.0 * (pos == 0).mean():>20.1f}%")
+    rows.append("Test is the ten days after validation; the same drift continues into it.")
+    return chr(10).join(rows)
+
+
 def demo() -> None:
     rng = np.random.default_rng(0)
     users = np.repeat(np.arange(300), rng.integers(1, 30, 300))

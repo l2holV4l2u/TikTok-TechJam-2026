@@ -13,6 +13,7 @@ from agent.kb import load_papers
 from agent.ledger import Ledger
 from agent.llm import FakeComplete, RecordingComplete, ReplayComplete, make_complete
 from agent.loop import SavedScoresEvaluator, run_loop
+from agent.diagnose import drift_report
 from agent.memory import distil
 from agent.proposer import LLMProposer
 from agent.recovery import Recovery
@@ -210,6 +211,10 @@ def main() -> None:
         print(f"cross-run memory: {len(memory.splitlines())} lines from this agent's prior runs")
 
     facts = json.loads(Path(args.facts).read_text(encoding="utf-8"))
+    # Measured, not asserted: an over-powered model reaches 0.9245 primary in-sample on
+    # train and 0.5868 on validation, so transfer across the date boundary is the binding
+    # constraint, not capacity. The controller knew the boundary and never said so.
+    facts["drift_note"] = drift_report()
     print(f"dataset: {facts.get('variant', '?')}  "
           f"train {facts['train_rows']:,} / valid {facts['valid_rows']:,} / test {facts['test_rows']:,}")
     proposer = LLMProposer(complete, kb_papers=load_papers(), timeout=args.timeout,
