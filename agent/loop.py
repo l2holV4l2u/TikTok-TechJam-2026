@@ -21,7 +21,8 @@ from .executor import RunResult, run_script
 from .ensemble import retain_or_blend
 from .ledger import Entry, Ledger
 from .llm import LLMDailyLimit
-from .portfolio import CORR_ALERT, Slot, log_portfolio, pairwise_rank_correlation
+from .portfolio import (CORR_ALERT, SLOT_PATIENCE, Archive, RefillState, Slot, log_portfolio,
+                        pairwise_rank_correlation, refill)
 from .recovery import RETRY, Recovery
 from .critic import review as critic_review
 from .knowledge import Knowledge
@@ -68,6 +69,8 @@ class LoopResult:
     scripts: int = 0
     slots: int = 1
     mean_slot_correlation: float | None = None
+    archived: int = 0        # lineages retired and kept, not lineages lost
+    revivals: int = 0        # refills that resumed an archived line rather than drafting
 
 
 class Proposer(Protocol):
@@ -319,6 +322,26 @@ def _sibling_note(slots: list[Slot], me: Slot) -> str:
     return "\n".join(f"  - slot {s.slot_id}: {s.last_hypothesis[:120]}" for s in others)
 
 
+def _stall_note(slot: Slot) -> str:
+    """Why this lineage was retired, in the words of what it actually did.
+
+    Derived from the slot's own record rather than asked of a model: it has to exist even when
+    belief revision is unavailable, and a revived line reads it as the reason it is resuming.
+    """
+    best = f"{slot.best:.4f}" if slot.best > float("-inf") else "no scored result"
+    return (f"stalled after {slot.stale} turns without a gain; best {best} over "
+            f"{len(slot.lineage)} experiment(s). Last attempt: {slot.last_hypothesis[:140]}")
+
+
+def _valid_user_id():
+    """The validation user column, or None when no cache is present (unit tests)."""
+    try:
+        from pipeline.data import load
+        return load("valid").user_id
+    except Exception:
+        return None
+
+
 def _record_turn(run_dir: Path, turn: int, batch: list[dict], slots: list[Slot],
                  out: "LoopResult", epsilon: float) -> None:
     """Measure whether the slots actually disagreed, and write it to portfolio.jsonl.
@@ -341,6 +364,7 @@ def _record_turn(run_dir: Path, turn: int, batch: list[dict], slots: list[Slot],
     corr = pairwise_rank_correlation(scores, user_id)
     out.mean_slot_correlation = corr["mean"]
     log_portfolio(run_dir, {
+        "event": "turn",
         "turn": turn,
         "scripts": [b["iter_id"] for b in batch],
         "slots": [{"slot_id": s.slot_id, "best": s.best, "stale": s.stale,
@@ -367,12 +391,15 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
              memory: str = "", baseline: float = 0.6016, ceiling: float | None = None,
              baseline_tolerance: float = BASELINE_TOLERANCE,
              max_instant_failures: int = 5, max_proposer_errors: int = 6,
-             force_mode: str = "", n_slots: int = 1) -> LoopResult:
+             force_mode: str = "", n_slots: int = 1,
+             slot_patience: int = SLOT_PATIENCE) -> LoopResult:
     tree = tree if tree is not None else Tree(epsilon=epsilon)
     recovery = recovery or Recovery()
     workdir = Path(workdir)
     workdir.mkdir(parents=True, exist_ok=True)
     slots = [Slot(slot_id=k) for k in range(max(1, n_slots))]
+    archive = Archive(run_dir=workdir.parent)
+    refill_state = RefillState()
 
     t_start = time.perf_counter()
     out = LoopResult("max_iters", tree=tree, slots=len(slots))
@@ -561,7 +588,10 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         for slot in slots:
             if i + len(batch) >= max_iters:
                 break
-            slot.parent = tree.select(mode)
+            # A revived slot starts from the node it was revived onto; everything else takes
+            # whatever the search policy hands it.
+            slot.parent = slot.pending_parent or tree.select(mode)
+            slot.pending_parent = None
             context["siblings"] = _sibling_note(slots, slot)
             context["seed_note"] = slot.seed_note
             iter_id = i + len(batch)
@@ -579,6 +609,7 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
                 batch.append({"slot": slot, "proposal": None, "iter_id": iter_id})
                 continue
             proposer_errors = 0
+            slot.seed_note = ""     # the revival note is context for one proposal, not forever
             if p is None:
                 if not batch:
                     return finish("exhausted")
@@ -725,6 +756,31 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         out.turns = turn
         out.scripts = i
         _record_turn(workdir.parent, turn, batch, slots, out, epsilon)
+
+        # 5. RECYCLE a slot that has stopped paying. This is not a stopping rule -- the run's
+        #    convergence counter is untouched by it -- it is where the slot's remaining turns
+        #    get spent. Its code, its predictions and why it stalled go to the archive, which
+        #    is both a revival source and the pool the portfolio blend draws on.
+        #    Portfolio-only: with one slot there is nothing to recycle it in favour of, and
+        #    retiring the sole lineage would change the sequential path this defaults to.
+        #    A single-slot run keeps relying on the tree's own node retirement.
+        if len(slots) > 1:
+            for idx, slot in enumerate(slots):
+                if slot.stale < slot_patience or not slot.lineage:
+                    continue
+                note = _stall_note(slot)
+                archive.add(slot, turn, note,
+                            valid_scores=slot.last_valid_scores, test_scores=None)
+                live = {s.slot_id: s.last_valid_scores for s in slots if s is not slot}
+                user_id = _valid_user_id()
+                slots[idx], why = refill(slot.slot_id, archive, live, user_id, refill_state,
+                                         tree=tree)
+                log_portfolio(workdir.parent, {
+                    "turn": turn, "event": "refill", "slot_id": slot.slot_id,
+                    "archived_primary": slot.best, "archived_note": note, **why})
+
+        out.archived = len(archive) if archive is not None else 0
+        out.revivals = refill_state.revivals
 
         _revise(revise_fn, ledger, out, context, knowledge,
                 "\n".join(findings_seen)[:MAX_FINDINGS_CHARS], stale, patience)

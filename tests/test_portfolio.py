@@ -223,11 +223,14 @@ def test_siblings_are_disclosed_to_every_slot_and_never_to_itself():
                 assert f"slot {o}:" in text, f"slot {slot_id} was not told about slot {o}"
 
 
-def _portfolio_records(tmp):
+def _portfolio_records(tmp, event="turn"):
+    """Records of one kind from portfolio.jsonl. The log carries turn summaries and refill
+    events; filtering by kind keeps a test about one from breaking when the other is added."""
     path = Path(tmp) / "portfolio.jsonl"
     if not path.exists():
         return []
-    return [json.loads(l) for l in path.read_text().splitlines() if l.strip()]
+    rows = [json.loads(l) for l in path.read_text().splitlines() if l.strip()]
+    return [r for r in rows if event is None or r.get("event") == event]
 
 
 def test_correlation_is_logged_once_per_turn():
@@ -268,9 +271,140 @@ def test_one_slot_writes_no_portfolio_log():
             "a single slot has no pair to correlate and must not write an empty log")
 
 
+def _archive(tmp):
+    from agent.portfolio import Archive
+    return Archive(run_dir=Path(tmp))
+
+
+def _slot_with(tmp, slot_id=0, best=0.60, hyp="h", lineage=(1,), scores=None):
+    s = Slot(slot_id=slot_id, best=best, last_hypothesis=hyp)
+    s.lineage = list(lineage)
+    s.last_valid_scores = scores
+    return s
+
+
+def test_slot_archives_after_two_non_improving_turns():
+    with tempfile.TemporaryDirectory() as tmp:
+        # flat scores: no slot ever beats its own best, so each hits slot_patience
+        _, _, r = _run([0.6016] * 30, 3, tmp, patience=99,
+                       evaluator=ArrayEvaluator(spread=0.9), slot_patience=2)
+        assert r.archived >= 2, f"expected retirements, got {r.archived}"
+        rows = [json.loads(l) for l in
+                (Path(tmp) / "archive.jsonl").read_text().splitlines() if l.strip()]
+        assert rows and all("stalled after" in x["note"] for x in rows), rows
+
+
+def test_archiving_a_slot_does_not_stop_the_run():
+    """Slot stagnation is a resource decision, not a stopping rule. The organizers' counter
+    belongs to the run, and nothing a slot does may shorten it."""
+    with tempfile.TemporaryDirectory() as tmp:
+        _, _, r = _run([0.6016] * 30, 3, tmp, patience=3,
+                       evaluator=ArrayEvaluator(spread=0.9), slot_patience=1)
+        assert r.stop_reason == "converged", r.stop_reason
+        assert r.archived >= 1, "the fixture must actually archive something"
+        # convergence still took the full window of TURNS despite churn underneath it
+        assert r.turns >= 4, r.turns
+
+
+def test_refill_is_fresh_until_the_alternation_calls_for_a_revival():
+    from agent.portfolio import RefillState, refill
+
+    with tempfile.TemporaryDirectory() as tmp:
+        arch = _archive(tmp)
+        arch.add(_slot_with(tmp, best=0.605), turn=1, note="n")
+        state = RefillState()
+        choices = [refill(0, arch, {}, None, state, fresh_per_revive=3)[1]["choice"]
+                   for _ in range(4)]
+        assert choices == ["fresh", "fresh", "fresh", "revived"], choices
+        assert state.revivals == 1 and state.fresh == 3
+
+
+def test_refill_falls_back_to_fresh_when_the_archive_is_empty():
+    from agent.portfolio import RefillState, refill
+
+    with tempfile.TemporaryDirectory() as tmp:
+        state = RefillState(fresh_since_revive=99)
+        slot, why = refill(1, _archive(tmp), {}, None, state, fresh_per_revive=1)
+        assert why["choice"] == "fresh" and slot.origin == "fresh"
+
+
+def test_revival_prefers_a_decorrelated_entry_over_a_higher_scoring_correlated_one():
+    """Reviving the top scorer when it duplicates a live slot spends a slot to learn nothing."""
+    from agent.portfolio import RefillState, refill
+
+    users = np.repeat(np.arange(60), 5)
+    rng = np.random.default_rng(0)
+    live_scores = rng.random(users.size)
+    with tempfile.TemporaryDirectory() as tmp:
+        arch = _archive(tmp)
+        # higher primary, but ranks validation exactly like the running slot
+        arch.add(_slot_with(tmp, slot_id=0, best=0.610), turn=1, note="twin",
+                 valid_scores=live_scores.copy())
+        # lower primary, independent
+        arch.add(_slot_with(tmp, slot_id=1, best=0.606), turn=1, note="different",
+                 valid_scores=rng.random(users.size))
+        chosen = arch.best_revival({9: live_scores}, users)
+        assert chosen.note == "different", (chosen.entry_id, chosen.primary, chosen.note)
+
+        state = RefillState(fresh_since_revive=3)
+        slot, why = refill(2, arch, {9: live_scores}, users, state, fresh_per_revive=3)
+        assert why["choice"] == "revived" and slot.seed_note == "different"
+        assert slot.origin == "revived"
+
+
+def test_revival_takes_the_top_scorer_when_nothing_is_live_to_compare_against():
+    with tempfile.TemporaryDirectory() as tmp:
+        arch = _archive(tmp)
+        arch.add(_slot_with(tmp, best=0.601), turn=1, note="low")
+        arch.add(_slot_with(tmp, best=0.609), turn=1, note="high")
+        assert arch.best_revival({}, None).note == "high"
+
+
+def test_a_revived_slot_resumes_from_its_archived_node_not_the_search_leader():
+    from agent.portfolio import RefillState, refill
+    from agent.tree import Node, Tree
+
+    tree = Tree()
+    tree.add(Node(4, None, "archived line", "code", 0.604))
+    tree.add(Node(9, None, "the leader", "code", 0.620))
+    with tempfile.TemporaryDirectory() as tmp:
+        arch = _archive(tmp)
+        arch.add(_slot_with(tmp, best=0.604, lineage=(4,)), turn=1, note="resume me")
+        state = RefillState(fresh_since_revive=3)
+        slot, why = refill(0, arch, {}, None, state, tree=tree, fresh_per_revive=3)
+        assert why["choice"] == "revived"
+        assert slot.pending_parent is not None and slot.pending_parent.iter_id == 4, (
+            "a revived slot must start from the line it is resuming")
+
+
+def test_all_slots_archived_in_one_turn_still_refills_to_n():
+    with tempfile.TemporaryDirectory() as tmp:
+        _, _, r = _run([0.6016] * 24, 3, tmp, patience=99,
+                       evaluator=ArrayEvaluator(spread=0.9), slot_patience=1)
+        recs = _portfolio_records(tmp, event="turn")
+        for rec in recs:
+            assert len(rec["slots"]) == 3, f"portfolio shrank below three slots: {rec}"
+        assert r.archived >= 3, r.archived
+
+
+def test_archive_persists_predictions_for_the_ensemble_pool():
+    """The archive's more valuable job is as a blend pool, so the arrays must survive."""
+    with tempfile.TemporaryDirectory() as tmp:
+        arch = _archive(tmp)
+        scores = np.arange(10, dtype=np.float64)
+        entry = arch.add(_slot_with(tmp), turn=2, note="n",
+                         valid_scores=scores, test_scores=scores[:4])
+        assert np.array_equal(arch.valid_scores(entry), scores)
+        assert np.array_equal(arch.test_scores(entry), scores[:4])
+        assert "retired" in arch.summary().lower()
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_") and callable(v)]
     for test in tests:
         test()
         print(f"ok: {test.__name__}")
     print(f"{len(tests)} tests passed")
+
+
+# ------------------------------------------------------------------ Phase 3: archive & refill

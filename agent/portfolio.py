@@ -31,6 +31,19 @@ import numpy as np
 CORR_ALERT = 0.95
 
 
+# A slot gets this many turns without beating its own best before it is archived and its place
+# reused. Deliberately below the run-level patience: a lineage should be recycled well before
+# the run itself is at risk of ending.
+SLOT_PATIENCE = 2
+# Refill alternates: three fresh drafts, then one revival from the archive. Exploration is the
+# default because a fresh draft is the only thing that can find a family nothing has tried;
+# revival exists so a line that stalled with an idea left in it is not lost.
+FRESH_PER_REVIVE = 3
+# How hard to punish a revival candidate for agreeing with what is already live. Reviving the
+# top scorer when it correlates 0.97 with a running slot spends a slot to learn nothing.
+LAMBDA_CORR = 0.5
+
+
 @dataclass
 class Slot:
     """One lineage. `parent` is the node its next script edits."""
@@ -40,10 +53,165 @@ class Slot:
     stale: int = 0                        # turns without beating this slot's own best
     best: float = float("-inf")
     origin: str = "fresh"                 # "fresh" | "revived"
-    seed_note: str = ""                   # consultant note this slot was refilled with
+    seed_note: str = ""                   # note this slot was refilled with
     lineage: list[int] = field(default_factory=list)   # iter_ids it has produced
     last_hypothesis: str = ""
     last_valid_scores: object | None = None           # np.ndarray, for correlation
+    # A revived slot must start from the node it was revived onto, not from whatever
+    # tree.select would hand it; cleared once it has been used for one proposal.
+    pending_parent: object | None = None
+
+
+@dataclass
+class ArchiveEntry:
+    """A retired lineage, kept for two different reasons.
+
+    As a REVIVAL source it is a starting point with an idea left in it. As an ENSEMBLE MEMBER
+    its stored predictions are the more valuable half: a set of converged, decorrelated models
+    is exactly the input the harness blender has never had, and the correlation ceiling is the
+    measured reason blends on this benchmark gain nothing.
+    """
+
+    entry_id: int
+    slot_id: int
+    turn_retired: int
+    iter_id: int | None                   # the tree node this lineage ended on
+    hypothesis: str
+    primary: float
+    note: str
+    valid_path: str | None = None
+    test_path: str | None = None
+
+    def to_json(self) -> dict:
+        return {"entry_id": self.entry_id, "slot_id": self.slot_id,
+                "turn_retired": self.turn_retired, "iter_id": self.iter_id,
+                "hypothesis": self.hypothesis, "primary": self.primary, "note": self.note,
+                "valid_path": self.valid_path, "test_path": self.test_path}
+
+
+@dataclass
+class Archive:
+    """Retired lineages, their predictions, and why each one stopped."""
+
+    run_dir: Path
+    entries: list[ArchiveEntry] = field(default_factory=list)
+
+    def __len__(self) -> int:
+        return len(self.entries)
+
+    def __bool__(self) -> bool:
+        return bool(self.entries)
+
+    def _dir(self) -> Path:
+        d = Path(self.run_dir) / "archive"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def add(self, slot: Slot, turn: int, note: str,
+            valid_scores=None, test_scores=None) -> ArchiveEntry:
+        entry_id = len(self.entries)
+        valid_path = test_path = None
+        if valid_scores is not None:
+            valid_path = str(self._dir() / f"entry_{entry_id}_valid.npy")
+            np.save(valid_path, np.asarray(valid_scores, dtype=np.float64))
+        if test_scores is not None:
+            test_path = str(self._dir() / f"entry_{entry_id}_test.npy")
+            np.save(test_path, np.asarray(test_scores, dtype=np.float64))
+        entry = ArchiveEntry(
+            entry_id=entry_id, slot_id=slot.slot_id, turn_retired=turn,
+            iter_id=slot.lineage[-1] if slot.lineage else None,
+            hypothesis=slot.last_hypothesis, primary=slot.best, note=note,
+            valid_path=valid_path, test_path=test_path)
+        self.entries.append(entry)
+        with (Path(self.run_dir) / "archive.jsonl").open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry.to_json(), default=float) + "\n")
+        return entry
+
+    def top(self, k: int = 5) -> list[ArchiveEntry]:
+        return sorted(self.entries, key=lambda e: -e.primary)[:k]
+
+    def valid_scores(self, entry: ArchiveEntry):
+        if not entry.valid_path or not Path(entry.valid_path).exists():
+            return None
+        return np.load(entry.valid_path, allow_pickle=False)
+
+    def test_scores(self, entry: ArchiveEntry):
+        if not entry.test_path or not Path(entry.test_path).exists():
+            return None
+        return np.load(entry.test_path, allow_pickle=False)
+
+    def summary(self, k: int = 5) -> str:
+        if not self.entries:
+            return ""
+        rows = [f"  #{e.entry_id} (turn {e.turn_retired}, primary {e.primary:.4f}) "
+                f"{e.hypothesis[:90]}" for e in self.top(k)]
+        return "LINES ALREADY RETIRED THIS RUN:\n" + "\n".join(rows)
+
+    def best_revival(self, live_scores: dict, user_id,
+                     lam: float = LAMBDA_CORR) -> ArchiveEntry | None:
+        """argmax(primary - lam * max within-user rank correlation with any live slot).
+
+        Not simply the top scorer. A stored line that ranks validation the way a running slot
+        already does is a slot spent on a result the portfolio already holds.
+        """
+        if not self.entries:
+            return None
+        from .ensemble import _within_user_rank
+
+        live = [np.asarray(v, dtype=np.float64)
+                for v in (live_scores or {}).values() if v is not None]
+        if not live:
+            return max(self.entries, key=lambda e: e.primary)
+        live_ranked = [_within_user_rank(user_id, v) for v in live]
+        best, best_value = None, -float("inf")
+        for entry in self.entries:
+            scores = self.valid_scores(entry)
+            penalty = 0.0
+            if scores is not None and len(scores) == len(user_id):
+                mine = _within_user_rank(user_id, scores)
+                corrs = [abs(float(np.corrcoef(mine, other)[0, 1]))
+                         for other in live_ranked
+                         if mine.std() > 0 and other.std() > 0]
+                penalty = max(corrs) if corrs else 1.0
+            value = entry.primary - lam * penalty
+            if value > best_value:
+                best, best_value = entry, value
+        return best
+
+
+@dataclass
+class RefillState:
+    """Where the explore/exploit alternation currently stands."""
+
+    fresh_since_revive: int = 0
+    revivals: int = 0
+    fresh: int = 0
+
+
+def refill(slot_id: int, archive: Archive, live_scores: dict, user_id, state: RefillState,
+           tree=None, fresh_per_revive: int = FRESH_PER_REVIVE,
+           exhausted: bool = False) -> tuple[Slot, dict]:
+    """Replace a retired slot: a fresh draft by default, a revival every Nth refill.
+
+    Returns (slot, reason) so the choice is explainable in the run log rather than looking
+    like a lost lineage.
+    """
+    want_revival = bool(archive) and (state.fresh_since_revive >= fresh_per_revive or exhausted)
+    if want_revival:
+        entry = archive.best_revival(live_scores, user_id)
+        node = tree.get(entry.iter_id) if (tree is not None and entry is not None
+                                           and entry.iter_id is not None) else None
+        if entry is not None:
+            state.fresh_since_revive = 0
+            state.revivals += 1
+            return (Slot(slot_id=slot_id, parent=node, pending_parent=node, origin="revived",
+                         seed_note=entry.note, best=float("-inf")),
+                    {"choice": "revived", "entry_id": entry.entry_id,
+                     "entry_primary": entry.primary, "exhausted": exhausted})
+    state.fresh_since_revive += 1
+    state.fresh += 1
+    return (Slot(slot_id=slot_id, origin="fresh"),
+            {"choice": "fresh", "fresh_since_revive": state.fresh_since_revive})
 
 
 def pairwise_rank_correlation(score_arrays: dict[int, np.ndarray], user_id) -> dict:
