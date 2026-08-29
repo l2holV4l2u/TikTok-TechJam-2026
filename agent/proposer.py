@@ -110,8 +110,16 @@ PIPELINE API -- import these, do not reimplement them:
   Printing it costs one call and the aggregate score alone cannot tell you the same thing.
 
 RULES:
-  - Fit on "train" only. Report on "valid". Never fit or select anything on "test",
-    and never read test labels.
+  - The validation score you report MUST come from a model fit on "train" only. Every
+    comparison and every selection is made on that number, so a model that has seen
+    validation labels would make it meaningless.
+  - The TEST scores you save may come from the SAME recipe refit on train + validation
+    together. Validation is the week immediately before the test period and the rules
+    allow developing on both splits; a model fit only on data that stops a week earlier
+    is fitting staler behaviour than the one being scored. Fit train-only, evaluate and
+    report validation, then refit the identical recipe on the two splits combined and
+    use that model for scores_test.npy.
+  - Never fit or select anything on "test", and never read test labels.
   - load("test").y DOES NOT EXIST. Touching it -- .y, .y.sum(), .y.astype(), len(s.y),
     anything -- raises RuntimeError and the whole iteration is lost. The test split gives
     you features only; you produce scores for it and the harness scores them for you.
