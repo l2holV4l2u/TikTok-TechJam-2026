@@ -248,7 +248,7 @@ def main() -> None:
             "model": getattr(complete, "model", "unknown"),
             "dataset": facts.get("variant", "unknown"),
             "api_surface": api_surface,
-            "data_contract": "train-only-v1",
+            "data_contract": "train-plus-valid-v2",
             "stop_reason": f"crashed: {type(exc).__name__}: {exc}"[:400],
             "crashed": True,
             "iterations": len(ledger.read()),
@@ -274,7 +274,7 @@ def main() -> None:
         "model": getattr(complete, "model", "unknown"),
         "dataset": facts.get("variant", "unknown"),
         "api_surface": api_surface,
-        "data_contract": "train-only-v1",
+        "data_contract": "train-plus-valid-v2",
         "provider": ("replay" if args.replay else "dry-run" if args.dry_run
                      else __import__("os").environ.get("LLM_PROVIDER", "anthropic")),
         "stop_reason": r.stop_reason,
