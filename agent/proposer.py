@@ -376,6 +376,16 @@ class LLMProposer:
         else:
             blocks.append(_IMPROVE_TASK)
 
+        # The catalogue is identical on every call of a run. Providers discount input that
+        # repeats as a stable PREFIX, so it earns nothing sitting after the volatile blocks;
+        # it has to sit against the brief for one cached span to cover both. Nothing is
+        # dropped here -- the same text is sent, just where it can be reused.
+        if phase == "improve":
+            blocks.append(
+                "AVAILABLE LITERATURE -- the whole catalogue you can draw on. It lists every "
+                "method available, including ones that may not suit this data; deciding which "
+                "are relevant is your job:\n" + index(self.kb_papers))
+
         eda = context.get("eda")
         if eda:
             blocks.append(f"WHAT YOU MEASURED WHEN YOU INSPECTED THE DATA:\n{eda[:MAX_EDA_CHARS]}")
@@ -419,10 +429,6 @@ class LLMProposer:
                 blocks.append(_EDIT_PARENT.format(iid=parent.iter_id, score=parent.score,
                                                   hyp=parent.hypothesis,
                                                   code=parent.code[:MAX_CODE_CHARS]))
-            blocks.append(
-                "AVAILABLE LITERATURE -- the whole catalogue you can draw on. It lists every "
-                "method available, including ones that may not suit this data; deciding which "
-                "are relevant is your job:\n" + index(self.kb_papers))
             kb = retrieve(_kb_query(history, refl, feedback), k=MAX_KB, papers=self.kb_papers,
                           seen=self._seen_papers)
             if kb:

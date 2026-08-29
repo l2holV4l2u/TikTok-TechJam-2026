@@ -287,6 +287,31 @@ def test_a_prompt_budget_trims_context_but_never_the_contracts():
     assert "[trimmed" in out, "context blocks are what gives way"
 
 
+def test_the_static_head_of_the_prompt_is_identical_across_calls():
+    """Providers discount input that repeats as a stable PREFIX, and only as a prefix.
+
+    The brief and the method catalogue are byte-identical on every call of a run, but while
+    the catalogue sat after the volatile blocks none of it could be cached. Keeping the head
+    stable is worth thousands of input tokens a run and removes nothing from the prompt.
+    """
+    proposer, prompts = _capture()
+    proposer.propose(phase="improve", history=[_entry(1)], context={"eda": "first eda"})
+    proposer.propose(phase="improve", history=[_entry(1), _entry(2, "other")],
+                     context={"eda": "a completely different eda report"})
+    assert len(prompts) == 2
+    a, b = prompts
+    common = 0
+    for x, y in zip(a, b):
+        if x != y:
+            break
+        common += 1
+    assert common > 8000, (
+        f"only {common} characters of stable prefix; the static head must stay contiguous "
+        "at the front or none of it can be cached")
+    assert "AVAILABLE LITERATURE" in a[:common], (
+        "the catalogue is static and belongs inside the cacheable prefix")
+
+
 if __name__ == "__main__":
     for t in (
         test_brief_carries_no_human_findings,
@@ -313,6 +338,7 @@ if __name__ == "__main__":
         test_token_counts_summed_across_retries,
         test_history_reports_the_score_outcome_not_the_loop_status,
         test_a_prompt_budget_trims_context_but_never_the_contracts,
+        test_the_static_head_of_the_prompt_is_identical_across_calls,
     ):
         t()
         print(f"ok  {t.__name__}")
