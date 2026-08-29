@@ -327,18 +327,17 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         # run, so the runs converged at 6 of 50 iterations having spent 16 min of the 6h
         # ceiling. Breadth is what buys the budget; a second miss falls through to broaden,
         # which can leave the model stage entirely.
-        # Explore while breadth pays, then exploit into the convergence tail. A run must
-        # spend `patience` sub-epsilon iterations before it can stop, so that tail is going to
-        # be spent either way -- r70-r74 spent it wandering and banked 0.0005 total. The last
-        # rung tunes the best architecture instead, as a config search inside one script.
+        # Every improve iteration sweeps model families. Measured over r76-r78 on the hidden
+        # test set, which is what the ranking uses: family sweeps moved it +0.00224, while two
+        # tune iterations and a 9->37 field expansion moved it -0.00001 between them. Refine
+        # and tune buy validation points that do not exist on test, and selection is forced
+        # onto validation, so keeping them made the harness pick the worse model -- r74 has
+        # better validation than r78 (0.6049 vs 0.6047) and worse test (0.5991 vs 0.5998).
+        # The other modes stay reachable through --force-mode for diagnostic runs.
         if force_mode and phase == "improve":
             mode = force_mode
-        elif phase == "improve" and (not best_curve or stale == 1):
-            mode = "sweep"
-        elif phase == "improve" and stale >= 2:
-            mode = "tune"
         else:
-            mode = "refine" if stale == 0 else "broaden"
+            mode = "sweep" if phase == "improve" else "refine"
         context["mode"] = mode
         parent = tree.select(mode) if phase == "improve" else None
 

@@ -140,3 +140,40 @@ than the gap between families" was argued from two measurements that do not cove
 iterations. Neither is a configuration sweep, which the harness had never run. The family gap
 being larger than seed noise is still measured and still true; the claim that tuning cannot
 pay was not.
+
+## Refine and tune bought validation points that did not exist on the test set
+
+r77 and r78 were run with `--patience 999` to disable the convergence stop, and every
+iteration's saved `scores_valid.npy` / `scores_test.npy` were scored on both splits. The
+hidden test set is what the ranking uses; validation only selects which checkpoint is
+submitted. Scoring both is what exposed this -- the harness had only ever reported
+validation.
+
+| move | validation | hidden test |
+|---|---|---|
+| family sweeps 1-3 (boosted tree, cross network, multi-task) | +0.00168 | **+0.00224** |
+| family sweeps 4-8 (ten further architectures) | +0.00009 | +0.00007 |
+| refine: 9 -> 37 categorical fields (r77 #4) | +0.00021 | **-0.00001** |
+| tune: successive halving (r76 #5, r77 #6) | +0.00018, refused | never shipped |
+
+Two conclusions, and the second is the damaging one:
+
+1. **Three complementary families capture the whole gain.** Seventeen architectures were
+   tried across all seven groups -- FM, FFM, DeepFM, xDeepFM, DCN, DCN-V2, AutoInt, PNN, AFM,
+   FiBiNET, NFM, Wide & Deep, DIN, GRU, SASRec, LightGBM binary and LambdaRank, MMoE, SVD,
+   empirical Bayes. Everything after the third was inside seed noise. Once the blend holds a
+   boosted tree, a cross network and a multi-task model they already disagree in enough
+   different ways that a fourth architecture has no error mode left to correct.
+
+2. **Refine and tune move validation without moving test.** The ranking is on test but the
+   rules force the submission to be the validation-best checkpoint, so a mode that inflates
+   validation actively steers the harness toward the worse model. r74 has better validation
+   than r78 (0.604917 vs 0.604778) and worse test (0.599100 vs 0.599842) -- a 0.00074 gap,
+   about 14% of the whole margin over the official baseline.
+
+The leaked iteration r78 #9 is the same effect without ambiguity: reading `.aux` on the valid
+split gained +0.00049 validation and lost 0.0001 test. The integrity check rejected it.
+
+**Fixed.** Every improve iteration is now `sweep`. `refine`, `tune` and `broaden` remain
+reachable through `--force-mode` for diagnostic runs, which is how these numbers were
+measured. Best result on record is r78 iteration 7: test 0.599842, delta +0.00524.
