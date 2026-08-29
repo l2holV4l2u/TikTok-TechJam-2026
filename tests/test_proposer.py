@@ -291,23 +291,27 @@ def test_the_static_head_of_the_prompt_is_identical_across_calls():
         "the catalogue is static and belongs inside the cacheable prefix")
 
 
-def test_the_first_improve_iteration_asks_for_breadth():
-    """Measured on this data: distinct families differ by 0.0019 primary, two seeds of one
-    family by 0.0002. The family is worth more than the tuning, and one script is one
-    iteration however many models it holds -- so the first experiment sweeps families and
-    later ones refine the winner.
+def test_sweep_mode_asks_for_breadth_across_named_families():
+    """Sweep is the only move that has cleared epsilon: measured over r70-r74 a family sweep
+    gains 0.0027-0.0031 while all 15 refine iterations gained 0.0000-0.0004. Three of the
+    runs spent their sweep on hyperparameters instead of families, so the prompt names the
+    families outright rather than describing them.
     """
     proposer, prompts = _capture()
     parent = Node(1, None, "baseline", "print(1)", 0.6016)
     proposer.propose(phase="improve", history=[_entry(1)], parent=parent,
                      context={"mode": "sweep"})
-    assert "FIRST experiment" in prompts[0] and "breadth" in prompts[0], prompts[0][:200]
-    assert "CANDIDATES" in prompts[0], "the comparison has to be recorded"
+    sweep = prompts[0]
+    assert "BREADTH" in sweep and "structurally DIFFERENT" in sweep
+    assert all(f in sweep for f in ("AutoInt", "LambdaRank", "MMoE", "DIN")),         "the families have to be named; three runs read 'family' as 'hyperparameter'"
+    assert "NOT a different family" in sweep, "the negative case has to be explicit too"
+    assert "ALREADY TRIED THIS RUN" in sweep, "breadth needs to know what was already tried"
+    assert "CANDIDATES" in sweep, "the comparison has to be recorded"
 
     proposer2, p2 = _capture()
     proposer2.propose(phase="improve", history=[_entry(1)], parent=parent,
                       context={"mode": "refine"})
-    assert "FIRST experiment" not in p2[0], "later iterations refine, they do not re-sweep"
+    assert "structurally DIFFERENT" not in p2[0], "refine edits the parent, it does not sweep"
 
 
 def test_the_parent_script_sits_inside_the_cacheable_prefix():

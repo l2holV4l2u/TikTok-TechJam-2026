@@ -320,7 +320,13 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         # same family differ by 0.0002 -- the choice of family is worth more than anything
         # tuning it recovers, and the convergence rule charges the same one iteration either
         # way. Later iterations refine whatever the sweep found.
-        if phase == "improve" and not best_curve:
+        # Sweep again on the FIRST miss, not just at the start. Measured over r70-r74: a
+        # family sweep gains 0.0027-0.0031 and clears epsilon alone, while all 15 refine
+        # iterations gained 0.0000-0.0004 and none did. Three sub-epsilon iterations end the
+        # run, so the runs converged at 6 of 50 iterations having spent 16 min of the 6h
+        # ceiling. Breadth is what buys the budget; a second miss falls through to broaden,
+        # which can leave the model stage entirely.
+        if phase == "improve" and (not best_curve or stale == 1):
             mode = "sweep"
         else:
             mode = "refine" if stale == 0 else "broaden"

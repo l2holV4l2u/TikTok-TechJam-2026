@@ -266,27 +266,55 @@ ALREADY TRIED THIS RUN:
 
 Return the COMPLETE script."""
 
-_DRAFT = """No prior solution has survived, so write this script from scratch."""
 
-_SWEEP = """This is the run's FIRST experiment, and it buys breadth rather than depth.
+_SWEEP_INSTRUCTION = """Train several structurally DIFFERENT model families on the same inputs
+in this ONE script, score each on validation, and return the best.
 
-Train several structurally DIFFERENT model families on the same inputs in this one script,
-score each on validation, and return the best. Different family means a different way of
-forming the prediction, not the same model at another width, depth or learning rate.
+Different family means a different way of FORMING the prediction. The same model at another
+width, depth, learning rate, seed, epoch count or feature subset is NOT a different family,
+and this iteration is wasted if you sweep those instead. Families to draw from -- not
+exhaustive, not a recommendation, and you may propose one that is not listed:
 
-Why here: one script is one iteration however many models it contains, so comparing five
-families costs exactly what comparing one does. Later iterations can only refine whatever
-this one finds, and refinement recovers less than the gap between families.
+  factorisation      FM, FFM, field-weighted FM
+  deep CTR           DeepFM, xDeepFM, AutoInt, FiBiNET, DCNv2, PNN
+  sequence/attention DIN, DIEN, transformer over user history
+  gradient boosting  LightGBM binary, LambdaRank, setwise ranking
+  multi-task         MMoE, PLE, ESMM over the other feedback signals
+  latent/MF          truncated SVD, ALS, item2vec
+  non-parametric     empirical Bayes, target statistics, popularity priors
+
+WHY BREADTH, measured on this harness's own runs: a family sweep gains 0.0027-0.0031 primary
+and clears the 0.002 convergence threshold on its own. An iteration that tunes an existing
+model gains 0.0000-0.0004 and has never once cleared it in 15 attempts. Three sub-threshold
+iterations end the run, so sweeping is what buys the budget to keep going.
+
+The convergence rule charges per ITERATION, not per model: eight families in one script cost
+exactly what one costs. Keep each fit short enough that all of them finish inside the time
+limit -- a rough comparison of eight beats one polished fit.
+
+Also score the BLEND of each new family with the trusted incumbent. On this dataset the blend
+has beaten every standalone family, every time.
 
 Print `CANDIDATES {{"family_name": score, ...}}` so the comparison is recorded, save the
-winner's validation and test scores, and report its metrics. Keep each fit short enough
-that all of them finish inside the time limit -- a rough comparison of five is worth more
-than one polished fit.
+winner's validation and test scores, and report its metrics.
+
+FAMILIES AND DIRECTIONS ALREADY TRIED THIS RUN -- choose ones that are not here:
+{tried}"""
+
+_DRAFT = """No prior solution has survived, so write this script from scratch."""
+
+_SWEEP_CODE = """This experiment buys BREADTH across model families, not depth on one.
 
 THE BASELINE TO BEAT -- iteration #{iid}, validation primary {score:.4f}:
 ```python
 {code}
 ```"""
+
+
+def _tried(history) -> str:
+    """What the run has already attempted, so breadth prompts do not re-propose it."""
+    return "\n".join(f"  - {e.hypothesis[:100]}" for e in history
+                     if e.phase == "improve") or "  - nothing yet"
 
 
 def _fmt_metrics(metrics: dict) -> str:
@@ -414,7 +442,7 @@ class LLMProposer:
             if parent is None:
                 blocks.append(_DRAFT)
             elif context.get("mode") == "sweep":
-                blocks.append(_SWEEP.format(iid=parent.iter_id, score=parent.score,
+                blocks.append(_SWEEP_CODE.format(iid=parent.iter_id, score=parent.score,
                                             code=parent.code[:MAX_CODE_CHARS]))
             elif context.get("mode") == "broaden":
                 blocks.append(_BROADEN_CODE.format(iid=parent.iter_id, score=parent.score,
@@ -447,6 +475,8 @@ class LLMProposer:
             bl = ", ".join(sorted(blacklist))
             if bl:
                 blocks.append(f"RETIRED -- do not propose again: {bl}")
+            if parent is not None and context.get("mode") == "sweep":
+                blocks.append(_SWEEP_INSTRUCTION.format(tried=_tried(history)))
             if parent is not None and context.get("mode") == "broaden":
                 tried = "\n".join(f"  - {e.hypothesis[:100]}" for e in history
                                   if e.phase == "improve") or "  - nothing yet"

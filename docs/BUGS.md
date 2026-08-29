@@ -69,3 +69,39 @@ an isolated one.
 
 **Not yet fixed.** A smarter truncation (cut at a line/def boundary, or summarize the tail
 instead of dropping it) would at least make the loss legible instead of silent.
+
+## Runs converge at iteration 6 of 50 because only sweeps clear epsilon
+
+The organizers allow 50 iterations or 6 h, whichever comes first. Measured on r70-r74, every
+run stopped at iteration 6 having used 16 minutes -- 12% of the iteration cap and 4.5% of the
+wall-clock ceiling. The stop was always `converged`, never the cap.
+
+Per-iteration validation gain, all five runs:
+
+| iteration kind | gain | clears eps = 0.002 |
+|---|---|---|
+| family sweep (r74, r71) | +0.00305, +0.00266 | yes |
+| sweep that swept hyperparameters instead (r70, r72, r73) | +0.00127, +0.00046, +0.00038 | no |
+| refine / broaden (15 of them) | +0.00000 .. +0.00042 | never |
+
+No refine iteration has ever cleared epsilon. Three sub-epsilon iterations is exactly the
+convergence condition, so the run ends three iterations after the last sweep -- every time.
+The rule was not detecting a score ceiling; it was detecting that the harness stopped
+sweeping after iteration 2.
+
+Two causes, both now fixed:
+
+1. `agent/loop.py` only ever entered `sweep` mode on the first improve iteration
+   (`if phase == "improve" and not best_curve`). It now also sweeps on the first miss, and
+   falls through to `broaden` on a second so the search can still leave the model stage.
+2. `_SWEEP` described "structurally different model families" without naming any, and three
+   of five runs read that as breadth over blend weights, feature subsets or fusion scales.
+   The prompt now lists the families outright, states the negative case ("the same model at
+   another width, depth, learning rate, seed, epoch count or feature subset is NOT a
+   different family"), and carries the run's already-tried list so each sweep picks new ones.
+
+**This also revises the entry above.** "Cross-iteration search cannot pay for itself under
+this convergence rule" was argued from "a run gets roughly three to six iterations". That
+premise was self-inflicted, not imposed by the rule. If sweeping keeps clearing epsilon the
+run reaches the budget it was actually given, and node retirement and backtracking have the
+sample count they need. The conclusion stands only for a run that stops sweeping.

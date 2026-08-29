@@ -201,3 +201,38 @@ if __name__ == "__main__":
         test()
         print(f"ok: {test.__name__}")
     print(f"{len(tests)} tests passed")
+
+
+def test_a_stalled_iteration_sweeps_families_again_instead_of_refining():
+    """Sweeping is the only move that has ever cleared epsilon on this benchmark.
+
+    Over r70-r74 a family sweep gained 0.0027-0.0031 while all 15 refine iterations gained
+    0.0000-0.0004, so three refines in a row ended every run at iteration 6 of 50, having
+    spent 16 minutes of the 6 h ceiling. The first miss now re-sweeps; a second falls
+    through to broaden, which may leave the model stage entirely.
+    """
+    from agent.ledger import Ledger
+    from agent.loop import run_loop
+    from agent.proposer import Proposal
+
+    modes = []
+
+    class ModeRecorder:
+        """baseline reproduces, then every improve lands 0.0001 up -- the shape of r72."""
+        def propose(self, *, phase="improve", context=None, **_):
+            if phase == "improve":
+                modes.append((context or {}).get("mode"))
+            score = 0.6016 if phase == "baseline" else 0.6017
+            code = "print('METRICS " + json.dumps({"primary": score}) + "')"
+            return Proposal(f"experiment {len(modes)}", code, 0, 0)
+
+    from agent.loop import StdoutJsonEvaluator
+
+    with tempfile.TemporaryDirectory() as d:
+        run_loop(ModeRecorder(), StdoutJsonEvaluator(), Ledger(Path(d) / "ledger.jsonl"),
+                 workdir=Path(d) / "scripts", max_iters=8, patience=3, epsilon=0.002)
+
+    assert modes[0] == "sweep", f"the first improve iteration sweeps, got {modes}"
+    assert modes[1] == "sweep", (
+        f"the first stalled iteration re-sweeps rather than refining, got {modes}")
+    assert "broaden" in modes[2:], f"a second miss leaves the model stage, got {modes}"
