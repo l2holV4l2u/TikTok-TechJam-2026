@@ -341,6 +341,11 @@ def main() -> None:
         "turns": r.turns,
         "scripts": r.scripts,
         "mean_slot_correlation": r.mean_slot_correlation,
+        "archived": r.archived,
+        "revivals": r.revivals,
+        "portfolio_blend_primary": (None if r.portfolio_blend_primary == float("-inf")
+                                    else r.portfolio_blend_primary),
+        "portfolio_blend_members": r.portfolio_blend_members,
         "wall_clock_s": wall,
         "wall_clock_h": wall / 3600.0,
         "script_seconds": r.script_seconds,
