@@ -23,7 +23,7 @@ class Node:
 
 @dataclass
 class Tree:
-    max_misses: int = 3      # retire a node after this many non-improving children
+    max_misses: int = 2      # retire a node after this many non-improving children
     epsilon: float = 0.002   # organizer convergence epsilon; smaller deltas are noise
     nodes: list[Node] = field(default_factory=list)
 

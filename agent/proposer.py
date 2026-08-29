@@ -142,7 +142,11 @@ ENVIRONMENT:
     will time out.
 
 WHAT ONE ITERATION IS: one script, executed once, reporting one METRICS line. Within that
-script you may do as much as fits the time budget -- one iteration is one script, not one model
+script you may do as much as fits the time budget -- one iteration is one script, not one model.
+The convergence rule counts ITERATIONS, not models: comparing five approaches inside one
+script costs one of the three non-improving iterations the run is allowed, while comparing
+them across five iterations costs five and ends the run. Search inside the script is the
+cheap search; only the conclusion needs its own iteration
 and not one idea. The METRICS line reports whatever you finally choose to evaluate.
 
 OUTPUT CONTRACT -- the harness reads stdout:

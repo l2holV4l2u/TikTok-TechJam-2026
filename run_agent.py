@@ -123,7 +123,10 @@ def main() -> None:
     ap.add_argument("--patience", type=int, default=3, help="N in the convergence rule")
     ap.add_argument("--epsilon", type=float, default=0.002, help="organizer-fixed eps")
     ap.add_argument("--max-retries", type=int, default=2)
-    ap.add_argument("--max-misses", type=int, default=3,
+    # Must stay below --patience. Both counters test the same epsilon against the same
+    # leader, so at 3 a node retired on the same iteration the run converged and select()
+    # never got to return the fallback: backtracking existed only for crash-heavy nodes.
+    ap.add_argument("--max-misses", type=int, default=2,
                     help="non-improving children before a search node is retired")
     ap.add_argument("--baseline-valid", type=float, default=BASELINE_VALID,
                     help="validation score the agent must reproduce; measure it with research.baseline_reference on a non-Pure variant")
