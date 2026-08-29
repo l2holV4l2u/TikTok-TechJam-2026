@@ -15,6 +15,7 @@ class Node:
     hypothesis: str
     code: str
     score: float
+    children: int = 0        # children attempted, so breadth can branch off the least-tried
     misses: int = 0          # children that failed to beat this node
     crashes: int = 0         # children that crashed or timed out before producing a score
     child_seconds: float = 0.0   # wall time this node's children have consumed
@@ -34,27 +35,39 @@ class Tree:
         return next((n for n in self.nodes if n.iter_id == iter_id), None)
 
     def select(self, mode: str = "refine") -> Node | None:
-        """Best live node, or None when the tree is empty or fully retired (draft from scratch).
+        """Exploit modes extend the leader; breadth modes branch off a less-explored node.
 
         FML-bench found that agents exploring broadly beat agents refining one line of attack
         deeply (arXiv:2510.10472), and that switching to broader exploration on detecting
         stagnation outperforms every fixed strategy (arXiv:2605.17373).
 
-        Both modes return the best live node; what differs is what the proposer is asked to do
-        with it. Breadth belongs in method space, not in which file you start from. An earlier
-        version sent `broaden` back to the earliest node instead, and a run showed the cost
-        directly: the agent rebuilt a genuinely useful idea (recency weighting, worth +0.0005 in
-        its own internal sweep) on top of the plain baseline rather than on the best model it
-        had, so the iteration scored below a leader it should have improved.
+        Returning the leader for every mode is greedy hill-climbing, and it made the tree a
+        linear chain: r70-r74 each produced 5 nodes on one path with no branch ever taken. A
+        sweep is asking for a DIFFERENT model family, so grafting it onto the leader's
+        family-specific code is the one starting point that works against it.
+
+        An earlier version sent `broaden` back to the earliest node and that cost a run: the
+        agent rebuilt recency weighting on the plain baseline instead of on its best model and
+        scored below the leader. That predates `_publish_incumbent` -- a branch can now load
+        incumbent_valid_scores.npy and blend against the leader without rebuilding it, so the
+        starting file no longer decides whether the incumbent is available.
+
+        Ties break toward the higher score, so a branch is still taken from the best of the
+        equally-unexplored nodes.
         """
         live = [n for n in self.nodes if not n.dead]
-        return max(live, key=lambda n: n.score) if live else None
+        if not live:
+            return None
+        if mode in ("sweep", "broaden"):
+            return min(live, key=lambda n: (n.children, -n.score))
+        return max(live, key=lambda n: n.score)
 
     def record_child(self, parent_id: int | None, score: float, seconds: float = 0.0) -> None:
         """A child that does not clear the parent by epsilon is a miss, not progress."""
         parent = self.get(parent_id) if parent_id is not None else None
         if parent is None:
             return
+        parent.children += 1
         parent.child_seconds += seconds
         if score <= parent.score + self.epsilon:
             parent.misses += 1
@@ -81,6 +94,7 @@ class Tree:
         if parent is None:
             return
         parent.crashes += 1
+        parent.children += 1
         parent.child_seconds += seconds
         if parent.crashes >= 2 * self.max_misses:
             parent.dead = True

@@ -239,3 +239,30 @@ def test_a_stalled_iteration_sweeps_families_again_instead_of_refining():
         f"the first stalled iteration re-sweeps rather than refining, got {modes}")
     assert modes[2] == "tune", (
         f"the convergence tail exploits the best architecture, got {modes}")
+
+
+def test_breadth_modes_branch_instead_of_extending_the_leader():
+    """Greedy selection made the tree a linear chain: r70-r74 each produced 5 nodes on one
+    path, no branch ever taken. A sweep asks for a different model family, so starting it
+    from the leader's family-specific code is the one file that works against it.
+    """
+    from agent.tree import Node, Tree
+
+    t = Tree(max_misses=99, epsilon=0.002)
+    t.add(Node(1, None, "baseline", "", 0.6013))
+    t.add(Node(2, 1, "deepfm sweep", "", 0.6044))
+    t.record_child(1, 0.6044)          # node 1 has been extended once, node 2 not at all
+
+    assert t.select("refine").iter_id == 2, "exploit extends the leader"
+    assert t.select("tune").iter_id == 2, "so does tuning"
+    assert t.select("sweep").iter_id == 2, "the unextended node is the leader here"
+
+    t.add(Node(3, 2, "personalization", "", 0.6048))
+    t.record_child(2, 0.6048)          # now 1 and 2 both have one child, 3 has none
+    assert t.select("sweep").iter_id == 3, "branch off the least-explored node"
+    assert t.select("refine").iter_id == 3, "which is also the leader, so exploit agrees"
+
+    t.record_child(3, 0.6048)
+    t.record_child(3, 0.6048)          # 3 now the most-explored
+    assert t.select("sweep").iter_id in (1, 2), f"got {t.select('sweep').iter_id}"
+    assert t.select("refine").iter_id == 3, "exploit still takes the best score"
