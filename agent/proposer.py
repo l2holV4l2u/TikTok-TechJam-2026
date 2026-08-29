@@ -283,6 +283,24 @@ exhaustive, not a recommendation, and you may propose one that is not listed:
   latent/MF          truncated SVD, ALS, item2vec
   non-parametric     empirical Bayes, target statistics, popularity priors
 
+A FAMILY IS NOT THE ONLY AXIS, AND ON THIS DATA IT IS NO LONGER THE BEST ONE. Seventeen
+architectures have been tried across every group above; the first three complementary ones took
+essentially all of the gain and the rest landed inside seed noise. The binding constraint is
+DRIFT, not capacity. The evaluation window sits 8-20 days after training ends, and across that
+gap users with no positive label go 5.1% -> 30.3% and the median rows per user go 31 -> 4. A
+sweep over how the model is TRAINED AND SELECTED is now worth more than a sweep over what it is:
+
+  sample weighting   weight the 13 training days by proximity to the evaluation window; sweep
+                     the half-life. `split.date` is available and nothing has used it yet.
+  selection protocol every blend weight so far was chosen on ONE 7-day validation window, which
+                     over-reports gains that do not transfer. Hold out the last days of TRAIN as
+                     a proxy evaluation window, choose there, and confirm on validation.
+  stationarity       prefer features whose distribution holds across windows over identity
+                     embeddings. Expanding 9 -> 37 categorical fields gained validation and lost
+                     test, which is what a non-stationary feature looks like.
+  cold start         30% of evaluated users have no positive label at all and cannot be helped;
+                     the score lives on the users who do.
+
 WHY BREADTH, measured on this harness's own runs: a family sweep gains 0.0027-0.0031 primary
 and clears the 0.002 convergence threshold on its own. An iteration that tunes an existing
 model gains 0.0000-0.0004 and has never once cleared it in 15 attempts. Three sub-threshold

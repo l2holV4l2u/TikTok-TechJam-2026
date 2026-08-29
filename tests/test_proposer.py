@@ -394,3 +394,20 @@ def test_the_tune_rung_exploits_one_architecture_instead_of_adding_families():
     assert all(w in tune for w in ("rung 1", "rung 2", "rung 3"))
     assert "0.0008" in tune, "a gain inside seed noise is not a gain"
     assert "structurally DIFFERENT" not in tune, "tune must not also ask for breadth"
+
+
+def test_the_sweep_offers_a_training_distribution_axis_not_only_families():
+    """Seventeen architectures were tried across all seven groups; the first three took the
+    gain and the rest landed in seed noise. The prompt listed only model families, so the
+    agent kept proposing architectures and never touched `split.date` in r76-r79.
+    """
+    proposer, prompts = _capture()
+    parent = Node(2, None, "sweep", "print(1)", 0.6044)
+    proposer.propose(phase="improve", history=[_entry(1)], parent=parent,
+                     context={"mode": "sweep", "stale": 1})
+    sweep = prompts[0]
+    assert "DRIFT, not capacity" in sweep
+    assert all(w in sweep for w in ("sample weighting", "selection protocol",
+                                    "stationarity", "cold start"))
+    assert "split.date" in sweep, "the unused column has to be named"
+    assert "AutoInt" in sweep, "the family list still stands alongside it"
