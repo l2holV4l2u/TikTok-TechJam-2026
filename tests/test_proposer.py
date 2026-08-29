@@ -345,40 +345,6 @@ def test_the_parent_script_sits_inside_the_cacheable_prefix():
         "shared; a volatile block was moved in front of it and the cache prefix broke")
 
 
-if __name__ == "__main__":
-    for t in (
-        test_brief_carries_no_human_findings,
-        test_knowledge_base_carries_no_measured_results,
-        test_eda_phase_asks_for_inspection_and_no_metrics,
-        test_baseline_phase_names_the_official_number,
-        test_improve_phase_sends_the_parent_script_for_editing,
-        test_broaden_mode_demands_a_new_direction_and_lists_what_was_tried,
-        test_refine_mode_asks_for_a_targeted_edit,
-        test_iterate_prompt_states_the_candidates_contract,
-        test_improve_without_a_parent_drafts_from_scratch,
-        test_beliefs_and_memory_reach_the_improve_prompt,
-        test_controller_diagnosis_and_incumbent_predictions_reach_prompt,
-        test_empty_belief_set_is_not_rendered,
-        test_iterate_prompt_states_the_findings_contract,
-        test_prompt_size_bounded_as_history_grows,
-        test_parent_code_is_truncated_not_unbounded,
-        test_blacklisted_hypothesis_never_returned,
-        test_blacklist_does_not_block_baseline_reproduction,
-        test_malformed_output_returns_none_after_two_attempts,
-        test_kb_entries_appear_but_are_not_pinned,
-        test_full_catalogue_is_offered_so_retrieval_cannot_hide_a_method,
-        test_detailed_retrieval_rotates_instead_of_repeating,
-        test_token_counts_summed_across_retries,
-        test_history_reports_the_score_outcome_not_the_loop_status,
-        test_the_static_head_of_the_prompt_is_identical_across_calls,
-        test_the_first_improve_iteration_asks_for_breadth,
-        test_the_parent_script_sits_inside_the_cacheable_prefix,
-    ):
-        t()
-        print(f"ok  {t.__name__}")
-    print("all passed")
-
-
 def test_the_tune_rung_exploits_one_architecture_instead_of_adding_families():
     """Explore-then-exploit: once breadth stops clearing epsilon the remaining convergence
     tail is spent searching the winner's configuration space, as successive halving inside
@@ -411,3 +377,15 @@ def test_the_sweep_offers_a_training_distribution_axis_not_only_families():
                                     "stationarity", "cold start"))
     assert "split.date" in sweep, "the unused column has to be named"
     assert "AutoInt" in sweep, "the family list still stands alongside it"
+
+
+if __name__ == "__main__":
+    # Discovered, not listed. A hand-maintained list drifted three times: it named a test that
+    # had been renamed (crashing the module on import) while three real tests defined below it
+    # never ran at all. Definition order is the run order, so the block stays at the end.
+    _tests = [v for k, v in list(globals().items())
+              if k.startswith("test_") and callable(v)]
+    for t in _tests:
+        t()
+        print(f"ok  {t.__name__}")
+    print(f"all passed ({len(_tests)} tests)")

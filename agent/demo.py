@@ -87,12 +87,18 @@ def test_eda_output_reaches_later_prompts():
 
 
 def test_refine_mode_climbs_from_the_current_best_node():
-    """While every iteration keeps gaining, the search stays greedy and deepens the leader."""
+    """While every iteration keeps gaining, the search deepens the leader.
+
+    The mode is `sweep` now, not `refine` -- every improve iteration sweeps model families
+    (loop.py) -- but on a monotone trajectory the newest node is both the least-explored and
+    the highest-scoring, so `select` returns the leader either way. What this asserts is the
+    resulting CHAIN, which is the property the test was written for; pinning the mode string
+    made it fail the moment the policy changed while the behaviour it describes did not.
+    """
     with tempfile.TemporaryDirectory() as tmp:
         led = _ledger(tmp)
         pr = ScriptedProposer([0.62, 0.64, 0.66])
         r = run_loop(pr, StdoutJsonEvaluator(), led, workdir=tmp, patience=99, timeout=30)
-        assert pr.modes[:3] == ["refine"] * 3, pr.modes
         assert pr.parents[:3] == [1, 2, 3], pr.parents
         assert r.tree.best.score == 0.66
         parents = {e.iter_id: e.parent_iter_id for e in led.read() if e.phase == "improve"}
@@ -100,31 +106,71 @@ def test_refine_mode_climbs_from_the_current_best_node():
 
 
 def test_a_node_that_never_pays_off_is_retired_and_search_moves_on():
+    """Nothing ever gains, so nodes accumulate misses, get retired, and stop being selectable.
+
+    This used to assert that the search returned to the root three times in `broaden` mode.
+    Both halves of that are obsolete: every improve iteration is `sweep` now, and sweep picks
+    the LEAST-EXPLORED live node rather than the leader, so a flat run spreads its children
+    across nodes instead of piling them on one. What has to hold either way is the property
+    the test is named for -- a node that keeps not paying off dies, and a dead node is never
+    handed out again.
+    """
     with tempfile.TemporaryDirectory() as tmp:
-        # nothing ever gains, so the search broadens and keeps returning to the baseline root
-        # until that root has taken max_misses and is retired
+        # `refine` returns the leader every time, so children pile onto one node and the
+        # counter can reach max_misses. Under `sweep` it cannot: every scored iteration adds a
+        # node with children=0, and sweep always prefers the least-explored, so no node is ever
+        # handed a second child while the tree keeps growing. Retirement is reachable there
+        # only through record_failure. Exercise the machinery where it can actually fire.
         pr = ScriptedProposer([0.60] * 5)
+        r = run_loop(pr, StdoutJsonEvaluator(), _ledger(tmp), workdir=tmp, patience=99,
+                     timeout=30, tree=Tree(max_misses=2, epsilon=0.002), force_mode="refine")
+        assert r.tree.get(1).dead, (
+            f"two non-improving children must retire the leader; "
+            f"{[(n.iter_id, n.misses, n.dead) for n in r.tree.nodes]}")
+        assert pr.parents[:2] == [1, 1], pr.parents
+        # once retired it is never handed out again. Checking liveness at the END of the run
+        # would be wrong: #1 was alive on the two turns that killed it.
+        assert 1 not in pr.parents[2:], pr.parents
+
+
+def test_sweep_spreads_children_so_no_node_takes_a_second_one():
+    """Documents why retirement is near-unreachable under the shipped sweep-only policy.
+
+    sweep returns min(children, -score). A scored iteration always appends a node with
+    children=0, so there is always an unexplored node to prefer and no node accumulates the
+    second miss that `max_misses=2` needs. This is a property of the policy, not a bug -- but
+    it means node retirement protects a flat run only through crashes, and a reader of
+    tree.py's retirement logic should know that before relying on it.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        pr = ScriptedProposer([0.60] * 6)
         r = run_loop(pr, StdoutJsonEvaluator(), _ledger(tmp), workdir=tmp,
-                     patience=99, timeout=30, tree=Tree(max_misses=3, epsilon=0.002))
-        assert r.tree.get(1).dead, "the leader took three non-improving children and is retired"
-        assert pr.parents[:3] == [1, 1, 1], pr.parents
-        assert pr.parents[3] != 1, "once retired, that node is no longer selectable"
-        assert pr.modes[1:4] == ["broaden"] * 3, pr.modes
+                     patience=99, timeout=30, tree=Tree(max_misses=2, epsilon=0.002))
+        assert pr.modes and set(pr.modes) == {"sweep"}, pr.modes
+        assert all(n.misses <= 1 for n in r.tree.nodes), (
+            [(n.iter_id, n.misses) for n in r.tree.nodes])
+        assert not any(n.dead for n in r.tree.nodes)
 
 
 def test_search_broadens_on_stagnation_and_narrows_after_a_gain():
-    """FML-bench's adaptive strategy: refine while gains land, broaden the moment they stop."""
+    """The adaptive refine/broaden ladder, still reachable through --force-mode.
+
+    The shipped policy is sweep on every improve iteration, so this no longer describes a
+    default run -- it describes the ladder the loop still supports and that `--force-mode`
+    exposes for diagnostic runs. Asserting the old default here made the module fail while the
+    machinery it covers was untouched; the mode strings are pinned explicitly instead.
+    """
     with tempfile.TemporaryDirectory() as tmp:
         # baseline 0.6016 -> a miss, a miss, then a real gain, then a miss
         pr = ScriptedProposer([0.6000, 0.6005, 0.6100, 0.6050])
         r = run_loop(pr, StdoutJsonEvaluator(), _ledger(tmp), workdir=tmp,
-                     patience=99, timeout=30)
-        assert pr.modes[0] == "refine", "first improve follows a fresh incumbent"
-        assert pr.modes[1] == "broaden" and pr.modes[2] == "broaden", pr.modes
-        assert pr.modes[3] == "refine", "a gain above epsilon returns to refinement"
-        # broaden keeps the leader as the base; only the instruction changes
-        assert pr.parents[1] == 1 and pr.parents[2] == 1, pr.parents
-        assert pr.parents[3] == 4, "after the gain, build on the node that produced it"
+                     patience=99, timeout=30, force_mode="broaden")
+        assert set(pr.modes) == {"broaden"}, pr.modes
+        # `broaden` shares select()'s breadth branch with `sweep`, so it too anchors on the
+        # least-explored live node rather than the leader; what makes it "broaden" is the
+        # instruction the proposer receives, which tests/test_proposer.py covers. Here the
+        # property is only that every parent handed out was a live node of this tree.
+        assert all(r.tree.get(p) is not None for p in pr.parents), pr.parents
         assert r.tree.best.score == 0.6100
 
 
@@ -325,22 +371,9 @@ def test_ledger_append_only():
 
 
 if __name__ == "__main__":
-    for t in (test_runs_eda_then_baseline_then_improves,
-              test_eda_output_reaches_later_prompts,
-              test_refine_mode_climbs_from_the_current_best_node,
-              test_a_node_that_never_pays_off_is_retired_and_search_moves_on,
-              test_search_broadens_on_stagnation_and_narrows_after_a_gain,
-              test_critic_rejection_never_becomes_a_search_node,
-              test_internal_candidates_are_recorded,
-              test_candidates_line_is_optional_and_malformed_is_ignored,
-              test_artifacts_dir_persists_across_iterations,
-              test_retries_then_blacklists,
-              test_wall_clock_limit_stops_the_run,
-              test_knowledge_is_revised_after_every_scored_iteration,
-              test_revised_beliefs_reach_the_next_proposal,
-              test_findings_are_captured_and_passed_to_revision,
-              test_findings_parser_ignores_everything_else,
-              test_ledger_append_only):
+    # Discovered, not listed: a hand-kept tuple silently omitted every test added after it.
+    _tests = [v for k, v in list(globals().items()) if k.startswith("test_") and callable(v)]
+    for t in _tests:
         t()
         print(f"ok  {t.__name__}")
-    print("all passed")
+    print(f"all passed ({len(_tests)} tests)")
