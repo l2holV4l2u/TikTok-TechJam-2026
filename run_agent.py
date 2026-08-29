@@ -126,6 +126,9 @@ def main() -> None:
     # Must stay below --patience. Both counters test the same epsilon against the same
     # leader, so at 3 a node retired on the same iteration the run converged and select()
     # never got to return the fallback: backtracking existed only for crash-heavy nodes.
+    ap.add_argument("--force-mode", default="",
+                    choices=["", "sweep", "refine", "tune", "broaden"],
+                    help="pin every improve iteration to one mode; diagnostic, not for scoring")
     ap.add_argument("--max-misses", type=int, default=2,
                     help="non-improving children before a search node is retired")
     ap.add_argument("--baseline-valid", type=float, default=BASELINE_VALID,
@@ -234,6 +237,7 @@ def main() -> None:
             epsilon=args.epsilon,
             patience=args.patience,
             max_iters=args.iters,
+            force_mode=args.force_mode,
             timeout=args.timeout,
             wall_clock_limit_s=args.wall_clock_s,
             tree=Tree(max_misses=args.max_misses, epsilon=args.epsilon),

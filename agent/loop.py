@@ -254,7 +254,8 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
              knowledge: Knowledge | None = None, revise_fn=None,
              memory: str = "", baseline: float = 0.6016, ceiling: float | None = None,
              baseline_tolerance: float = BASELINE_TOLERANCE,
-             max_instant_failures: int = 5, max_proposer_errors: int = 6) -> LoopResult:
+             max_instant_failures: int = 5, max_proposer_errors: int = 6,
+             force_mode: str = "") -> LoopResult:
     tree = tree if tree is not None else Tree(epsilon=epsilon)
     recovery = recovery or Recovery()
     workdir = Path(workdir)
@@ -330,7 +331,9 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         # spend `patience` sub-epsilon iterations before it can stop, so that tail is going to
         # be spent either way -- r70-r74 spent it wandering and banked 0.0005 total. The last
         # rung tunes the best architecture instead, as a config search inside one script.
-        if phase == "improve" and (not best_curve or stale == 1):
+        if force_mode and phase == "improve":
+            mode = force_mode
+        elif phase == "improve" and (not best_curve or stale == 1):
             mode = "sweep"
         elif phase == "improve" and stale >= 2:
             mode = "tune"
