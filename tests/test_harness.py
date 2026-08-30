@@ -195,14 +195,6 @@ def test_display_rounding_is_not_treated_as_a_fabricated_metric():
             "a metric off by 0.01 is still a fabrication and must be rejected")
 
 
-if __name__ == "__main__":
-    tests = [v for k, v in list(globals().items()) if k.startswith("test_") and callable(v)]
-    for test in tests:
-        test()
-        print(f"ok: {test.__name__}")
-    print(f"{len(tests)} tests passed")
-
-
 def test_every_improve_iteration_sweeps_model_families():
     """Sweeping is the only mode measured to move the HIDDEN TEST score, which is what the
     ranking uses. Over r76-r78 family sweeps moved it +0.00224; two tune iterations and a
@@ -271,3 +263,13 @@ def test_breadth_modes_branch_instead_of_extending_the_leader():
     t.record_child(3, 0.6048)          # 3 now the most-explored
     assert t.select("sweep").iter_id in (1, 2), f"got {t.select('sweep').iter_id}"
     assert t.select("refine").iter_id == 3, "exploit still takes the best score"
+
+
+if __name__ == "__main__":
+    # Kept at the very end: discovery reads globals(), so any test defined below this block
+    # would never run. Two were, silently, for the whole life of the sweep-mode change.
+    tests = [v for k, v in list(globals().items()) if k.startswith("test_") and callable(v)]
+    for test in tests:
+        test()
+        print(f"ok: {test.__name__}")
+    print(f"{len(tests)} tests passed")

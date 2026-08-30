@@ -140,6 +140,131 @@ def _robustness_evidence(run_dir: Path) -> None:
               f"— this incident is what the guard was written for.")
 
 
+def _portfolio_sections(run_dir: Path, meta: dict, rows: list) -> None:
+    """Slot lanes, the archive, and the correlation trace.
+
+    The correlation trace is the evidence the portfolio earned its cost. Slots that rank
+    validation the same way return one slot's worth of information for n slots' spend, so a
+    reader has to be able to see the number rather than take the design on trust.
+    """
+    path = run_dir / "portfolio.jsonl"
+    # The counts come from run_meta and are worth printing for any portfolio run; the tables
+    # below need the per-turn log. A run with one lineage has neither and reports as before.
+    if not path.exists() and int(meta.get("slots", 1) or 1) < 2:
+        return
+    recs = []
+    if path.exists():
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.strip():
+                try:
+                    recs.append(json.loads(line))
+                except json.JSONDecodeError:
+                    pass
+    turns = [r for r in recs if r.get("event") == "turn"]
+    refills = [r for r in recs if r.get("event") == "refill"]
+    blends = [r for r in recs if r.get("event") == "portfolio_blend"]
+
+    print("\n## Portfolio\n")
+    print(f"- Lineages advanced per turn: **{meta.get('slots', 1)}**")
+    print(f"- Turns: **{meta.get('turns', '?')}**  ·  scripts executed: "
+          f"**{meta.get('scripts', len(rows))}** of {meta.get('iteration_cap', 50)}")
+    print("- A turn is one hypothesis-to-score cycle -- Figure 1's iteration, and what the "
+          "convergence rule is measured against. Scripts are reported separately so the run "
+          "can be checked against the stricter reading of the 50-iteration cap as well.")
+    print(f"- Lineages archived: **{meta.get('archived', 0)}**  ·  revived from the archive: "
+          f"**{meta.get('revivals', 0)}**")
+
+    if turns:
+        print("\n### Did the lineages actually disagree?\n")
+        print("Within-user rank correlation between the live slots' validation predictions. "
+              "This is the acceptance test for the whole design: above ~0.95 the extra slots "
+              "are three copies of one agent and bought nothing.\n")
+        print("| turn | scripts | mean corr | max corr | alert |")
+        print("|---|---|---|---|---|")
+        for r in turns:
+            c = r.get("correlation", {})
+            mean = c.get("mean")
+            mx = c.get("max")
+            print(f"| {r['turn']} | {', '.join('#%d' % s for s in r.get('scripts', []))} | "
+                  f"{mean:.4f} | {mx:.4f} | {'**YES**' if r.get('alert') else 'no'} |"
+                  if mean is not None else
+                  f"| {r['turn']} | - | n/a | n/a | - |")
+
+    if refills:
+        print("\n### Lineages retired and replaced\n")
+        print("A slot that stops beating its own best is archived, not stopped -- the run's "
+              "convergence counter is untouched by it. Refill alternates fresh drafts with a "
+              "revival, and a revival is chosen for score AND for disagreeing with what is "
+              "already live.\n")
+        print("| turn | slot | archived at | choice | detail |")
+        print("|---|---|---|---|---|")
+        for r in refills:
+            best = r.get("archived_primary")
+            best = f"{best:.4f}" if isinstance(best, (int, float)) and best > -1e300 else "-"
+            detail = (f"entry #{r.get('entry_id')} (primary {r.get('entry_primary', 0):.4f})"
+                      if r.get("choice") == "revived" else "new draft")
+            print(f"| {r.get('turn')} | {r.get('slot_id')} | {best} | {r.get('choice')} | {detail} |")
+
+    if blends:
+        print("\n### Controller blend of the portfolio\n")
+        print("Every turn the controller blends the trusted incumbent, the live slots and the "
+              "archive, choosing members on one half of validation and confirming on the other. "
+              "A blend that wins the selection fold and loses the confirmation fold is refused: "
+              "it won the split, not the task.\n")
+        print("| turn | pool | accepted | members | fold A | fold B | reason |")
+        print("|---|---|---|---|---|---|---|")
+        for r in blends:
+            def _g(key):
+                v = r.get(key)
+                return f"{v:+.4f}" if isinstance(v, (int, float)) else "-"
+            print(f"| {r.get('turn')} | {r.get('pool_size')} | "
+                  f"{'yes' if r.get('accepted') else 'no'} | "
+                  f"{', '.join(r.get('members') or []) or '-'} | "
+                  f"{_g('fold_a_gain')} | {_g('fold_b_gain')} | {r.get('reason')} |")
+
+
+def _code_diffs(run_dir: Path, rows: list, max_lines: int = 40) -> None:
+    """The per-iteration code diff, which the deliverables list by name.
+
+    The ledger stores each script in full and records its parent, so the diff the spec asks for
+    has always been derivable -- it was simply never rendered. Reconstructed here rather than
+    stored, so it cannot drift from the code the run actually executed.
+    """
+    import difflib
+
+    by_id = {e["iter_id"]: e for e in rows}
+    pairs = [(e.get("parent_iter_id"), e["iter_id"]) for e in rows
+             if e.get("parent_iter_id") is not None and e.get("parent_iter_id") in by_id
+             and e.get("diff")]
+    if not pairs:
+        return
+    rendered = []
+    for parent_id, iter_id in pairs:
+        a = (by_id[parent_id].get("diff") or "").splitlines()
+        b = (by_id[iter_id].get("diff") or "").splitlines()
+        d = list(difflib.unified_diff(a, b, fromfile=f"iter_{parent_id}.py",
+                                      tofile=f"iter_{iter_id}.py", lineterm="", n=2))
+        if d:
+            rendered.append((parent_id, iter_id, d))
+    # An empty section is worse than no section: it reads as a deliverable that was attempted
+    # and produced nothing, when in fact no iteration changed its parent's source.
+    if not rendered:
+        return
+    print("\n## Code diff applied, per iteration\n")
+    print("Each iteration edits a parent script. This is that edit, reconstructed from the two "
+          "full sources in the ledger, truncated to the first "
+          f"{max_lines} lines per iteration.\n")
+    for parent_id, iter_id, d in rendered:
+        added = sum(1 for x in d if x.startswith("+") and not x.startswith("+++"))
+        removed = sum(1 for x in d if x.startswith("-") and not x.startswith("---"))
+        print(f"\n**#{parent_id} -> #{iter_id}**  (+{added} / -{removed} lines)\n")
+        print("```diff")
+        print("\n".join(d[:max_lines]))
+        if len(d) > max_lines:
+            print(f"... {len(d) - max_lines} more diff lines")
+        print("```")
+
+
 def main() -> None:
     # the report is redirected into a .md file; without this Windows writes cp1252 and any
     # non-ASCII character the model emitted lands in the deliverable as mojibake
@@ -207,8 +332,16 @@ def main() -> None:
           f"agent, each branching from a node of its own search tree.\n")
 
     print("## Iteration log\n")
-    print("| # | phase | parent | status | secs | primary | vs baseline | hypothesis |")
-    print("|---|---|---|---|---|---|---|---|")
+    portfolio = any(e.get("slot_id") is not None for e in rows)
+    if portfolio:
+        print("A turn is one hypothesis-to-score cycle and advances several lineages at once, "
+              "so `turn` and `slot` say when an experiment ran and which lineage produced it. "
+              "The convergence rule is measured against turns; the 50-cap counts scripts.\n")
+        print("| # | turn | slot | phase | parent | status | secs | primary | vs baseline | hypothesis |")
+        print("|---|---|---|---|---|---|---|---|---|---|")
+    else:
+        print("| # | phase | parent | status | secs | primary | vs baseline | hypothesis |")
+        print("|---|---|---|---|---|---|---|---|")
     for e in rows:
         m = e["metrics"].get("primary")
         d = f"{m - BASE_VALID:+.4f}" if m is not None else "-"
@@ -217,9 +350,15 @@ def main() -> None:
         p = f"{m:.4f}" if m is not None else ("n/a" if e["status"] == "ok" else "FAIL")
         par = e.get("parent_iter_id")
         h = e["hypothesis"].replace("|", "/")[:70]
-        print(f"| {e['iter_id']} | {e.get('phase', 'improve')} | "
+        lead = (f"| {e['iter_id']} | {e.get('turn') if e.get('turn') is not None else '-'} | "
+                f"{e.get('slot_id') if e.get('slot_id') is not None else '-'} | "
+                if portfolio else f"| {e['iter_id']} | ")
+        print(f"{lead}{e.get('phase', 'improve')} | "
               f"{'-' if par is None else '#%d' % par} | {e['status']} | "
               f"{e['gpu_seconds']:.0f} | {p} | {d} | {h} |")
+
+    _portfolio_sections(run_dir, meta, rows)
+    _code_diffs(run_dir, rows)
 
     tree_path = run_dir / "search_tree.txt"
     if tree_path.exists():

@@ -19,6 +19,12 @@ class Entry:
     error: str | None = None
     phase: str = "improve"  # eda | baseline | improve; default keeps old ledgers readable
     timestamp: float = field(default_factory=time.time)
+    # Portfolio coordinates. A turn is one pass of the loop and may launch several scripts at
+    # once, so iter_id alone no longer says when something happened or which lineage produced
+    # it. Both default to None: every ledger written before the portfolio existed still parses,
+    # and a single-slot run leaves them unset rather than inventing a slot 0.
+    slot_id: int | None = None
+    turn: int | None = None
 
 
 class Ledger:

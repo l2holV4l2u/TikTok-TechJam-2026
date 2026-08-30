@@ -170,11 +170,16 @@ OUTPUT CONTRACT -- the harness reads stdout:
 
     Producing test SCORES is required. Fitting or selecting on test is forbidden.
 
-REUSING WORK BETWEEN ITERATIONS: os.environ["RUN_ARTIFACTS"] is a directory that persists for
-the whole run, shared by every iteration. $ITER_OUT is per-iteration; RUN_ARTIFACTS is not.
-Anything you save there -- fitted predictions, arrays, parameters -- is still there next
-iteration, and reloading is free where refitting is not. Name files so you can recognise them
-later, and check a file exists before trusting it: earlier iterations may have crashed.
+REUSING WORK BETWEEN ITERATIONS: three directories, with different lifetimes.
+  $ITER_OUT          this iteration only. Where scores_valid.npy and scores_test.npy go.
+  $RUN_ARTIFACTS     yours for the whole run, and not shared with any experiment running
+                     beside you. Anything you save there -- fitted predictions, arrays,
+                     parameters -- is still there next iteration, and reloading is free where
+                     refitting is not. Name files so you can recognise them later, and check a
+                     file exists before trusting it: earlier iterations may have crashed.
+  $SHARED_ARTIFACTS  read-only to you. The controller publishes the trusted incumbent's
+                     verified predictions here; see the REUSABLE TRUSTED INCUMBENT note when
+                     one exists. Do not write to it.
 """
 
 # ---------------------------------------------------------------- phase instructions
@@ -354,6 +359,20 @@ CONFIGURATIONS AND DIRECTIONS ALREADY TRIED THIS RUN:
 
 _DRAFT = """No prior solution has survived, so write this script from scratch."""
 
+_SIBLINGS = """RUNNING IN PARALLEL WITH YOU THIS TURN -- other lines of work are writing these
+scripts right now, and all of them will be scored against the same validation split:
+{siblings}
+
+Propose something in a different family, or targeting a different stage, from every line above.
+A variation on one of them is not a different direction however it is described, and if two of
+us return the same idea this turn the second one bought nothing.
+
+This is not a hint about what works. It is the list of what is already covered."""
+
+_SEED_NOTE = """WHY THIS LINE WAS RESTARTED HERE -- carried over from the archived attempt this
+slot is resuming:
+{note}"""
+
 _SWEEP_CODE = """This experiment buys BREADTH across model families, not depth on one.
 
 THE BASELINE TO BEAT -- iteration #{iid}, validation primary {score:.4f}:
@@ -512,7 +531,7 @@ class LLMProposer:
                               "controller from its saved predictions):\n" + diagnosis)
             if context.get("incumbent_ready"):
                 blocks.append(
-                    "REUSABLE TRUSTED INCUMBENT: RUN_ARTIFACTS contains "
+                    "REUSABLE TRUSTED INCUMBENT: $SHARED_ARTIFACTS contains "
                     "incumbent_valid_scores.npy and incumbent_test_scores.npy plus "
                     "incumbent.json. You may load and blend these exact predictions instead "
                     "of retraining the incumbent; choose every blend weight on validation "
@@ -529,6 +548,16 @@ class LLMProposer:
             bl = ", ".join(sorted(blacklist))
             if bl:
                 blocks.append(f"RETIRED -- do not propose again: {bl}")
+            # What the other slots are attempting this turn. A negative constraint only: naming
+            # architectures to build would be a prior on method space, which the brief refuses
+            # to carry. This is the broaden instruction's "already tried" list applied across
+            # slots instead of across time.
+            siblings = context.get("siblings")
+            if siblings:
+                blocks.append(_SIBLINGS.format(siblings=siblings))
+            seed_note = context.get("seed_note")
+            if seed_note:
+                blocks.append(_SEED_NOTE.format(note=seed_note))
             if parent is not None and context.get("mode") == "tune":
                 blocks.append(_TUNE_INSTRUCTION.format(
                     stale=context.get("stale", 2), timeout=self.timeout,

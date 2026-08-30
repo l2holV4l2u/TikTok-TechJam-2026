@@ -280,8 +280,16 @@ def load(split: str) -> Split:
 
 
 def write_cache(out_dir, split: str, user_id: np.ndarray, video_id: np.ndarray,
-                 X: dict[str, np.ndarray], y: np.ndarray, aux: dict[str, np.ndarray]) -> None:
-    """Write a fully-materialized split (used by pipeline.synth; build_cache streams instead)."""
+                 X: dict[str, np.ndarray], y: np.ndarray, aux: dict[str, np.ndarray],
+                 date: np.ndarray | None = None, time_ms: np.ndarray | None = None,
+                 num: dict[str, np.ndarray] | None = None) -> None:
+    """Write a fully-materialized split (used by pipeline.synth; build_cache streams instead).
+
+    `date`, `time_ms` and `num` are optional so old callers keep working, but a cache without
+    them is not the cache `load` describes: it silently returns None for three channels the
+    task brief advertises, and every test covering them then skips or fails. They drifted apart
+    twice -- once when `date` was added and again for `num` -- so they are written here.
+    """
     split_dir = Path(out_dir) / split
     split_dir.mkdir(parents=True, exist_ok=True)
     np.save(split_dir / "user_id.npy", np.asarray(user_id, dtype=np.int64))
@@ -291,6 +299,12 @@ def write_cache(out_dir, split: str, user_id: np.ndarray, video_id: np.ndarray,
         np.save(split_dir / f"X_{feat}.npy", np.asarray(arr, dtype=np.int64))
     for name, arr in aux.items():
         np.save(split_dir / f"aux_{name}.npy", np.asarray(arr, dtype=AUX_DTYPES[name]))
+    if date is not None:
+        np.save(split_dir / "date.npy", np.asarray(date, dtype=np.int32))
+    if time_ms is not None:
+        np.save(split_dir / "time_ms.npy", np.asarray(time_ms, dtype=np.int64))
+    for name, arr in (num or {}).items():
+        np.save(split_dir / f"num_{name}.npy", np.asarray(arr, dtype=np.float32))
 
 
 # ---------------------------------------------------------------------------
