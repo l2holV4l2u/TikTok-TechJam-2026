@@ -296,10 +296,15 @@ gap users with no positive label go 5.1% -> 30.3% and the median rows per user g
 sweep over how the model is TRAINED AND SELECTED is now worth more than a sweep over what it is:
 
   sample weighting   weight the 13 training days by proximity to the evaluation window; sweep
-                     the half-life. `split.date` is available and nothing has used it yet.
-  selection protocol every blend weight so far was chosen on ONE 7-day validation window, which
-                     over-reports gains that do not transfer. Hold out the last days of TRAIN as
-                     a proxy evaluation window, choose there, and confirm on validation.
+                     the half-life. `split.date` is available. Measured standalone on a boosted
+                     tree: uniform days score 0.4597 and a 4-day half-life scores 0.5518. That
+                     has only ever been tried on a SIDE component the blender then damped to
+                     +0.00002. Put it on the MAIN model's sample_weight and sweep the half-life
+                     there; that is the untried version.
+  selection protocol REFUTED, do not spend an iteration on it. Ranking this run's 49 scored
+                     iterations by the last 2/3/4 days of validation instead of all 7 correlates
+                     WORSE with hidden test (Spearman 0.33/0.66/0.84 against 0.87 for the full
+                     window) and submits the same model. Full validation is the better selector.
   stationarity       prefer features whose distribution holds across windows over identity
                      embeddings. Expanding 9 -> 37 categorical fields gained validation and lost
                      test, which is what a non-stationary feature looks like.

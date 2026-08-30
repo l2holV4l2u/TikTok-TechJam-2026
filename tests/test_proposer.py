@@ -377,6 +377,11 @@ def test_the_sweep_offers_a_training_distribution_axis_not_only_families():
                                     "stationarity", "cold start"))
     assert "split.date" in sweep, "the unused column has to be named"
     assert "AutoInt" in sweep, "the family list still stands alongside it"
+    # r81 ran recency weighting as a side component the blender damped to +0.00002, so the
+    # axis reads as tried unless the prompt says which version is still open.
+    assert "MAIN model's sample_weight" in sweep
+    # a chronological selection window ranked worse against test than the full 7 days
+    assert "REFUTED" in sweep, "a measured dead end must not be offered as an axis"
 
 
 def test_sibling_slots_are_disclosed_so_a_turn_does_not_duplicate_itself():

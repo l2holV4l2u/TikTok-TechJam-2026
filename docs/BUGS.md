@@ -177,3 +177,31 @@ split gained +0.00049 validation and lost 0.0001 test. The integrity check rejec
 **Fixed.** Every improve iteration is now `sweep`. `refine`, `tune` and `broaden` remain
 reachable through `--force-mode` for diagnostic runs, which is how these numbers were
 measured. Best result on record is r78 iteration 7: test 0.599842, delta +0.00524.
+
+## A chronological selection window does not beat full validation
+
+Claimed earlier in this run's notes: selection is forced onto validation, validation and test
+disagree, so choosing on the last days of validation -- the days nearest the test window --
+should track test better. Test is 20220429-0508 and validation is 20220422-0428, so the last
+validation days really are the closest thing to the evaluation window the agent may look at.
+
+Measured with `research/selector_window.py` over all 49 iterations in r72-r81 that left both
+`scores_valid.npy` and `scores_test.npy`:
+
+| selector | Spearman vs test | test primary of its pick |
+|---|---|---|
+| full 7-day validation | 0.8659 | 0.599688 |
+| last 4 days | 0.8397 | 0.599688 |
+| last 3 days | 0.6637 | 0.599688 |
+| last 2 days | 0.3273 | 0.599688 |
+
+Full validation ranks iterations more like the hidden test than any truncation of it, and all
+four selectors submit the same model. Averaged per run the last-2-day window is ahead by
+0.00008, which is one iteration in r74 against the worst rank correlation of the four.
+
+The premise was misapplied rather than wrong. The evidence for it was r74 beating r78 on
+validation and losing on test -- a comparison BETWEEN runs, which the harness never makes. The
+only choice it makes is between iterations within one run, and there full validation is a good
+selector. Shrinking the window trades bias it does not have for variance it cannot afford.
+
+Recorded so the axis is not re-proposed; `_SWEEP_INSTRUCTION` now marks it REFUTED.
