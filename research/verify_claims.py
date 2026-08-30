@@ -23,6 +23,51 @@ ROW = re.compile(r"\|\s*\*{0,2}(r\d+\w*)\*{0,2}\s*\|.*?\|\s*\*{0,2}(0\.\d{4})\*{
                  r"\s*\*{0,2}([+-]0\.\d{4})\*{0,2}\s*\|")
 
 
+CORR = re.compile("^\|\s*(\d)\s*\|\s*([0-9.]+|[-—])\s*\|\s*([0-9.]+|[-—])\s*\|\s*$")
+
+
+def _check_correlations(root: Path, roots, checked: int, bad: int):
+    """The portfolio gate table cites per-turn slot correlations; re-read them from the runs.
+
+    The gate is the reason Phases 3-5 were abandoned, so a wrong number here would misreport a
+    negative result -- the one kind of claim nobody else will re-derive for us.
+    """
+    logged = {}
+    for run in ("r82", "r83"):
+        path = next((r / run / "portfolio.jsonl" for r in roots
+                     if (r / run / "portfolio.jsonl").exists()), None)
+        if path is None:
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if rec.get("event") == "turn" and (rec.get("correlation") or {}).get("mean") is not None:
+                logged[(run, rec["turn"])] = float(rec["correlation"]["mean"])
+    if not logged:
+        return checked, bad
+    for line in (root / "DEVPOST.md").read_text(encoding="utf-8").splitlines():
+        m = CORR.match(line)
+        if not m:
+            continue
+        turn = int(m.group(1))
+        for run, claim in (("r82", m.group(2)), ("r83", m.group(3))):
+            if claim in ("-", "—"):
+                continue
+            actual = logged.get((run, turn))
+            checked += 1
+            if actual is None:
+                print(f"  {run} turn {turn}: UNVERIFIABLE -- no portfolio.jsonl record")
+                bad += 1
+                continue
+            ok = abs(actual - float(claim)) < 1e-4
+            print(f"  {run} turn {turn} correlation: claims {float(claim):.4f}  "
+                  f"actual {actual:.4f}  {'OK' if ok else '<-- MISMATCH'}")
+            bad += not ok
+    return checked, bad
+
+
 def _rescore(run_dir: Path):
     """Score a run's own submission.csv -- the fallback when its metadata was lost."""
     sub = run_dir / "submission.csv"
@@ -88,7 +133,8 @@ def main() -> int:
               f"actual {'n/a' if valid is None else f'{valid:.4f}'}/{delta:+.4f}  "
               f"[{source}]  {'OK' if okd and okv else '<-- MISMATCH'}")
         bad += not (okd and okv)
-    print(f"\n{checked} rows checked, {bad} problem(s)")
+    checked, bad = _check_correlations(root, roots, checked, bad)
+    print(f"\n{checked} claim(s) checked, {bad} problem(s)")
     return 1 if bad else 0
 
 

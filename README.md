@@ -2,6 +2,15 @@
 
 TikTok TechJam 2026, Track 2.
 
+## Team
+
+<!-- TODO(team): required deliverable. Replace both rows with real names and contributions. -->
+
+| Member | Contribution |
+|---|---|
+| _name_ | _what they built_ |
+| _name_ | _what they built_ |
+
 An LLM-driven agent that runs the MLE iteration loop of the problem statement's Figure 1
 unattended. It inspects the data, reproduces the official baseline, then repeatedly proposes a
 hypothesis, writes the code, trains, evaluates, **revises what it believes**, and decides what to
@@ -29,8 +38,12 @@ Some later runs scored higher, but they read the supplied `video_features_statis
 whose full-month aggregates overlap the validation and test windows. Those runs are excluded from
 the submission, from cross-run memory and from every comparison in the write-up.
 
-`python -m research.verify_claims` re-derives every score cited in DEVPOST.md from the run
-records and exits non-zero on any disagreement.
+`python -m research.verify_claims` re-derives every row of the DEVPOST.md ablation table from the
+run records and exits non-zero on any disagreement. It checks that table, not every number in the
+write-up.
+
+Cost to reach this result: **6 iterations of the 50 allowed, 20.2 min wall-clock, 96,359 tokens,
+CPU only, 0 failures, 0 manual interventions.**
 
 Bonus benchmark: on KuaiRand-1K the same agent reached **+0.0422** over a reference we measured
 ourselves, since no official baseline exists for it (`research/transfer-1k.md`).
@@ -102,7 +115,8 @@ kb/papers.json   methods with literature-only descriptions, retrieved to ground 
 research/    human analysis, clearly off the submission path.
   baseline_reference.py  runs the organizers' recipe on any variant to anchor a run
   ceiling_probe.py       in-sample vs validation probe behind the generalisation ceiling
-  verify_claims.py       re-checks every DEVPOST score against the run records
+  verify_claims.py       re-checks the DEVPOST ablation table against the run records
+  selector_window.py     the refuted chronological selection window (docs/BUGS.md)
 run_agent.py     drives a run
 report_run.py    renders the Run & Iteration Logs deliverable
 runs/            per-run ledger, scripts, EDA report, belief set, search tree, candidates

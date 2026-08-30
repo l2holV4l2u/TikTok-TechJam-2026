@@ -282,7 +282,7 @@ two contracts.
 
 Resources for the submitted run (`r79`): **6 iterations of 50**, **20.2 minutes** of agent
 wall-clock, **96,359 tokens**, CPU only, **0 failures**, **0 manual
-interventions**, and **65 candidate solutions compared inside those 6 iterations**.
+interventions**, and **80 candidate solutions compared inside those 6 iterations**.
 
 A later run did lose 6 iterations to an expired API key. That is an outage rather than the agent
 failing an experiment, and `report_run.py` now separates the two rather than reporting "6
@@ -710,6 +710,83 @@ data. Logged outcome signals (`play_time_ms`, `is_click`, `is_like`, …) are ex
 auxiliary targets and are asserted absent from the feature set by test;
 `video_features_statistic_pure.csv` is excluded entirely because its counts are aggregated over
 the whole log period, including the validation and test windows.
+
+## Three things we tested and rejected
+
+An agent that only reports what worked is reporting a filtered view. Each of these cost a real
+measurement, and each changed what the agent does next. All three are reproducible from the run
+records in `runs/`; the full working is in `docs/BUGS.md`.
+
+### 1. Selecting on a chronological window, refuted
+
+The hidden test window (29 Apr - 8 May) sits strictly after validation (22 - 28 Apr), so the
+last validation days are the closest legal proxy for the evaluation period. The obvious move is
+to rank candidates on those days instead of all seven.
+
+We scored all 49 iterations across r72-r81 that saved predictions on both splits
+(`research/selector_window.py`):
+
+| selector | Spearman vs hidden test | test primary of its pick |
+|---|---|---|
+| full 7-day validation | **0.8659** | 0.599688 |
+| last 4 days | 0.8397 | 0.599688 |
+| last 3 days | 0.6637 | 0.599688 |
+| last 2 days | 0.3273 | 0.599688 |
+
+Full validation ranks iterations *more* like the hidden test than any truncation of it, and all
+four selectors submit the same model. The premise had been misapplied rather than wrong: the
+evidence for it was one run beating another on validation and losing on test, which is a
+comparison *between* runs, and the harness only ever chooses *within* one. Shrinking the window
+trades a bias it does not have for variance it cannot afford. The proposer prompt now marks the
+axis refuted so no future iteration spends a convergence life on it.
+
+### 2. Recency weighting, adopted — but only in the right place
+
+The binding constraint on this benchmark is drift, not capacity. Across the train-to-test gap,
+users with no positive label go 5.1% -> 27.1% and the median rows per user go 31 -> 5. Measured
+standalone on a boosted tree, uniform day weights score 0.4597 (random is 0.4753) against 0.5518
+for a 4-day half-life.
+
+That effect had been tried once, on a *side* component, where the blender damped it to +0.00002.
+Directing the agent at the main model's `sample_weight` instead produced r82's winning iteration,
+a recency-weighted pointwise LightGBM, and our best hidden-test score: **0.599904, +0.00530**.
+The lesson is about placement, not about the technique.
+
+### 3. A portfolio of parallel lineages, built and abandoned
+
+We built a portfolio search that advances *n* solution lineages per turn under one convergence
+counter, with an archive, a refill policy and a cross-lineage blend. It shipped behind a
+go/no-go gate: three slots are only worth their cost if they explore differently, measured as
+mean pairwise rank correlation between slots. Below 0.90 proceed; above 0.95 stop.
+
+Two three-slot runs answered it:
+
+| turn | r82 | r83 |
+|---|---|---|
+| 1 | 0.9431 | 0.9142 |
+| 2 | — | 0.9952 |
+| 3 | — | 0.9946 |
+| 4 | — | 0.9955 |
+
+Slots start moderately diverse and collapse by turn 2, in both runs independently. In r83's turn
+2 two slots given different hypotheses produced *byte-identical* predictions, because the best
+internal candidate in each script was the same recency-weighted boosted tree. The portfolio blend
+declined on all eight turns with "no member improved fold A" — the correct outcome for a pool of
+near-copies.
+
+So we kept the parallel turns, which do buy wall-clock (r83 converged in 24.3 min against r82's
+34.1), and abandoned the archive, refill and blend. The same ceiling shows up everywhere else on
+this data: MMoE against plain DeepFM correlates at 0.9888, blend components at 0.94+. **The
+constraint on this benchmark is not search breadth.** Knowing that is worth more than the
+machinery we did not keep.
+
+r82's turns 2-4 are absent above because a bug made them meaningless, which is worth stating
+rather than hiding: the harness blender overwrites the published score array with whichever of
+{incumbent, blend, candidate} wins, and at incumbent-only the slot recorded the *incumbent* as
+its own prediction. The gate then correlated the incumbent with itself and reported a perfect
+1.0000 for three different architectures. Slots now keep what their own script produced, with
+regression tests in `tests/test_selection.py`. r83 ran with the fix, and all four of its readings
+are honest.
 
 ## One thing we deliberately did not do
 
