@@ -46,6 +46,7 @@ runs/*
 !runs/r79/
 !runs/r80/
 !runs/r81/
+!runs/r82/
 # the KuaiRand-1K bonus run behind RUN_REPORT_1K.md (logs only; its 532MB of scores,
 # submission CSV and cached artifacts stay out).
 !runs/r38_1k/

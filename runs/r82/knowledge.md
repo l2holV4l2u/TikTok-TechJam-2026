@@ -1,0 +1,10 @@
+# What the agent established
+
+- (active) A k=16 pointwise Factorization Machine trained with Adam at lr=0.001 on user_id, video_id, author_id, tab, and duration_bucket scored 0.6002, within seed noise of the 0.6016 official baseline. [iters 1]
+- (active) The iteration 2 target-formation and temporal-training search scored 0.6028, only 0.0012 above the official baseline and therefore produced no measurable improvement. [iters 2]
+- (active) The iteration 3 and 4 target-model/temporal-training pipelines scored 0.6037 and 0.6047, exceeding the official baseline by 0.0021 and 0.0031 respectively. [iters 3,4]
+- (active) The non-FM objective, prediction, memorization/reranking, sequence-aware, graph-based, and temporal searches in iterations 5-12 scored within 0.6051-0.6053. [iters 5,6,7,8,9,10,11,12]
+- (active) Slot 0 improved from 0.6028 to 0.6051 by 0.0023, while the iteration 6 and 7 slot improvements of 0.0015 and 0.0005 were inside seed noise. [iters 2,3,4,5,6,7]
+- (active) The sequence-aware, graph-based, and sequence/pairwise pipelines from iterations 8-10, as well as the latest compared live predictions, rank validation examples identically within users with correlation 1.000. [iters 8,9,10,11,12]
+- (active) Iterations 8-12 produced no measurable gain above the 0.6052 incumbent: iteration 11 scored 0.6052 and iteration 12 scored 0.6053, whose 0.0001 increase is inside seed noise. [iters 8,9,10,11,12]
+- (active) The iteration 13 shared-bottom, MMoE, and PLE proposal was rejected without a score, so these multi-task architectures remain untested by scored evidence. [iters 13]

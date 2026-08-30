@@ -1,0 +1,12 @@
+#1 0.6002  Reproduce the official baseline stage by training a k=16 pointwise Fac
+  #2 0.6028  Target prediction formation and temporal training: compare expanded FM
+  #3 0.6037  Target prediction formation and temporal training stages by comparing 
+  #4 0.6047 [retired]  Target model formation and temporal training jointly by comparing an e
+    #5 0.6051  Target prediction formation with three non-FM families—recency-weighte
+    #6 0.6052 [retired]  Target the training-objective and prediction-formation stages by compa
+      #8 0.6052  Target sequence-aware prediction formation: compare a DIN attention mo
+      #9 0.6052  Target latent graph-based prediction formation: spectral positive/sign
+      #10 0.6052  Target sequence-aware prediction formation and pairwise training by co
+    #7 0.6052 [retired]  Target the non-parametric memorization and reranking stages by compari
+      #11 0.6052  Target the training-objective and temporal-weighting stages by compari
+      #12 0.6053  Target prediction formation and temporal training by comparing recency

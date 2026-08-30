@@ -121,6 +121,9 @@ class SavedScoresEvaluator(StdoutJsonEvaluator):
         self.last_error: str | None = None
         self.last_scores = None
         self.last_test_scores = None
+        # what the script itself produced, kept because retain_or_blend overwrites last_scores
+        self.raw_valid_scores = None
+        self.raw_test_scores = None
 
     @staticmethod
     def _load_scores(path: Path, expected: int, name: str):
@@ -142,6 +145,7 @@ class SavedScoresEvaluator(StdoutJsonEvaluator):
 
         self.last_error = None
         self.last_scores = self.last_test_scores = None
+        self.raw_valid_scores = self.raw_test_scores = None
         reported = super().evaluate(result, iter_out)
         if reported is None:
             self.last_error = "The METRICS line is missing or is not valid JSON."
@@ -161,6 +165,7 @@ class SavedScoresEvaluator(StdoutJsonEvaluator):
                 test = load("test")
                 self.last_test_scores = self._load_scores(
                     Path(iter_out) / "scores_test.npy", len(test.y), "scores_test.npy")
+            self.raw_valid_scores, self.raw_test_scores = self.last_scores, self.last_test_scores
             verified = evaluate(valid.user_id, valid.y, self.last_scores)
         except (OSError, ValueError, TypeError) as exc:
             self.last_error = str(exc)
@@ -805,8 +810,16 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
             slot.feedback = None
             tree.add(Node(iter_id, parent_id, p.hypothesis, p.code, score))
             tree.record_child(parent_id, score, res.seconds)
-            slot.last_valid_scores = getattr(evaluator, "last_scores", None)
-            slot.last_test_scores = getattr(evaluator, "last_test_scores", None)
+            # The slot keeps what its OWN script produced, not what retain_or_blend published.
+            # At alpha 0.0 the published array is the incumbent, so recording that made a slot
+            # look like a perfect clone of every other discarded slot and gave the portfolio
+            # blend the incumbent as its own candidate member -- which can never improve a fold.
+            slot.last_valid_scores = (getattr(evaluator, "raw_valid_scores", None)
+                                      if getattr(evaluator, "raw_valid_scores", None) is not None
+                                      else getattr(evaluator, "last_scores", None))
+            slot.last_test_scores = (getattr(evaluator, "raw_test_scores", None)
+                                     if getattr(evaluator, "raw_test_scores", None) is not None
+                                     else getattr(evaluator, "last_test_scores", None))
             turn_scored = True
             turn_results.append({"slot_id": slot.slot_id, "iter_id": iter_id,
                                  "hypothesis": p.hypothesis, "primary": score,

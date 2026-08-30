@@ -111,6 +111,38 @@ def test_old_ledger_lines_still_parse_without_slot_id():
     assert round_tripped == e
 
 
+
+def test_a_slot_keeps_its_own_prediction_when_the_harness_blend_discards_it():
+    """r82 turn 3 reported slot correlation 1.0000 across three different architectures.
+
+    `retain_or_blend` had chosen alpha 0.0 for all three -- it discarded each candidate and
+    republished the incumbent into `evaluator.last_scores`. The slot recorded that, so the gate
+    correlated the incumbent with itself, and the portfolio blend was handed the incumbent as a
+    candidate member, which is why every turn declined with "no member improved fold A".
+    """
+    import numpy as np
+
+    from agent.loop import SavedScoresEvaluator
+
+    ev = SavedScoresEvaluator.__new__(SavedScoresEvaluator)
+    candidate = np.array([0.1, 0.9, 0.4, 0.7])
+    ev.raw_valid_scores, ev.raw_test_scores = candidate, candidate
+    incumbent = np.array([0.5, 0.5, 0.5, 0.5])
+    ev.last_scores, ev.last_test_scores = incumbent, incumbent  # what alpha 0.0 publishes
+
+    kept = (ev.raw_valid_scores if ev.raw_valid_scores is not None else ev.last_scores)
+    assert np.array_equal(kept, candidate), "the slot must keep its own script's prediction"
+    assert not np.array_equal(kept, incumbent)
+
+
+def test_the_raw_scores_reset_between_iterations():
+    """A stale raw array would attribute one slot's predictions to the next script that fails."""
+    from agent.loop import SavedScoresEvaluator
+
+    ev = SavedScoresEvaluator()
+    assert ev.raw_valid_scores is None and ev.raw_test_scores is None
+
+
 if __name__ == "__main__":
     tests = [v for k, v in list(globals().items()) if k.startswith("test_") and callable(v)]
     for test in tests:
