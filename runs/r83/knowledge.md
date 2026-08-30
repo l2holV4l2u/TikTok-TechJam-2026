@@ -1,0 +1,8 @@
+# What the agent established
+
+- (active) A k=16 five-field Factorization Machine trained with Adam at lr=0.001 changes primary validation performance by less than seed noise relative to the official baseline (0.6006 versus 0.6016). [iters 1]
+- (active) The temporal-training and prediction-formation search over additive memorization and low-rank FM interactions produced no measurable gain over the official baseline (0.6020 versus 0.6016). [iters 2]
+- (active) At least one configuration from each tested temporal-drift/model-family, expanded-field interaction/score-fusion, sequence-conditioned, recency-weighted objective, broad prediction-family, representation/supervision, temporal GBDT, slate-context reranking, and hard-negative NFM search measurably exceeds the official baseline, reaching 0.6 [iters 3,4,5,6,7,8,10,11,12,13]
+- (active) The best sequence-conditioned, recency-weighted, broad prediction-family, representation/supervision, temporal GBDT, slate-context reranking, and hard-negative NFM results are not measurably different (0.6047-0.6050), and their within-user rankings are nearly identical; current pairwise correlations are 0.994-0.996. [iters 5,6,7,8,10,11,12,13]
+- (active) The AutoInt/FiBiNET representation-supervision search and the MMoE/implicit-latent prediction-family search both scored 0.6048, providing no measurable gain over the prior 0.6047 best. [iters 8,10]
+- (active) Recency-weighted pointwise GBDT, slate-context reranking, and recency-weighted hard-negative NFM scored 0.6048, 0.6049, and 0.6050 respectively, so none measurably improves on the previous 0.6048 best. [iters 11,12,13]

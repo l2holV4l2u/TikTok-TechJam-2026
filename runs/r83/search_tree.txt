@@ -1,0 +1,12 @@
+#1 0.6006  Reproduce the official baseline at the modeling stage using a k=16 fiv
+  #2 0.6020  Target prediction formation and temporal training by comparing additiv
+  #3 0.6044 [retired]  Target training under temporal drift and prediction formation jointly:
+    #5 0.6047 [retired]  Target sequence-conditioned prediction under drift by comparing last-e
+      #8 0.6048 [retired]  Target representation and supervision jointly by comparing AutoInt fea
+        #11 0.6048  Target temporal training and complementary prediction formation by com
+        #12 0.6049  Target slate-context reranking rather than another correlated CTR arch
+        #13 0.6050  Target the supervision and prediction-formation stages by comparing re
+      #10 0.6048  Target prediction formation with two untried, structurally different f
+    #6 0.6047  Target the training/objective stage with recency-weighted main models 
+    #7 0.6047  Target prediction formation with a breadth comparison of nonlinear boo
+  #4 0.6044  Target prediction formation and score fusion by comparing expanded-fie
