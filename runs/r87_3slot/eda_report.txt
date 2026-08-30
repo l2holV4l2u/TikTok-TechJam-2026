@@ -1,0 +1,58 @@
+ROWS train=1141112 valid=124909 Xfields=37 num=5
+X_LAYOUT=[(1, 'int64', 1141112)] scalar_per_row=True
+LABEL train=0.3366 (384121) valid=0.3133 (39132)
+USER tr n=26210 rows_q=[5, 13, 31, 59, 97, 207]
+USER tr pos_q=[1.0, 4.0, 10.0, 21.0, 34.0, 67.0] zero=0.051 all=0.023
+USER va n=22377 rows_q=[1, 2, 4, 7, 12, 26]
+USER va pos_q=[0.0, 0.0, 1.0, 2.0, 4.0, 9.0] zero=0.303 all=0.119
+OVERLAP user trU=26210 vaU=22377 unseen_rows=0.016 unseen_U=0.019
+OVERLAP video trU=7538 vaU=5951 unseen_rows=0.000 unseen_U=0.001
+OVERLAP author trU=6482 vaU=5311 unseen_rows=0.000 unseen_U=0.000
+DATE tr 0409:0.336 0410:0.341 0411:0.333 0412:0.332 0413:0.317 0414:0.319 0415:0.363 0416:0.377 0417:0.364 0418:0.331 0419:0.323 0420:0.311 0421:0.315
+DATE va 0422:0.319 0423:0.338 0424:0.303 0425:0.312 0426:0.311 0427:0.297 0428:0.290
+FIELDS sorted_by_train_MI: K, train/valid used IDs, valid-new-row%, train-top%
+F user_id                K=30000 U=26210/21956 new=1.6 top=0.1 MI=128.36
+F video_id               K=8000 U=7538/5945 new=0.0 top=0.8 MI=91.24
+F author_id              K=7000 U=6482/5311 new=0.0 top=0.8 MI=88.18
+F tab                    K=20 U=15/15 new=0.0 top=73.2 MI=70.64
+F tag                    K=64 U=44/43 new=0.0 top=26.4 MI=19.69
+F onehot_feat3           K=1600 U=1436/1330 new=0.1 top=4.2 MI=11.90
+F upload_type            K=20 U=14/11 new=0.0 top=43.0 MI=9.64
+F onehot_feat8           K=512 U=452/438 new=0.0 top=2.0 MI=6.11
+F duration_bucket        K=12 U=10/10 new=0.0 top=10.3 MI=3.73
+F onehot_feat1           K=12 U=7/7 new=0.0 top=27.2 MI=3.15
+F music_type             K=12 U=6/6 new=0.0 top=88.1 MI=3.05
+F onehot_feat7           K=160 U=117/105 new=0.0 top=8.7 MI=2.70
+F user_active_degree     K=16 U=9/9 new=0.0 top=77.0 MI=2.56
+F register_days_bucket   K=12 U=10/10 new=0.0 top=10.0 MI=2.35
+F register_days_range    K=16 U=7/8 new=0.0 top=75.1 MI=1.93
+F onehot_feat0           K=8 U=2/2 new=0.0 top=50.0 MI=1.58
+F onehot_feat12          K=8 U=3/3 new=0.0 top=67.7 MI=1.34
+F fans_user_num_range    K=16 U=9/9 new=0.0 top=37.9 MI=1.31
+F onehot_feat11          K=8 U=5/5 new=0.0 top=74.9 MI=0.99
+F onehot_feat2           K=64 U=50/50 new=0.0 top=24.8 MI=0.85
+F onehot_feat6           K=8 U=3/3 new=0.0 top=52.7 MI=0.83
+F friend_user_num_range  K=16 U=7/7 new=0.0 top=27.8 MI=0.68
+F hour                   K=32 U=24/24 new=0.0 top=7.8 MI=0.67
+F is_live_streamer       K=4 U=2/2 new=0.0 top=77.1 MI=0.58
+F onehot_feat9           K=12 U=7/7 new=0.0 top=22.8 MI=0.46
+F onehot_feat16          K=8 U=3/3 new=0.0 top=93.3 MI=0.31
+F follow_user_num_range  K=16 U=8/8 new=0.0 top=19.8 MI=0.30
+F onehot_feat4           K=24 U=16/16 new=0.0 top=36.9 MI=0.21
+F onehot_feat5           K=48 U=33/31 new=0.0 top=99.5 MI=0.18
+F is_video_author        K=4 U=2/2 new=0.0 top=85.4 MI=0.16
+F onehot_feat10          K=8 U=5/5 new=0.0 top=40.0 MI=0.13
+F onehot_feat15          K=8 U=3/3 new=0.0 top=95.5 MI=0.12
+F onehot_feat14          K=8 U=3/3 new=0.0 top=88.4 MI=0.09
+F onehot_feat13          K=8 U=3/3 new=0.0 top=93.7 MI=0.08
+F video_type             K=8 U=3/3 new=0.0 top=98.7 MI=0.07
+F onehot_feat17          K=8 U=3/3 new=0.0 top=96.8 MI=0.00
+F is_lowactive_period    K=4 U=1/1 new=0.0 top=100.0 MI=0.00
+NUM duration_ms               miss=0.000 med=70233.0 p95=286166.0 logcorr=0.074
+NUM user_follow_user_num      miss=0.000 med=146.0 p95=1557.0 logcorr=0.016
+NUM user_fans_user_num        miss=0.000 med=60.0 p95=1172.0 logcorr=-0.043
+NUM user_friend_user_num      miss=0.000 med=20.0 p95=574.0 logcorr=-0.030
+NUM user_register_days        miss=0.000 med=1223.0 p95=2408.0 logcorr=-0.053
+AUX keys=comment_stay_time,is_click,is_comment,is_follow,is_forward,is_hate,is_like,is_profile_enter,play_time_ms,profile_stay_time
+HIST video_id nkeys=12 video_id_train_count_log1p:(124909,)/float32,video_id_long_view_rate:(124909,)/float32,video_id_is_like_rate:(124909,)/float32,video_id_is_follow_rate:(124909,)/float32,video_id_is_comment_rate:(124909,)/float32,video_id_is_forward_rate:(124909,)/float32,video_id_is_hate_rate:(12
+HIST author_id nkeys=12 author_id_train_count_log1p:(124909,)/float32,author_id_long_view_rate:(124909,)/float32,author_id_is_like_rate:(124909,)/float32,author_id_is_follow_rate:(124909,)/float32,author_id_is_comment_rate:(124909,)/float32,author_id_is_forward_rate:(124909,)/float32,author_id_is_hate_r

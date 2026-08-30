@@ -51,13 +51,24 @@ def _strip_credentials(env: dict) -> dict:
     return out
 
 
+# Holds the child-only `sitecustomize.py` that imports LightGBM before torch can load its
+# bundled libomp. See that file for why; without it a script that touches both segfaults or
+# hangs until the timeout kills it.
+_CHILD_ENV_DIR = Path(__file__).resolve().parent / "childenv"
+
+
 def run_script(path: Path, timeout: float = 1800, cwd=None, pythonpath=None, extra_env=None) -> RunResult:
     """Never raises on script failure; the loop decides what a failure means."""
     # always build the child environment explicitly, even with no extras: inheriting the parent's
     # wholesale hands the script every credential the controller holds
     env = _strip_credentials(dict(os.environ))
+    # childenv goes first so its sitecustomize wins, and applies whether or not a caller
+    # passed a pythonpath -- every generated script needs the import-order fix.
+    parts = [str(_CHILD_ENV_DIR)]
     if pythonpath:
-        env["PYTHONPATH"] = os.pathsep.join([str(pythonpath), env.get("PYTHONPATH", "")]).rstrip(os.pathsep)
+        parts.append(str(pythonpath))
+    parts.append(env.get("PYTHONPATH", ""))
+    env["PYTHONPATH"] = os.pathsep.join(p for p in parts if p)
     env.update(extra_env or {})
     t0 = time.perf_counter()
     process_group = ({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}

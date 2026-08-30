@@ -1,116 +1,85 @@
-# Run report - r79
+# Slot-ladder comparison
 
-## Loop stages executed by the agent
+5 runs, 1 to 5 lineages per turn. Model: gpt-5.6-sol. Data contract: train-plus-valid-v2.
 
-- **Inspect data (EDA):** completed at iteration #0 - the agent wrote and ran its own exploratory script; its findings are in `eda_report.txt` and were carried into every later prompt.
-- **Reproduce official baseline (Requirement 1):** 1 attempt(s); the agent's own pipeline reached validation primary **0.6022** against the official 0.6016 (delta +0.0006, inside the baseline's 5-seed noise). That script became the root of the search tree.
-- **Iterate:** 4 experiments proposed, executed and evaluated by the agent, each branching from a node of its own search tree.
+Cost columns are omitted: the run records hold token counts, not prices. Pass `--price-in=` and `--price-out=` in USD per 1M tokens to include them.
+## What each rung produced
 
-## Iteration log
+Every run below is the same agent, same dataset, same data contract and the same convergence rule. The only difference is `--slots`.
 
-| # | phase | parent | status | secs | primary | vs baseline | hypothesis |
+| slots | run | validation | hidden test | vs baseline | wall clock | tokens | scripts | turns |
+|---|---|---|---|---|---|---|---|---|
+| **1** | `r85_1slot` | 0.604424 | **0.598788** | +0.004188 | 10.8 min | 128,159 | 8 | 5 |
+| **2** | `r86_2slot` | 0.604452 | **0.599473** | +0.004873 | 15.4 min | 179,572 | 11 | 4 |
+| **3** | `r87_3slot` | 0.605713 | **0.600410** | +0.005810 | 22.0 min | 246,618 | 14 | 4 |
+| **4** | `r88_4slot` | 0.605090 | **0.600194** | +0.005594 | 27.4 min | 319,616 | 18 | 4 |
+| **5** | `r89_5slot` | 0.605716 | **0.600256** | +0.005656 | 32.9 min | 429,394 | 22 | 4 |
+
+Baseline for the `vs baseline` column is the official baseline: validation 0.6016, hidden test 0.5946.
+
+## Where the score stops moving
+
+Marginal change from adding one more lineage. A benchmark difference below 0.0008 is inside the baseline's own 5-seed noise and is not evidence of anything; below 0.002 it is under the organizers' convergence epsilon.
+
+| step | test | delta | reading | tokens | delta | wall | delta |
 |---|---|---|---|---|---|---|---|
-| 0 | eda | - | ok | 4 | n/a | - | In the data-inspection stage, quantify temporal drift, entity cold-sta |
-| 1 | baseline | - | ok | 116 | 0.6022 | +0.0006 | Reproduce the official baseline end-to-end using a k=16 Factorization  |
-| 2 | improve | #1 | kept | 149 | 0.6040 | +0.0024 | Target model-family breadth and score aggregation by comparing expande |
-| 3 | improve | #2 | ok | 136 | 0.6043 | +0.0027 | Target prediction formation with three structurally distinct families— |
-| 4 | improve | #3 | kept | 159 | 0.6053 | +0.0037 | Target prediction formation and training objective breadth by comparin |
-| 5 | improve | #4 | kept | 206 | 0.6053 | +0.0037 | Target prediction formation with a breadth sweep over AutoInt attentio |
+| 1 slot | 0.598788 | - | starting point | 128,159 | - | 10.8 min | - |
+| 1 -> 2 | 0.599473 | +0.000685 | within seed noise | 179,572 | +51,413 | 15.4 min | +4.5 |
+| 2 -> 3 | 0.600410 | +0.000937 | under epsilon | 246,618 | +67,046 | 22.0 min | +6.7 |
+| 3 -> 4 | 0.600194 | -0.000216 | within seed noise | 319,616 | +72,998 | 27.4 min | +5.4 |
+| 4 -> 5 | 0.600256 | +0.000063 | within seed noise | 429,394 | +109,778 | 32.9 min | +5.5 |
 
-## Search tree
+**The curve flattens at 3 slots.** Rungs 3, 4, 5 all land within 0.0008 of the best result (0.600410 at 3 slots), so on this evidence they are indistinguishable on the hidden test. Across that flat span the spend still rises from 246,618 to 429,394 tokens (1.7x) and from 22.0 to 32.9 minutes.
 
-Each line is an executed script; indentation is the edit it was derived from. A node marked `[retired]` produced three children that failed to improve on it, so the search abandoned that branch and backtracked.
+The honest reading is that everything past 3 slots is bought and not delivered: cost scales close to linearly in the slot count while the scored result does not move outside noise.
 
-```
-#1 0.6022  Reproduce the official baseline end-to-end using a k=16 Factorization 
-  #2 0.6040  Target model-family breadth and score aggregation by comparing expande
-    #3 0.6043  Target prediction formation with three structurally distinct families—
-      #4 0.6053  Target prediction formation and training objective breadth by comparin
-        #5 0.6053  Target prediction formation with a breadth sweep over AutoInt attentio
-```
+## What the spend bought
 
-## What the agent established
+| slots | tokens | tokens/slot | wall clock | script time | candidates compared | candidates/1k tokens |
+|---|---|---|---|---|---|---|
+| 1 | 128,159 | 128,159 | 10.8 min | 2.7 min | 24 | 0.19 |
+| 2 | 179,572 | 89,786 | 15.4 min | 5.2 min | 41 | 0.23 |
+| 3 | 246,618 | 82,206 | 22.0 min | 9.9 min | 282 | 1.14 |
+| 4 | 319,616 | 79,904 | 27.4 min | 14.6 min | 257 | 0.80 |
+| 5 | 429,394 | 85,878 | 32.9 min | 17.7 min | 696 | 1.62 |
 
-The agent's belief set, revised after every scored iteration rather than appended to, so later evidence can demote an earlier conclusion instead of piling up beside it. A claim marked `(invalidated)` was contradicted by a later result. Machine-readable form with per-claim evidence in `knowledge.json`.
+`candidates compared` counts the alternatives evaluated INSIDE scripts, which is where most of the search happens: a script may build and compare a dozen models for one iteration of budget. It rises with the slot count, so the extra lineages are doing real work -- the question the table above answers is whether that work reaches the score.
 
-```
-- (qualified) The iteration-2 comparison of FM, DeepFM, categorical gradient boosting, and empirical-Bayes variants found no measurable gain over the reproduced FM baseline: its winning primary of 0.6040 was only 0.0018 above 0.6022; this conclusion is limited to those iteration-2 candidates. [iters 1,2,3]
-- (active) Within-user rank blending with the incumbent has not produced a measurable gain: iterations 2 and 3 retained raw candidates, iteration 4's alpha=0.5 blend added only 0.0001, and iteration 5 selected the incumbent alone with alpha=0.0. [iters 2,3,4,5]
-- (active) The iteration-3 auxiliary-MMoE winner using is_click and is_like auxiliary tasks scored 0.6043, only 0.0003 above the iteration-2 incumbent at 0.6040, so it showed no measurable gain. [iters 2,3]
-- (active) In iteration 4, the DCN-based incumbent blend was selected over the tested NFM and within-user BPR-FM alternatives, but its final primary of 0.6053 was only 0.0010 above the iteration-3 incumbent, so none of those tested interaction or pairwise-objective mechanisms demonstrated a measurable gain. [iters 3,4]
-- (active) The iteration-5 breadth sweep over AutoInt attention, PNN product interactions, FiBiNET field reweighting, and DCNv2 low-rank matrix crosses produced no measurable gain over the 0.6053 incumbent; validation selected the incumbent with family=None and blend alpha=0.0. [iters 4,5]
-- (active) 
-```
+## Did the extra lineages disagree?
 
-## Alternatives compared inside iterations
+Within-user rank correlation between the slots' own pre-blend models. Above ~0.95 the extra lineages rank validation identically and return one lineage's information for n lineages' spend.
 
-80 candidate solutions were built and scored across 4 iteration(s). The convergence rule charges one iteration per experiment, so searching inside an iteration buys comparisons the iteration budget cannot.
+| slots | per-turn mean | mean across turns | last turn (`mean_slot_correlation`) | reading |
+|---|---|---|---|---|
+| 2 | 0.842 -> 0.738 -> 0.924 -> 0.293 | **0.699** | 0.293 | lineages genuinely differ |
+| 3 | 0.914 -> 0.635 -> 0.764 -> 0.741 | **0.763** | 0.741 | lineages genuinely differ |
+| 4 | 0.900 -> 0.822 -> 0.182 -> 0.762 | **0.667** | 0.762 | lineages genuinely differ |
+| 5 | 0.617 -> 0.776 -> 0.478 -> 0.343 | **0.554** | 0.343 | lineages genuinely differ |
 
-| iteration | candidates (validation primary) |
-|---|---|
-| #2 | deepfm 0.6031, deepfm_blend_25 0.6028, deepfm_blend_40 0.6034, deepfm_blend_55 0.6040, deepfm_blend_70 0.6036, deepfm_blend_85 0.6034, empirical_bayes 0.5895, empirical_bayes_blend_25 0.6024 |
-| #3 | auxiliary_mmoe 0.6038, auxiliary_mmoe_blend_20 0.6041, auxiliary_mmoe_blend_35 0.6042, auxiliary_mmoe_blend_50 0.6043, auxiliary_mmoe_blend_65 0.6042, auxiliary_mmoe_blend_80 0.6039, hierarchical_empirical_bayes 0.5762, hierarchical_empirical_bayes_blend_20 0.6034 |
-| #4 | bpr_fm 0.6009, bpr_fm_inc_blend_20 0.6042, bpr_fm_inc_blend_35 0.6040, bpr_fm_inc_blend_50 0.6033, bpr_fm_inc_blend_65 0.6025, bpr_fm_inc_blend_80 0.6013, dcn 0.6044, dcn_inc_blend_20 0.6041 |
-| #5 | autoint 0.5974, autoint_blend_0.25 0.6047, autoint_blend_0.50 0.6024, autoint_blend_0.75 0.5987, dcnv2 0.6029, dcnv2_blend_0.25 0.6051, dcnv2_blend_0.50 0.6040, dcnv2_blend_0.75 0.6031 |
+The last-turn column is what `run_meta.json` records; it is a single turn and swings widely, so the verdict above is taken from the average across turns.
 
-## Resource usage (Feasibility & Practicality)
+## Reliability across the ladder
 
-- **Agent wall-clock to converged result: 0.34 h (20 min)**
-- Total LLM tokens: **96,359** (59,833 in / 36,526 out), including the knowledge-revision stage
-- Iterations used: **6 of 50** (5 accepted scores, 0 failed, 0 rejected)
-- Compute inside generated scripts: **0.21 h (13 min)** on CPU.
-- Mean tokens per iteration: 16,060
-- Stop reason: `converged`
+| slots | scripts | crashes | integrity rejections | manual interventions | stop reason |
+|---|---|---|---|---|---|
+| 1 | 8 | 2 | 0 | 0 | `converged` |
+| 2 | 11 | 0 | 1 | 0 | `converged` |
+| 3 | 14 | 0 | 1 | 0 | `converged` |
+| 4 | 18 | 0 | 1 | 0 | `converged` |
+| 5 | 22 | 0 | 1 | 0 | `converged` |
 
-## Autonomy (Impact & Relevance)
+`crashes` counts scripts that failed to produce a scored result, separately from integrity rejections, which are results the critic refused. Both are handled in the loop; neither reaches a human.
 
-- **Manual interventions: 0.** No human edited code, restarted the loop, chose a hypothesis, or selected a result during the run.
-- The agent inspected the data, reproduced the baseline, and chose every subsequent experiment itself. The prompt it starts from contains the task specification, the pipeline API and the output contract - no findings about what works on this dataset.
-- Failures recovered by in-loop retry: 0
-- Ideas retired after repeated failure or underperformance: 0
+## Score curve within each run
 
-## Robustness (Technical Execution)
+The run's best validation score after each scored improve iteration. One curve per run, which is what the convergence rule is measured against.
 
-- **No failures occurred in this run.** The recovery machinery was therefore never exercised here; the evidence that it works is below.
+- **1 slot(s)** (`r85_1slot`): 0.6030 -> 0.6035 -> 0.6042 -> 0.6044
+- **2 slot(s)** (`r86_2slot`): 0.6036 -> 0.6038 -> 0.6042 -> 0.6042 -> 0.6043 -> 0.6044 -> 0.6044 -> 0.6045
+- **3 slot(s)** (`r87_3slot`): 0.6042 -> 0.6042 -> 0.6043 -> 0.6043 -> 0.6049 -> 0.6052 -> 0.6052 -> 0.6055 -> 0.6055 -> 0.6057 -> 0.6057 -> 0.6057
+- **4 slot(s)** (`r88_4slot`): 0.6041 -> 0.6041 -> 0.6045 -> 0.6045 -> 0.6046 -> 0.6046 -> 0.6047 -> 0.6048 -> 0.6048 -> 0.6048 -> 0.6048 -> 0.6048 -> 0.6048 -> 0.6048 -> 0.6048 -> 0.6051
+- **5 slot(s)** (`r89_5slot`): 0.6037 -> 0.6040 -> 0.6041 -> 0.6042 -> 0.6042 -> 0.6043 -> 0.6044 -> 0.6044 -> 0.6044 -> 0.6050 -> 0.6051 -> 0.6054 -> 0.6055 -> 0.6055 -> 0.6055 -> 0.6057 -> 0.6057 -> 0.6057 -> 0.6057 -> 0.6057
 
-The loop never stalled, crashed, or escalated to a human. Guards in place: retry-with-source on crash, distinct handling for timeouts (which are not bugs to fix), method-keyed retirement so a reworded idea cannot evade the blacklist, process-tree kill so a timed-out script leaves no orphan burning CPU, tolerance of LLM outages and rate limits, node retirement with backtracking so the search cannot grind on one exhausted branch, and a circuit breaker that halts on repeated instant failures (a broken environment rather than broken code).
+## Caveat
 
-### Evidence from development runs
-
-Across 55 development runs of this agent, 477 iterations were executed and 185 failed. Every one was handled in-loop; none was escalated to a human. Failure taxonomy:
-
-- `(no output)`: 92
-- `IndexError`: 30
-- `RuntimeError`: 22
-- `TypeError`: 12
-- `}`: 7
-- `TIMEOUT`: 6
-- `AttributeError`: 5
-- `SyntaxError`: 3
-
-Each recovery path, with a concrete instance:
-
-- **Retry with source.** `r11` #1 crashed with `RuntimeError: The size of tensor a (8192) must match the size of tenso`. The traceback *and the failing script* went back to the proposer, which fixed it: #2 scored 0.6001.
-- **Timeout, handled as distinct from a bug.** `r11` #8 was killed at the limit after 420s. The feedback says the approach is too slow rather than wrong, because re-running a slow script unchanged just times out again.
-- **Idea retirement.** `r2` #16: an idea was retired after repeated failure and never proposed again. Retirement keys on the named method, so restating it in different words does not evade the blacklist.
-- **Circuit breaker.** `r7` hit 32 consecutive instant, output-less failures: the interpreter could not spawn children at all. That is a broken machine, not broken code, and grinding on would shred the budget for nothing. The loop now halts with `environment_broken` after five such failures — this incident is what the guard was written for.
-
-## Result
-
-- Best validation primary: **0.6053** (baseline 0.6016, delta +0.0037)
-- From iteration #4: Target prediction formation and training objective breadth by comparing nonlinear bi-interaction pooling (NFM), explicit bounded-degree feature crosses (DCN), and pairwise within-user BPR-FM; these mechanisms can capture higher-order context interactions or directly optimize positive-over-negative ordering, and validation-selected rank blends can preserve complementary incumbent orderings.
-- Selection is on validation only, per the scoring rules; the hidden test set was never used to choose between iterations.
-- Submission: written to `runs\r79\submission.csv`
-
-### Results table
-
-| split | GAUC | nDCG@5 | primary |
-|---|---|---|---|
-| validation (best iteration) | 0.6719 | 0.5387 | 0.6053 |
-| official baseline (validation) | 0.6674 | 0.5357 | 0.6016 |
-| hidden test (this submission) | 0.6673 | 0.5321 | **0.5997** |
-| official baseline (test) | 0.6610 | 0.5282 | 0.5946 |
-
-**Absolute delta over baseline on hidden test: GAUC +0.0063, nDCG@5 +0.0039, mean +0.0051** (primary +0.0051).
-
-Per the scoring formula, delta(m) = score_agent(m) - score_baseline(m), averaged over metrics.
+Each rung is a single run. Run-to-run spread on this benchmark is roughly 0.0008 on the scored metric, which is the same size as most of the differences above, so the ladder shows the SHAPE of the cost/score curve rather than a precise value for any rung. The plateau claim rests on several rungs agreeing, not on any single pair.

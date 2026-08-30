@@ -1,0 +1,11 @@
+#1 0.6024 [retired]  Reproduce the official baseline at the model-training stage using a 16
+  #5 0.6024  Target the loss/model-family stage with a fast shared-feature sweep ov
+  #6 0.6037  Target temporal sample-weighting and prediction formation: sweeping re
+  #7 0.6039 [retired]  Target the training-loss and prediction-formation stages by comparing 
+    #8 0.6043 [retired]  Target leakage-free history feature construction and prediction format
+      #11 0.6045  Target order-aware prediction formation by comparing a causal GRU, a c
+      #12 0.6045  Target candidate scoring with orthogonal latent and graph families—tem
+      #13 0.6056 [retired]  Target the supervision stage with leakage-free hard-sharing, MMoE, and
+        #15 0.6056  Target latent candidate-scoring and fusion by comparing positive-only 
+        #16 0.6056  Target interaction formation with field-aware FM, FiBiNET bilinear rec
+    #9 0.6043  Target candidate-conditioned preference formation with two structurall

@@ -153,6 +153,17 @@ OUTPUT CONTRACT -- the harness reads stdout:
             np.save(os.path.join(out, "scores_valid.npy"),
                     np.asarray(valid_scores, dtype=np.float64))
 
+  - If the scores you report are a COMBINATION of your own model with anything you did not
+    fit in this script -- the published incumbent, a stored array, another run's predictions
+    -- also save the scores of your own model on its own:
+
+        np.save(os.path.join(out, "scores_valid_raw.npy"),
+                np.asarray(own_model_valid_scores, dtype=np.float64))
+
+    Optional, never submitted, and never compared against your METRICS line: it is not a
+    second result and nothing about your iteration is judged on it. Omit it if your reported
+    scores already come from one model. It exists because a combined score cannot show what
+    your own model contributed, and the harness has no other way to see that.
   - The FINAL stdout line must be exactly:
     METRICS {{"primary": <float>, "gauc": <float>, "ndcg@5": <float>,
               "gpu_seconds": <float>}}
@@ -171,7 +182,8 @@ OUTPUT CONTRACT -- the harness reads stdout:
     Producing test SCORES is required. Fitting or selecting on test is forbidden.
 
 REUSING WORK BETWEEN ITERATIONS: three directories, with different lifetimes.
-  $ITER_OUT          this iteration only. Where scores_valid.npy and scores_test.npy go.
+  $ITER_OUT          this iteration only. Where scores_valid.npy, scores_test.npy and the
+                     optional scores_valid_raw.npy go.
   $RUN_ARTIFACTS     yours for the whole run, and not shared with any experiment running
                      beside you. Anything you save there -- fitted predictions, arrays,
                      parameters -- is still there next iteration, and reloading is free where

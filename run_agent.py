@@ -154,12 +154,20 @@ def main() -> None:
                     help="pin every improve iteration to one mode; diagnostic, not for scoring")
     ap.add_argument("--max-misses", type=int, default=2,
                     help="non-improving children before a search node is retired")
-    # Capped at 3 deliberately. Selecting the max of k candidates on 124,909 validation rows is
-    # inflated by selection alone -- about +0.00114 at k=8, +0.00145 at k=18 and +0.00180 at
-    # k=50 against the baseline's reported 5-seed sigma of 0.0008. Three slots over a typical
-    # run costs ~+0.0003 of validation that will not transfer, which is affordable against a
-    # ~+0.005 effect; eight would start eating the result it is trying to measure.
-    ap.add_argument("--slots", type=int, default=1, choices=[1, 2, 3],
+    # Capped at 5. Selecting the max of k candidates on 124,909 validation rows is inflated by
+    # selection alone -- about +0.00114 at k=8, +0.00145 at k=18 and +0.00180 at k=50 against
+    # the baseline's reported 5-seed sigma of 0.0008 -- so the cap exists to stop the search
+    # buying validation that will not transfer.
+    #
+    # The cap was 3 on that reasoning alone. Measured across the 14 runs under this data
+    # contract the effect does not show: corr(candidates compared, validation-test gap) =
+    # +0.108, and r87 compared 282 candidates -- more than any run -- for the best hidden-test
+    # score on record. Raised to 5, which measurement does constrain: on a 12-logical/8-
+    # performance-core box, 5 concurrent scripts run at 3.0x the throughput of one against
+    # 2.3x at three slots, and each script slows 1.3s -> 2.5s per epoch. Past that the
+    # per-script slowdown starts pushing long scripts toward the timeout, and the LLM
+    # request volume per turn -- proposals are serial -- becomes the binding cost.
+    ap.add_argument("--slots", type=int, default=1, choices=[1, 2, 3, 4, 5],
                     help="solution lineages advanced per turn. 1 is the sequential loop")
     ap.add_argument("--baseline-valid", type=float, default=BASELINE_VALID,
                     help="validation score the agent must reproduce; measure it with research.baseline_reference on a non-Pure variant")

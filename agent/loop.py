@@ -121,6 +121,10 @@ class SavedScoresEvaluator(StdoutJsonEvaluator):
         self.last_error: str | None = None
         self.last_scores = None
         self.last_test_scores = None
+        # The slot's own model BEFORE it blended anything into it. Optional and purely
+        # diagnostic: it is never submitted and never verified against the METRICS line, so a
+        # missing or malformed one must not cost an iteration.
+        self.last_raw_scores = None
 
     @staticmethod
     def _load_scores(path: Path, expected: int, name: str):
@@ -141,7 +145,7 @@ class SavedScoresEvaluator(StdoutJsonEvaluator):
         import math
 
         self.last_error = None
-        self.last_scores = self.last_test_scores = None
+        self.last_scores = self.last_test_scores = self.last_raw_scores = None
         reported = super().evaluate(result, iter_out)
         if reported is None:
             self.last_error = "The METRICS line is missing or is not valid JSON."
@@ -166,6 +170,17 @@ class SavedScoresEvaluator(StdoutJsonEvaluator):
             self.last_error = str(exc)
             self.last_scores = self.last_test_scores = None
             return None
+
+        # Optional, and deliberately outside the block above: this array decides nothing, so
+        # anything wrong with it is worth ignoring rather than failing an otherwise good
+        # iteration over. Absent means the script did not blend, and its own scores ARE raw.
+        try:
+            raw_path = Path(iter_out) / "scores_valid_raw.npy"
+            if raw_path.exists():
+                self.last_raw_scores = self._load_scores(
+                    raw_path, len(valid.y), "scores_valid_raw.npy")
+        except (OSError, ValueError, TypeError):
+            self.last_raw_scores = None
 
         for key in ("primary", "gauc", "ndcg@5"):
             claimed = reported.get(key)
@@ -436,7 +451,10 @@ def _record_turn(run_dir: Path, turn: int, batch: list[dict], slots: list[Slot],
     """
     if len(slots) < 2:
         return
-    scores = {s.slot_id: s.last_valid_scores for s in slots}
+    # Pre-blend candidates, not the retained/blended arrays: the question is whether the
+    # LINEAGES disagree. Reading post-blend scores made r82 report 1.000 because two slots
+    # had blended to alpha=0.0 and were literally holding the same incumbent array.
+    scores = {s.slot_id: s.last_candidate_scores for s in slots}
     if sum(v is not None for v in scores.values()) < 2:
         return
     try:
@@ -700,6 +718,12 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
                 break
             out.llm_tokens_in += p.tokens_in
             out.llm_tokens_out += p.tokens_out
+            # Record the hypothesis HERE, not after scoring, so the next slot in this same
+            # turn sees it. Set in the process step instead, `_sibling_note` showed each slot
+            # what its siblings did LAST turn -- and on turn 1 showed nothing at all, so every
+            # slot opened from an identical prompt. The block claims these are being written
+            # "right now"; this is what makes that true.
+            slot.last_hypothesis = p.hypothesis
             script, iter_out = _stage_script(workdir, iter_id, p.code)
             batch.append({"slot": slot, "proposal": p, "iter_id": iter_id,
                           "script": script, "iter_out": iter_out})
@@ -732,7 +756,6 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
                 continue
             spent += res.seconds
             slot.lineage.append(iter_id)
-            slot.last_hypothesis = p.hypothesis
             parent_id = slot.parent.iter_id if slot.parent is not None else None
             findings = parse_findings(res.stdout)
             if findings:
@@ -764,6 +787,18 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
 
             instant_failures = 0
             _, shared = _artifact_dirs(workdir, slot.slot_id)
+            # Capture what THIS slot's model predicted before retain_or_blend overwrites
+            # evaluator.last_scores with a blend against the incumbent. The correlation gate
+            # asks whether the lineages disagree; measured after the blend it answers a
+            # different question, and at alpha=0.0 two slots store the identical incumbent
+            # array and read 1.000 by construction. r82 turn 5 did exactly that.
+            # Prefer the script's own unblended model where it saved one. Without it the best
+            # available array is the script's internal blend against the shared incumbent, and
+            # every slot folds in that same array -- which is why r83 read 0.98 while the
+            # slots' HYPOTHESES overlapped by only 0.00-0.50 on the blacklist's own measure.
+            candidate_valid_scores = (getattr(evaluator, "last_raw_scores", None)
+                                      if getattr(evaluator, "last_raw_scores", None) is not None
+                                      else getattr(evaluator, "last_scores", None))
             metrics = retain_or_blend(metrics, evaluator, shared, workdir.parent, iter_id)
             score = metrics[primary]
             cands = parse_candidates(res.stdout)
@@ -807,6 +842,7 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
             tree.record_child(parent_id, score, res.seconds)
             slot.last_valid_scores = getattr(evaluator, "last_scores", None)
             slot.last_test_scores = getattr(evaluator, "last_test_scores", None)
+            slot.last_candidate_scores = candidate_valid_scores
             turn_scored = True
             turn_results.append({"slot_id": slot.slot_id, "iter_id": iter_id,
                                  "hypothesis": p.hypothesis, "primary": score,

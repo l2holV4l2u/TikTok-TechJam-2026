@@ -56,8 +56,12 @@ class Slot:
     seed_note: str = ""                   # note this slot was refilled with
     lineage: list[int] = field(default_factory=list)   # iter_ids it has produced
     last_hypothesis: str = ""
-    last_valid_scores: object | None = None           # np.ndarray, for correlation
+    last_valid_scores: object | None = None           # np.ndarray, post-blend, for the blend pool
     last_test_scores: object | None = None            # np.ndarray, for the portfolio blend
+    # This slot's OWN model, before retain_or_blend folds it toward the incumbent. The
+    # correlation gate must read this: post-blend arrays answer "how similar are the
+    # harness's retention decisions", not "do the lineages disagree".
+    last_candidate_scores: object | None = None       # np.ndarray, pre-blend, for correlation
     # A revived slot must start from the node it was revived onto, not from whatever
     # tree.select would hand it; cleared once it has been used for one proposal.
     pending_parent: object | None = None

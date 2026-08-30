@@ -5,6 +5,12 @@
 numpy==2.1.3
 torch==2.12.0
 lightgbm==4.7.0
+# scipy is a transitive dependency of nothing here, but generated scripts import it.
+# It MUST be pinned: 1.17 removed the `random_state=` shim on scipy.sparse.linalg.svds,
+# and r82 lost three iterations to `SeedSequence expects int ... not RandomState`.
+# 1.15.3 accepts both `random_state=` and the newer `rng=`, so either form the agent
+# writes runs.
+scipy==1.15.3
 
 # torch above is the CPU build. The benchmark is CPU-only by design -- the
 # organizers' baseline runs in ~40s on one core and GPU-hours are reported, not capped.

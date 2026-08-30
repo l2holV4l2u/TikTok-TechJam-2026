@@ -46,6 +46,20 @@ runs/*
 !runs/r79/
 !runs/r80/
 !runs/r81/
+# the portfolio runs. r82 is the first 3-slot run and r83 the one that lost three iterations
+# to the torch/LightGBM OpenMP crash; both measured slot correlation AFTER the harness had
+# blended each slot toward the shared incumbent, so both read ~1.0 and said nothing. r84 is
+# the first run to measure it on the slots' own pre-blend models (0.721). r85-r87 are the
+# slot-count ladder at 1, 2 and 3, and r87 holds the best hidden-test score on record.
+!runs/r82/
+!runs/r83/
+!runs/r84/
+!runs/r85_1slot/
+!runs/r86_2slot/
+!runs/r87_3slot/
+# globbed: later runs in this series carry a _Nslot suffix that is not known in advance.
+!runs/r88_4slot/
+!runs/r89_5slot/
 # the KuaiRand-1K bonus run behind RUN_REPORT_1K.md (logs only; its 532MB of scores,
 # submission CSV and cached artifacts stay out).
 !runs/r38_1k/
@@ -74,3 +88,6 @@ __pycache__/
 *.pyc
 .env
 *.env
+
+# local interpreter for runs; see requirements.txt for the pins
+.venv/
