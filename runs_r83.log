@@ -1,0 +1,14 @@
+cross-run memory: 50 lines from this agent's prior runs
+dataset: KuaiRand-Pure  train 1,141,112 / valid 124,909 / test 170,588
+
+submission from iteration #13 (validation primary 0.6050) -> runs\r83\submission.csv
+  hypothesis: Target the supervision and prediction-formation stages by comparing recency-weighted hard-
+  test primary 0.5995  gauc 0.6668  ndcg@5 0.5322   delta vs baseline +0.0049
+
+stopped: converged
+iterations: 14 of 50   failures: 1
+agent wall-clock: 24.3 min   script time: 23.0 min
+tokens (incl. knowledge revision): 241,656
+EDA completed: True   baseline reproduced: 0.6006336462497189
+manual interventions: 0
+run log: runs\r83

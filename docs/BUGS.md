@@ -205,3 +205,56 @@ only choice it makes is between iterations within one run, and there full valida
 selector. Shrinking the window trades bias it does not have for variance it cannot afford.
 
 Recorded so the axis is not re-proposed; `_SWEEP_INSTRUCTION` now marks it REFUTED.
+
+## The portfolio diversity gate: answered, and the answer is no
+
+`docs/portfolio-plan.md` Phase 2 is a go/no-go gate. Three slots are only worth their cost if
+they explore differently; if they converge on the same model the run is three expensive copies
+of one agent. The rule set in HANDOFF.md §7: mean slot correlation < 0.90 proceed, 0.90-0.95
+tighten `_SIBLINGS` and retry, > 0.95 stop and keep only Phases 0-1.
+
+Two three-slot runs against the real dataset, r82 and r83:
+
+| turn | r82 | r83 |
+|---|---|---|
+| 1 | 0.9431 | 0.9142 |
+| 2 | (contaminated) | 0.9952 |
+| 3 | (contaminated) | 0.9946 |
+| 4 | (contaminated) | 0.9955 |
+
+r82's turns 2-4 are not usable: see the bug below. r83 ran with the fix, and all four of its
+readings are honest. The shape is the same in both runs -- slots start moderately diverse and
+collapse by turn 2. r83's turn-2 pair 1-2 correlates at exactly 1.0000: two slots given
+different hypotheses produced byte-identical predictions, because the best internal candidate
+in each script was the same recency-weighted boosted tree.
+
+Verdict: **> 0.95, stop.** Keep Phases 0-1 -- parallel turns still buy wall-clock, and r83
+converged in 24.3 min against r82's 34.1 -- and abandon Phases 3-5. The archive, the refill
+policy and `blend_portfolio` are built for a decorrelated ensemble pool that does not exist
+here. Consistent with that, the portfolio blend declined on all eight turns across both runs
+with "no member improved fold A", which is the correct outcome for a pool of near-copies.
+
+This is the same bottleneck measured everywhere else on this benchmark: MMoE against plain
+DeepFM at 0.9888, components at 0.94+, and blends that gained nothing. The constraint is not
+search breadth.
+
+### The gate was measuring the incumbent against itself
+
+Found in r82, fixed before r83. `retain_or_blend` picks alpha over
+{incumbent, 0.25, 0.5, 0.75, candidate} and overwrites `evaluator.last_scores` with whatever it
+selected. At alpha 0.0 that array IS the incumbent. The slot then recorded it as its own
+prediction, so:
+
+- the correlation gate compared the incumbent with itself and reported a fake 1.0000 (r82
+  turn 3: three different architectures -- DIN, spectral factorisation, DIN+pairwise -- all
+  reporting the identical 0.60518);
+- `_blend_portfolio_turn` was handed the incumbent as a candidate member, which can never
+  improve a fold. Every "no member improved fold A" in r82 is partly this.
+
+Slots now keep `raw_valid_scores` / `raw_test_scores`, what their own script produced.
+Regression tests in `tests/test_selection.py`.
+
+Still open: `retain_or_blend` also OVERWRITES `iter_N_out/scores_valid.npy` and
+`scores_test.npy` on disk with the selected scores, so after a run the raw candidate is
+unrecoverable from the artifacts. The in-memory fix repairs the gate and the blend; the audit
+trail still loses what each script actually produced. It should be saved alongside, not over.
