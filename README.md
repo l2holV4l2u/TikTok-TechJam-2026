@@ -138,13 +138,19 @@ export OPENAI_API_KEY=...   # and LLM_PROVIDER=openai, or ANTHROPIC_API_KEY
 
 ```bash
 python -m pipeline.baseline_fm                        # the official baseline, for reference
-python run_agent.py --run-dir runs/rN --iters 50 --timeout 900 --patience 3
+python run_agent.py --run-dir runs/rN --iters 50 --timeout 900 --patience 3 --min-iters 10
 python report_run.py runs/rN > RUN_REPORT.md          # iteration log, resources, autonomy
 python -m pipeline.submit --check --in runs/rN/submission.csv --split test
 ```
 
-`--iters 50` is the organizers' hard cap; the run normally stops earlier on the convergence
-rule (ε = 0.002 over N = 3 iterations). A 6-hour wall-clock backstop is enforced in the loop.
+`--iters 50` is the organizers' hard cap. The declared default stopping rule is ε = 0.002 over
+N = 3 scored turns with a 10-turn minimum floor; a 6-hour wall-clock backstop is enforced.
+
+Normal runs set `AGENT_HIDE_TEST_LABELS=1`, and `pipeline.data.load("test")` hides test label
+values by default even outside the runner. The test split remains usable for prediction and
+submission output through `len(test)`, `test.user_id`, `test.video_id`, `test.X`, `test.date`,
+`test.time_ms` and safe numeric features. For local diagnostics that are not part of a benchmark
+run, `AGENT_ALLOW_TEST_LABELS=1` explicitly opts back into reading cached test labels.
 
 `python run_agent.py --dry-run` exercises the whole loop with a canned LLM and no network.
 
@@ -156,8 +162,9 @@ over three and is not converged. The stricter per-iteration reading is still eva
 recorded as `strict_convergence_iteration` in `run_meta.json`, so a run can be checked
 against either reading.
 
-Other flags: `--epsilon` and `--patience` set the convergence rule (organizer values are the
-defaults), `--wall-clock-s` the 6-hour backstop, `--max-retries` how often a failed script is
+Other flags: `--epsilon`, `--patience`, and `--min-iters` set the declared convergence rule,
+`--ensemble-min-gain` sets the smaller portfolio acceptance threshold independently,
+`--wall-clock-s` sets the 6-hour backstop, `--max-retries` controls how often a failed script is
 retried before its idea is retired, `--max-misses` how many non-improving children retire a
 search node, and `--revision-model` routes belief revision to a second model — rate limits are
 per-model and revision is ~37% of a run's requests, so a second model both halves the pressure
@@ -172,8 +179,8 @@ limitation cannot pass unnoticed.
 
 ### Running on another KuaiRand variant
 
-The dataset facts in the task brief -- row counts, date windows, the perfect-ranking ceiling,
-the random and item-popularity rungs -- are measured from the cache by `agent.facts`, not
+The dataset facts in the task brief -- row counts, date windows, the validation perfect-ranking
+ceiling, and validation random/item-popularity rungs -- are measured by `agent.facts`, not
 written into the prompt by hand, so the harness can be pointed at another release without
 feeding the agent false premises. `KUAIRAND_VARIANT` selects which raw files the loader reads.
 
@@ -193,15 +200,16 @@ disabled with `--no-memory`, since it ranks prior runs against a baseline on a d
 
 The agent writes the submission from its own validation-best iteration — every generated script
 saves both validation and test scores. The controller recomputes the official validation metrics
-from `scores_valid.npy`, rejects mismatched or invalid output, and assembles the winner. No human
-rebuilds it, and selection is on validation only; the hidden test set never picks the winner.
+from `scores_valid.npy`, rejects mismatched or invalid output, and assembles the winner from test
+features and saved test scores. No human rebuilds it, selection is on validation only, and normal
+submission generation does not read or score test labels.
 
 ## Tests
 
 ```bash
 for m in agent.tree agent.knowledge agent.memory agent.demo \
          tests.test_proposer tests.test_llm tests.test_evaluate tests.test_submit \
-         tests.test_data tests.test_models tests.test_weights tests.test_executor \
+         tests.test_run_agent tests.test_data tests.test_models tests.test_weights tests.test_executor \
          tests.test_harness tests.test_history tests.test_ensemble; \
          do python -m $m; done
 ```

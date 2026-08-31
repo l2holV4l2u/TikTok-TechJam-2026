@@ -6,6 +6,9 @@ from pathlib import Path
 
 import numpy as np
 
+HARNESS_BLEND_ALPHAS = (0.05, 0.10, 0.15, 0.20, 0.25, 0.50, 0.75)
+HARNESS_FOLD_TOLERANCE = 1e-4
+
 
 def _within_user_rank(user_id, scores) -> np.ndarray:
     """Map scores to [0,1] average rank within each query without using labels."""
@@ -39,11 +42,11 @@ def _within_user_rank(user_id, scores) -> np.ndarray:
 
 def blend_portfolio(members: dict, incumbent_valid, incumbent_test, user_id, labels,
                     fold_a, fold_b, epsilon: float = 0.002, max_members: int = 5,
-                    test_user_id=None) -> dict:
+                    test_user_id=None, ensemble_min_gain: float = 1e-4) -> dict:
     """Greedy forward selection over within-user ranks, chosen on fold A and confirmed on B.
 
     Start from the incumbent and repeatedly add whichever member most improves fold-A primary,
-    stopping when no addition gains more than epsilon or `max_members` is reached. Greedy
+    stopping when no addition gains more than `ensemble_min_gain` or `max_members` is reached. Greedy
     forward selection rather than a weight grid because it scales to an archive of any size, is
     deterministic, and needs no optimiser -- the run has to be reproducible from its log.
 
@@ -51,6 +54,10 @@ def blend_portfolio(members: dict, incumbent_valid, incumbent_test, user_id, lab
     chosen was chosen on one 7-day validation window, and selecting the max over many
     candidates on one split returns a number inflated by the selection itself. A blend that
     wins A and loses B won the split, not the task, and is refused.
+
+    `epsilon` remains the organizer convergence threshold for callers that log it around this
+    function. Portfolio acceptance is intentionally smaller: late-stage equal-rank blends tend
+    to move by ten-thousandths, so using the convergence threshold here disables the mechanism.
 
     `members` maps a name to (valid_scores, test_scores). Members are averaged as equal-weight
     within-user ranks: rank space makes differently-scaled models comparable without fitting
@@ -65,6 +72,10 @@ def blend_portfolio(members: dict, incumbent_valid, incumbent_test, user_id, lab
         return float(evaluate(np.asarray(user_id)[m], np.asarray(labels)[m],
                               np.asarray(scores)[m])["primary"])
 
+    min_gain = float(ensemble_min_gain)
+    if not np.isfinite(min_gain) or min_gain < 0.0:
+        min_gain = 1e-4
+
     inc_valid_rank = _within_user_rank(user_id, incumbent_valid)
     chosen: list[str] = []
     valid_stack = [inc_valid_rank]
@@ -78,7 +89,7 @@ def blend_portfolio(members: dict, incumbent_valid, incumbent_test, user_id, lab
         ranked[name] = _within_user_rank(user_id, v)
 
     while len(chosen) < max_members:
-        best_name, best_gain, best_blend = None, epsilon, None
+        best_name, best_gain, best_blend = None, min_gain, None
         for name, rank_v in ranked.items():
             if name in chosen:
                 continue
@@ -99,7 +110,7 @@ def blend_portfolio(members: dict, incumbent_valid, incumbent_test, user_id, lab
 
     blended_valid = np.mean(valid_stack, axis=0)
     fold_b_gain = primary(blended_valid, fold_b) - primary(inc_valid_rank, fold_b)
-    if not np.isfinite(fold_b_gain) or fold_b_gain < -epsilon:
+    if not np.isfinite(fold_b_gain) or fold_b_gain < -min_gain:
         return {"accepted": False, "members": chosen, "trace": trace,
                 "fold_a_gain": best_a - primary(inc_valid_rank, fold_a),
                 "fold_b_gain": fold_b_gain, "valid": None, "test": None,
@@ -129,6 +140,24 @@ def blend_portfolio(members: dict, incumbent_valid, incumbent_test, user_id, lab
             "reason": "gained on fold A and held on fold B"}
 
 
+def _raw_candidate_primary(metrics: dict, evaluator, valid) -> float:
+    """Score the script's own model when it saved pre-blend validation predictions."""
+    from pipeline.evaluate import evaluate
+
+    fallback = float(metrics["primary"])
+    raw_scores = getattr(evaluator, "last_raw_scores", None)
+    if raw_scores is None:
+        return fallback
+    raw_scores = np.asarray(raw_scores, dtype=np.float64)
+    if raw_scores.shape != np.asarray(valid.y).shape:
+        return fallback
+    try:
+        raw = float(evaluate(valid.user_id, valid.y, raw_scores)["primary"])
+    except (ValueError, TypeError, FloatingPointError):
+        return fallback
+    return raw if np.isfinite(raw) else fallback
+
+
 def retain_or_blend(metrics: dict, evaluator, artifacts: Path, run_dir: Path,
                     iter_id: int) -> dict:
     """Select candidate/incumbent/rank-blend on validation and apply it unchanged to test."""
@@ -156,13 +185,30 @@ def retain_or_blend(metrics: dict, evaluator, artifacts: Path, run_dir: Path,
     inc_v_rank = _within_user_rank(valid.user_id, incumbent_valid)
     can_v_rank = _within_user_rank(valid.user_id, candidate_valid)
 
-    raw_primary = float(metrics["primary"])
-    options = {0.0: float(incumbent_meta["valid_primary"]), 1.0: raw_primary}
+    candidate_primary = float(metrics["primary"])
+    raw_primary = _raw_candidate_primary(metrics, evaluator, valid)
+    options = {0.0: float(incumbent_meta["valid_primary"]), 1.0: candidate_primary}
     valid_blends = {}
-    for alpha in (0.25, 0.5, 0.75):
+    fold_grid = {}
+    from agent.selection import split_validation
+    fold_a, fold_b = split_validation(valid.user_id)
+
+    def fold_primary(scores, mask):
+        return float(evaluate(np.asarray(valid.user_id)[mask], np.asarray(valid.y)[mask],
+                              np.asarray(scores)[mask])["primary"])
+
+    inc_a, inc_b = fold_primary(inc_v_rank, fold_a), fold_primary(inc_v_rank, fold_b)
+    for alpha in HARNESS_BLEND_ALPHAS:
         scores = (1.0 - alpha) * inc_v_rank + alpha * can_v_rank
         valid_blends[alpha] = scores
-        options[alpha] = float(evaluate(valid.user_id, valid.y, scores)["primary"])
+        gain_a = fold_primary(scores, fold_a) - inc_a
+        gain_b = fold_primary(scores, fold_b) - inc_b
+        fold_grid[alpha] = {"fold_a_gain": gain_a, "fold_b_gain": gain_b}
+        # A blend weight is a fitted choice, so do not let a gain isolated to one validation
+        # fold enter the full-window grid. Small positive contributors often need 5-20% weight;
+        # the previous 25/50/75 grid discarded that useful regime entirely.
+        if gain_a >= -HARNESS_FOLD_TOLERANCE and gain_b >= -HARNESS_FOLD_TOLERANCE:
+            options[alpha] = float(evaluate(valid.user_id, valid.y, scores)["primary"])
     alpha = max(options, key=options.get)
 
     if alpha == 0.0:
@@ -189,8 +235,10 @@ def retain_or_blend(metrics: dict, evaluator, artifacts: Path, run_dir: Path,
             evaluator.last_test_scores)
     with (run_dir / "harness_ensembles.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps({"iter_id": iter_id, "selected_alpha": alpha,
-                            "candidate_primary": raw_primary,
+                            "candidate_primary": candidate_primary,
+                            "raw_candidate_primary": raw_primary,
                             "incumbent_primary": options[0.0],
                             "selected_primary": selected_metrics["primary"],
-                            "grid": options}) + "\n")
+                            "grid": options, "fold_grid": fold_grid,
+                            "fold_tolerance": HARNESS_FOLD_TOLERANCE}) + "\n")
     return selected_metrics

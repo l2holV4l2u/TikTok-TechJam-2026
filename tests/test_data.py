@@ -144,14 +144,22 @@ def test_no_leak_columns_in_feature_cardinalities():
     assert not (set(FEATURE_CARDINALITIES) & _LEAK_COLUMNS)
 
 
-def test_generated_process_can_size_but_not_read_test_labels():
+def test_test_features_are_available_but_labels_are_hidden_by_default():
     tmp, prev = _use_temp_cache()
     old = os.environ.get("AGENT_HIDE_TEST_LABELS")
+    old_allow = os.environ.get("AGENT_ALLOW_TEST_LABELS")
     try:
         build_synth(tmp, sizes={"train": 20, "valid": 10, "test": 7}, seed=9)
-        os.environ["AGENT_HIDE_TEST_LABELS"] = "1"
+        os.environ.pop("AGENT_HIDE_TEST_LABELS", None)
+        os.environ.pop("AGENT_ALLOW_TEST_LABELS", None)
+        # A compliant prediction-only load must not need to open outcome files at all.
+        (tmp / "test" / "y.npy").unlink()
+        for name in AUX_DTYPES:
+            (tmp / "test" / f"aux_{name}.npy").unlink()
         test = load("test")
+        assert len(test) == 7 and len(test.user_id) == 7 and len(test.video_id) == 7
         assert len(test.y) == 7 and test.y.shape == (7,)
+        assert "video_id" in test.X
         try:
             np.asarray(test.y)
         except RuntimeError as exc:
@@ -165,12 +173,47 @@ def test_generated_process_can_size_but_not_read_test_labels():
             assert "post-impression outcomes are hidden" in str(exc)
         else:
             raise AssertionError("generated code could read hidden-test outcomes")
-        assert len(load("valid").y) == 10, "validation labels remain available for selection"
+        assert len(load("valid").y) == 10, "validation labels remain available for scoring"
     finally:
         if old is None:
             os.environ.pop("AGENT_HIDE_TEST_LABELS", None)
         else:
             os.environ["AGENT_HIDE_TEST_LABELS"] = old
+        if old_allow is None:
+            os.environ.pop("AGENT_ALLOW_TEST_LABELS", None)
+        else:
+            os.environ["AGENT_ALLOW_TEST_LABELS"] = old_allow
+        _restore(tmp, prev)
+
+
+def test_test_labels_require_explicit_local_diagnostic_opt_in():
+    tmp, prev = _use_temp_cache()
+    old = os.environ.get("AGENT_HIDE_TEST_LABELS")
+    old_allow = os.environ.get("AGENT_ALLOW_TEST_LABELS")
+    try:
+        build_synth(tmp, sizes={"train": 20, "valid": 10, "test": 7}, seed=10)
+        os.environ.pop("AGENT_HIDE_TEST_LABELS", None)
+        os.environ["AGENT_ALLOW_TEST_LABELS"] = "1"
+        test = load("test")
+        assert np.asarray(test.y).shape == (7,)
+        assert set(test.aux) == set(AUX_DTYPES)
+        os.environ["AGENT_HIDE_TEST_LABELS"] = "1"
+        hidden = load("test")
+        try:
+            np.asarray(hidden.y)
+        except RuntimeError as exc:
+            assert "test labels are hidden" in str(exc)
+        else:
+            raise AssertionError("AGENT_HIDE_TEST_LABELS must override diagnostic opt-in")
+    finally:
+        if old is None:
+            os.environ.pop("AGENT_HIDE_TEST_LABELS", None)
+        else:
+            os.environ["AGENT_HIDE_TEST_LABELS"] = old
+        if old_allow is None:
+            os.environ.pop("AGENT_ALLOW_TEST_LABELS", None)
+        else:
+            os.environ["AGENT_ALLOW_TEST_LABELS"] = old_allow
         _restore(tmp, prev)
 
 
@@ -348,8 +391,8 @@ def test_hidden_test_labels_explain_themselves_on_every_access():
     Blocking __array__/__getitem__/__iter__ left `.astype()` falling through to a bare
     AttributeError -- observed live, a run lost a baseline attempt to
     "'HiddenTestLabels' object has no attribute 'astype'. Did you mean: 'dtype'?", which reads
-    as a harness bug rather than a rule. Length and dtype must still work, because legitimate
-    scoring code allocates by len(test.y).
+    as a harness bug rather than a rule. Length and dtype still work for controller shape
+    checks; value-bearing operations must be blocked.
     """
     from pipeline.data import HiddenTestLabels
     h = HiddenTestLabels(50)

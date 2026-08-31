@@ -67,9 +67,8 @@ def _dry_run_baseline() -> float:
 def _write_submission(run_dir: Path, ledger: Ledger, baseline_test: float) -> dict:
     """Build the submission from the agent's own best iteration -- no human rebuild.
 
-    The organizers score the validation-best checkpoint. We hold the public test labels, so we
-    also report what that submission scores -- but selection is on validation only; picking a
-    different iteration because its test score is higher would be fitting the hidden set.
+    The organizers score the validation-best checkpoint.  The repository may contain cached
+    labels for local development, but a normal benchmark run must not read or score them.
     """
     import numpy as np
     scored = [e for e in ledger.read()
@@ -109,8 +108,9 @@ def _write_submission(run_dir: Path, ledger: Ledger, baseline_test: float) -> di
     from pipeline.data import load
     te = load("test")
     scores = np.asarray(np.load(path, allow_pickle=False), dtype=np.float64)
-    if scores.ndim != 1 or len(scores) != len(te.y):
-        print(f"score shape {scores.shape} != ({len(te.y)},); refusing to write")
+    n_test = len(te)
+    if scores.ndim != 1 or len(scores) != n_test:
+        print(f"score shape {scores.shape} != ({n_test},); refusing to write")
         return {}
     if not np.isfinite(scores).all():
         print("test scores contain NaN or Inf; refusing to write")
@@ -122,26 +122,11 @@ def _write_submission(run_dir: Path, ledger: Ledger, baseline_test: float) -> di
         for i, (u, v, sc) in enumerate(zip(te.user_id, te.video_id, scores)):
             f.write(f"{i},{u},{v},{sc}\n")
 
-    from pipeline.evaluate import evaluate
-    # FAQ 2.9.3: test labels may not be used "in any way", and the check is a review of the
-    # code and the run log. Scoring our own finished submission is not selection -- nothing
-    # downstream reads it -- but a log that prints a test delta every run is what that review
-    # looks at. Under AGENT_HIDE_TEST_LABELS=1 the run cannot read them and reports validation
-    # only, which is the position that needs no explanation.
-    try:
-        r = evaluate(te.user_id, te.y, scores)
-    except RuntimeError:
-        print("  test labels hidden for this run; submission written unscored")
-        return {"iter_id": best.iter_id, "source": source,
-                "valid_primary": best_primary, "test_scored": False,
-                "hypothesis": best_hypothesis}
     print(f"\nsubmission from {source} (validation primary {best_primary:.4f}) -> {out}")
     print(f"  hypothesis: {best_hypothesis[:90]}")
-    print(f"  test primary {r['primary']:.4f}  gauc {r['gauc']:.4f}  ndcg@5 {r['ndcg@5']:.4f}"
-          f"   delta vs baseline {r['primary'] - baseline_test:+.4f}")
+    print("  test labels hidden by default; submission written unscored")
     return {"iter_id": best.iter_id, "source": source, "valid_primary": best_primary,
-            "test_primary": r["primary"], "test_gauc": r["gauc"], "test_ndcg@5": r["ndcg@5"],
-            "test_delta": r["primary"] - baseline_test, "hypothesis": best_hypothesis}
+            "test_scored": False, "hypothesis": best_hypothesis}
 
 
 def main() -> None:
@@ -165,9 +150,11 @@ def main() -> None:
     ap.add_argument("--patience", type=int, default=3, help="N in the convergence rule")
     # FAQ 2.9.1: a team may declare its own N, epsilon and a minimum-iteration floor, provided
     # they are fixed before the run and recorded in the run log. run_meta.json records all three.
-    ap.add_argument("--min-iters", type=int, default=0,
-                    help="declared minimum-iteration floor; convergence cannot stop the run below it")
+    ap.add_argument("--min-iters", type=int, default=10,
+                    help="declared scored-turn floor before convergence may stop the run")
     ap.add_argument("--epsilon", type=float, default=0.002, help="organizer-fixed eps")
+    ap.add_argument("--ensemble-min-gain", type=float, default=1e-4,
+                    help="minimum fold-A gain for portfolio members; independent of epsilon")
     ap.add_argument("--max-retries", type=int, default=2)
     # Must stay below --patience. Both counters test the same epsilon against the same
     # leader, so at 3 a node retired on the same iteration the run converged and select()
@@ -195,7 +182,7 @@ def main() -> None:
     ap.add_argument("--baseline-valid", type=float, default=BASELINE_VALID,
                     help="validation score the agent must reproduce; measure it with research.baseline_reference on a non-Pure variant")
     ap.add_argument("--baseline-test", type=float, default=BASELINE_TEST,
-                    help="test score the reported delta is taken against")
+                    help="legacy organizer reference retained for CLI compatibility; never scored locally")
     ap.add_argument("--baseline-tolerance", type=float, default=0.002,
                     help="maximum absolute baseline reproduction error")
     ap.add_argument("--revision-model", default=None,
@@ -221,6 +208,7 @@ def main() -> None:
     args = ap.parse_args()
 
     os.environ["AGENT_DEVICE"] = "cpu"
+    os.environ["AGENT_HIDE_TEST_LABELS"] = "1"
 
     if args.dry_run:
         args.baseline_valid = _dry_run_baseline()
@@ -307,7 +295,8 @@ def main() -> None:
             workdir=run_dir / "scripts",
             primary="primary",
             epsilon=args.epsilon,
-            patience=args.patience, min_iters=args.min_iters,
+            patience=args.patience,
+            min_iters=args.min_iters,
             max_iters=args.iters,
             force_mode=args.force_mode,
             timeout=args.timeout,
@@ -324,6 +313,7 @@ def main() -> None:
             # tell an extraordinary result from an impossible one.
             ceiling=facts.get("ceiling"),
             n_slots=args.slots,
+            ensemble_min_gain=args.ensemble_min_gain,
             # With several lineages running, one synthesis per turn replaces one belief
             # revision per experiment: same budget, and it can see what the slots share.
             consult_fn=(lambda k, slots, results, archive, corr, stale, patience:
@@ -379,6 +369,7 @@ def main() -> None:
         "epsilon": args.epsilon,
         "patience": args.patience,
         "min_iters": args.min_iters,
+        "ensemble_min_gain": args.ensemble_min_gain,
         "iterations": len(entries),
         "iteration_cap": args.iters,
         # A turn is one hypothesis-to-score cycle -- Figure 1's iteration, and what the

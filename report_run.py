@@ -458,11 +458,6 @@ def main() -> None:
 
         scores_path = run_dir / "scripts" / f"iter_{best['iter_id']}_out" / "scores_test.npy"
         if scores_path.exists():
-            import numpy as np
-            from pipeline.data import load
-            from pipeline.evaluate import evaluate
-            te = load("test")
-            rt = evaluate(te.user_id, te.y, np.load(scores_path))
             print("\n### Results table\n")
             print("| split | GAUC | nDCG@5 | primary |")
             print("|---|---|---|---|")
@@ -472,16 +467,9 @@ def main() -> None:
             print(f"| validation (best iteration) | {vg} | {vn} | {bm['primary']:.4f} |")
             print(f"| {BASE_LABEL} (validation) | {BASE_VALID_GAUC:.4f} | "
                   f"{BASE_VALID_NDCG:.4f} | {BASE_VALID:.4f} |")
-            print(f"| hidden test (this submission) | {rt['gauc']:.4f} | {rt['ndcg@5']:.4f} | "
-                  f"**{rt['primary']:.4f}** |")
-            print(f"| {BASE_LABEL} (test) | {BASE_TEST_GAUC:.4f} | "
-                  f"{BASE_TEST_NDCG:.4f} | {BASE_TEST:.4f} |")
-            dg, dn = rt["gauc"] - BASE_TEST_GAUC, rt["ndcg@5"] - BASE_TEST_NDCG
-            print(f"\n**Absolute delta over baseline on hidden test: GAUC {dg:+.4f}, "
-                  f"nDCG@5 {dn:+.4f}, mean {(dg + dn) / 2:+.4f}** "
-                  f"(primary {rt['primary'] - BASE_TEST:+.4f}).")
-            print("\nPer the scoring formula, delta(m) = score_agent(m) - score_baseline(m), "
-                  "averaged over metrics.")
+            print("| hidden test (this submission) | unscored | unscored | unscored |")
+            print("\nTest predictions were written without reading labels; final test metrics "
+                  "are computed once by the organizers.")
 
 
 if __name__ == "__main__":

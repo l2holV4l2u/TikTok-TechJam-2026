@@ -25,20 +25,11 @@ MAX_HISTORY = 8
 MAX_FEEDBACK_CHARS = 1200
 MAX_KB = 3
 MAX_ATTEMPTS = 2
-# A parent script is sent in full; truncating it hands the model a file that stops mid-function
-# and asks it to edit that. At 14000 this fired on 52% of the 272 scripts this project has run
-# (median 14368, max 22589), silently, for the whole project. 60000 clears the largest by 2.6x
-# and costs ~15k tokens of a prompt that is nowhere near its context limit.
-MAX_CODE_CHARS = 60000
+# A parent script is sent in full; truncating it hands the model a file that stops
+# mid-function and asks it to edit that. At 14000 this fired on 52% of the 272 scripts this
+# project has run (median 14368, max 22589), silently, for its whole history.
+MAX_CODE_CHARS = 60000     # parent scripts are large; clipping must preserve whole lines
 MAX_EDA_CHARS = 4000
-
-def _clip(code: str, limit: int = MAX_CODE_CHARS) -> str:
-    """Whole lines only, and say so, so a clipped parent is never mistaken for a complete file."""
-    if code is None or len(code) <= limit:
-        return code or ""
-    kept = code[:limit].rsplit(chr(10), 1)[0]
-    return kept + chr(10) + "# ... TRUNCATED BY THE HARNESS: this file is incomplete ..."
-
 
 # ---------------------------------------------------------------- task specification only
 
@@ -61,12 +52,13 @@ BASELINE ({baseline_source}, this is what you must beat):
   validation GAUC {baseline_valid_gauc:.4f} / nDCG@5 {baseline_valid_ndcg5:.4f} / primary {baseline_valid_primary:.4f}
   hidden test  GAUC {baseline_test_gauc:.4f} / nDCG@5 {baseline_test_ndcg5:.4f} / primary {baseline_test_primary:.4f}{baseline_noise_note}
   It is a Factorization Machine, k={baseline_k:.0f}, lr={baseline_lr}, over 5 categorical fields.
-Harness self-check rungs, measured on this dataset: random scoring primary {random_primary:.4f},
-item popularity primary {itempop_primary:.4f} (on test).
+Harness self-check rungs, measured on validation only: random scoring primary {random_primary:.4f},
+item popularity primary {itempop_primary:.4f}.
 A validation difference smaller than 0.002 is inside seed noise and is NOT evidence. That
 0.002 is also the organizers' convergence epsilon.
-Perfect ranking on test reaches only primary {ceiling:.4f}, because {zero_pos_user_pct:.1f}% of test
-users have no positive label at all. Judge headroom against {ceiling:.4f}, not 1.0.
+Perfect ranking on validation reaches only primary {ceiling:.4f}, because {zero_pos_user_pct:.1f}%
+of validation users have no positive label at all. Judge validation headroom against
+{ceiling:.4f}, not 1.0. No test-label-derived statistic is present in this brief.
 
 HOW THE RUN ENDS -- read this before choosing an experiment:
   The run stops at whichever comes first: 50 iterations, 6 hours, or the organizers'
@@ -132,9 +124,10 @@ RULES:
     or a combination weight from validation and then scoring the same rows. Hold out the last
     days of TRAIN for that.
   - Never fit or select anything on "test", and never read test labels.
-  - load("test").y DOES NOT EXIST. Touching it -- .y, .y.sum(), .y.astype(), len(s.y),
-    anything -- raises RuntimeError and the whole iteration is lost. The test split gives
-    you features only; you produce scores for it and the harness scores them for you.
+  - load("test").y has no readable label values. Converting, indexing, iterating, aggregating
+    or calling array methods on it raises RuntimeError and the whole iteration is lost. Use
+    len(test), test.user_id or test.video_id for row counts. The test split gives you features
+    only; you produce scores for it and the organizers score the final submission once.
   - Everything in s.aux is an OUTCOME of the row being scored. Using any of it as an input
     feature is label leakage and invalidates the result.
   - No external datasets, and no pretrained weights trained on this benchmark's test labels.
@@ -317,6 +310,7 @@ exhaustive, not a recommendation, and you may propose one that is not listed:
   deep CTR           DeepFM, xDeepFM, AutoInt, FiBiNET, DCNv2, PNN
   sequence/attention DIN, DIEN, transformer over user history
   gradient boosting  LightGBM binary, LambdaRank, setwise ranking
+  metric-aligned NN  whole-user LambdaLoss/nDCG@5 plus pairwise GAUC, optionally multi-task
   multi-task         MMoE, PLE, ESMM over the other feedback signals
   latent/MF          truncated SVD, ALS, item2vec
   non-parametric     empirical Bayes, target statistics, popularity priors
@@ -334,13 +328,11 @@ sweep over how the model is TRAINED AND SELECTED is now worth more than a sweep 
                      has only ever been tried on a SIDE component the blender then damped to
                      +0.00002. Put it on the MAIN model's sample_weight and sweep the half-life
                      there; that is the untried version.
-  selection protocol REFUTED, do not spend an iteration on it. Ranking this run's 49 scored
-                     iterations by the last 2/3/4 days of validation instead of all 7 correlates
-                     WORSE with hidden test (Spearman 0.33/0.66/0.84 against 0.87 for the full
-                     window) and submits the same model. Full validation is the better selector.
-  stationarity       prefer features whose distribution holds across windows over identity
-                     embeddings. Expanding 9 -> 37 categorical fields gained validation and lost
-                     test, which is what a non-stationary feature looks like.
+  selection protocol choose every epoch, model, and blend using train holdouts or user-grouped
+                     validation folds. Never use test feedback; it is unavailable by design.
+  stationarity       prefer features whose unlabeled distribution holds across train and future
+                     feature windows over brittle identities, without computing outcome statistics
+                     on validation or test.
   cold start         30% of evaluated users have no positive label at all and cannot be helped;
                      the score lives on the users who do.
 
@@ -430,6 +422,22 @@ def _fmt_metrics(metrics: dict) -> str:
         return "-"
     return ",".join(f"{k}={v:.4f}" if isinstance(v, float) else f"{k}={v}"
                     for k, v in metrics.items())
+
+
+def _clip_full_lines(text: str, max_chars: int = MAX_CODE_CHARS) -> str:
+    """Clip generated code without returning a syntactically corrupt partial line."""
+    if len(text) <= max_chars:
+        return text
+    kept: list[str] = []
+    total = 0
+    for line in text.splitlines(keepends=True):
+        if total + len(line) > max_chars:
+            break
+        kept.append(line)
+        total += len(line)
+    body = "".join(kept).rstrip()
+    marker = f"# ... clipped at {max_chars} chars on a line boundary ..."
+    return f"{body}\n{marker}" if body else marker
 
 
 def _summarize_history(history, n: int) -> str:
@@ -551,17 +559,17 @@ class LLMProposer:
                 blocks.append(_DRAFT)
             elif context.get("mode") == "sweep":
                 blocks.append(_SWEEP_CODE.format(iid=parent.iter_id, score=parent.score,
-                                            code=_clip(parent.code)))
+                                            code=_clip_full_lines(parent.code)))
             elif context.get("mode") == "tune":
                 blocks.append(_TUNE_CODE.format(iid=parent.iter_id, score=parent.score,
-                                                code=_clip(parent.code)))
+                                                code=_clip_full_lines(parent.code)))
             elif context.get("mode") == "broaden":
                 blocks.append(_BROADEN_CODE.format(iid=parent.iter_id, score=parent.score,
-                                                   code=_clip(parent.code)))
+                                                   code=_clip_full_lines(parent.code)))
             else:
                 blocks.append(_EDIT_PARENT.format(iid=parent.iter_id, score=parent.score,
                                                   hyp=parent.hypothesis,
-                                                  code=_clip(parent.code)))
+                                                  code=_clip_full_lines(parent.code)))
 
             diagnosis = context.get("diagnosis")
             if diagnosis:
@@ -622,7 +630,7 @@ class LLMProposer:
             last_code = next((e.diff for e in reversed(history)
                               if e.status in ("failed", "blacklisted") and e.diff), "")
             if last_code and parent is None:
-                fb += f"\n\nThe script that failed:\n```python\n{_clip(last_code)}\n```"
+                fb += f"\n\nThe script that failed:\n```python\n{_clip_full_lines(last_code)}\n```"
             blocks.append(fb)
 
         if note:

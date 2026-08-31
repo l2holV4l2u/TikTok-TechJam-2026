@@ -159,6 +159,29 @@ def test_convergence_uses_the_gain_across_the_window_not_each_single_step():
         "one big jump followed by three flat iterations is converged")
 
 
+def test_minimum_iteration_floor_counts_scored_turns_not_parallel_scripts():
+    """A declared floor is measured in the same turns as the convergence window."""
+    from agent.ledger import Ledger
+    from agent.loop import run_loop, StdoutJsonEvaluator
+    from agent.proposer import Proposal
+
+    class Flat:
+        def propose(self, *, phase="improve", **_):
+            score = 0.6016
+            return Proposal("flat candidate", "print('METRICS {\"primary\": 0.6016}')", 0, 0)
+
+    with tempfile.TemporaryDirectory() as d:
+        r = run_loop(
+            Flat(), StdoutJsonEvaluator(), Ledger(Path(d) / "ledger.jsonl"),
+            workdir=Path(d) / "scripts", max_iters=40, n_slots=3,
+            patience=3, min_iters=6, epsilon=0.002, timeout=30,
+        )
+
+    assert r.stop_reason == "converged", r.stop_reason
+    assert r.turns >= 6, (r.turns, r.scripts)
+    assert r.scripts > r.turns, "the test must exercise parallel script accounting"
+
+
 def test_a_script_that_produced_no_stdout_does_not_kill_the_run():
     """r61 died on iteration 4 with AttributeError: NoneType has no attribute splitlines.
 

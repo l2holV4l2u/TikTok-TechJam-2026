@@ -164,7 +164,7 @@ class SavedScoresEvaluator(StdoutJsonEvaluator):
             if self.require_test:
                 test = load("test")
                 self.last_test_scores = self._load_scores(
-                    Path(iter_out) / "scores_test.npy", len(test.y), "scores_test.npy")
+                    Path(iter_out) / "scores_test.npy", len(test.user_id), "scores_test.npy")
             verified = evaluate(valid.user_id, valid.y, self.last_scores)
         except (OSError, ValueError, TypeError) as exc:
             self.last_error = str(exc)
@@ -345,7 +345,8 @@ def _sibling_note(slots: list[Slot], me: Slot) -> str:
 
 
 def _blend_portfolio_turn(run_dir: Path, turn: int, slots: list[Slot], archive: Archive,
-                          out: "LoopResult", epsilon: float) -> None:
+                          out: "LoopResult", epsilon: float,
+                          ensemble_min_gain: float = 1e-4) -> None:
     """Blend incumbent + live slots + archive, gated on a held-out fold. Never raises.
 
     The result is written to run_dir/portfolio_blend/ with its validation primary, and
@@ -393,14 +394,16 @@ def _blend_portfolio_turn(run_dir: Path, turn: int, slots: list[Slot], archive: 
     try:
         got = blend_portfolio(members, inc_valid, inc_test, valid.user_id, valid.y,
                               fold_a, fold_b, epsilon=epsilon,
-                              test_user_id=test.user_id if inc_test is not None else None)
+                              test_user_id=test.user_id if inc_test is not None else None,
+                              ensemble_min_gain=ensemble_min_gain)
     except Exception:
         return
 
     record = {"event": "portfolio_blend", "turn": turn, "accepted": got["accepted"],
               "members": got.get("members", []), "reason": got.get("reason"),
               "fold_a_gain": got.get("fold_a_gain"), "fold_b_gain": got.get("fold_b_gain"),
-              "pool_size": len(members)}
+              "pool_size": len(members), "ensemble_min_gain": ensemble_min_gain,
+              "epsilon": epsilon}
     if got["accepted"] and got["valid"] is not None:
         primary = float(evaluate(valid.user_id, valid.y, got["valid"])["primary"])
         record["valid_primary"] = primary
@@ -415,6 +418,7 @@ def _blend_portfolio_turn(run_dir: Path, turn: int, slots: list[Slot], archive: 
             (d / "blend.json").write_text(json.dumps({
                 "turn": turn, "valid_primary": primary, "members": got["members"],
                 "fold_a_gain": got["fold_a_gain"], "fold_b_gain": got["fold_b_gain"],
+                "ensemble_min_gain": ensemble_min_gain,
                 "has_test_scores": got["test"] is not None,
             }, indent=2, default=float), encoding="utf-8")
     log_portfolio(run_dir, record)
@@ -494,7 +498,8 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
              baseline_tolerance: float = BASELINE_TOLERANCE,
              max_instant_failures: int = 5, max_proposer_errors: int = 6,
              force_mode: str = "", n_slots: int = 1,
-             slot_patience: int = SLOT_PATIENCE, consult_fn=None) -> LoopResult:
+             slot_patience: int = SLOT_PATIENCE, consult_fn=None,
+             ensemble_min_gain: float = 1e-4) -> LoopResult:
     tree = tree if tree is not None else Tree(epsilon=epsilon)
     recovery = recovery or Recovery()
     workdir = Path(workdir)
@@ -547,12 +552,11 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
             # of 50 still setting a record every step. Both stop points are recorded.
             if stale >= patience and out.strict_converged_iter is None:
                 out.strict_converged_iter = i
-            # FAQ 2.9.1 lets a team declare its own epsilon, N and an optional minimum-iteration
-            # floor, fixed before the run and recorded in the log. r95 is why there is a floor:
-            # it went flat for four turns around 0.6053 and then gained +0.00023 and +0.00025 on
-            # turns 9 and 10, in directions no shorter run ever reached. The default rule would
-            # have stopped it at turn 3.
-            if converged(best_curve, patience, epsilon) and i >= min_iters:
+            # FAQ 2.9.1 permits a declared minimum-iteration floor. Count scored search turns,
+            # not scripts: with three parallel slots, ten scripts are only about three actual
+            # hypothesis-to-score cycles. r95 found its late gains on turns 9 and 10.
+            if (len(best_curve) >= min_iters
+                    and converged(best_curve, patience, epsilon)):
                 return finish("converged")
 
         # live budget state: how close the convergence rule is to ending the run
@@ -563,13 +567,10 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         # broader exploration on detecting stagnation outperformed every fixed strategy, and
         # breadth should track opportunity density -- greedy while gains are dense, broad when
         # they are sparse. Gains are sparse here: almost nothing clears epsilon.
-        # Every improve iteration sweeps model families. Measured over r76-r78 on the hidden
-        # test set, which is what the ranking uses: family sweeps moved it +0.00224, while two
-        # tune iterations and a 9->37 field expansion moved it -0.00001 between them. Refine
-        # and tune buy validation points that do not exist on test, and selection is forced
-        # onto validation, so keeping them made the harness pick the worse model -- r74 has
-        # better validation than r78 (0.6049 vs 0.6047) and worse test (0.5991 vs 0.5998).
-        # The other modes stay reachable through --force-mode for diagnostic runs.
+        # Every improve iteration sweeps model/training families. In the validation ledgers,
+        # broad sweeps are the only changes that repeatedly clear epsilon; narrow tune/refine
+        # steps land inside the noise band. The other modes stay reachable through
+        # --force-mode for diagnostic runs.
         if force_mode and phase == "improve":
             mode = force_mode
         else:
@@ -923,7 +924,8 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
         #     Weights are chosen on validation fold A and confirmed on fold B, so a wider search
         #     cannot buy a validation score that will not transfer.
         if len(slots) > 1 and turn_scored:
-            _blend_portfolio_turn(workdir.parent, turn, slots, archive, out, epsilon)
+            _blend_portfolio_turn(workdir.parent, turn, slots, archive, out, epsilon,
+                                  ensemble_min_gain=ensemble_min_gain)
 
         # 6. ONE synthesis per turn. With several lineages running, what a slot most lacks is
         #    not literature -- it already receives the whole catalogue -- but knowledge of the

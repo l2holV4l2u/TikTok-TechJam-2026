@@ -5,6 +5,8 @@ import contextlib
 import tempfile
 from pathlib import Path
 
+import numpy as np
+
 import report_run
 
 
@@ -154,6 +156,29 @@ def test_counts_are_reported_even_before_a_turn_has_been_logged():
                       {"slots": 3, "turns": 0, "scripts": 2, "iteration_cap": 50}, [])
     assert "## Portfolio" in out and "Lineages advanced per turn: **3**" in out
     assert "Did the lineages actually disagree?" not in out, "no log, no correlation table"
+
+
+def test_report_leaves_test_predictions_unscored():
+    """Generating a deliverable must not turn into a hidden-label evaluation path."""
+    import sys
+
+    with tempfile.TemporaryDirectory() as tmp:
+        run = Path(tmp)
+        row = _entry(1, metrics={"primary": 0.61, "gauc": 0.62, "ndcg@5": 0.60}, status="ok")
+        (run / "ledger.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+        (run / "run_meta.json").write_text(json.dumps({"slots": 1}), encoding="utf-8")
+        score_dir = run / "scripts" / "iter_1_out"
+        score_dir.mkdir(parents=True)
+        np.save(score_dir / "scores_test.npy", np.array([0.1, 0.2]))
+        argv = sys.argv
+        sys.argv = ["report_run.py", str(run)]
+        try:
+            out = _render(report_run.main)
+        finally:
+            sys.argv = argv
+
+    assert "hidden test (this submission) | unscored" in out
+    assert "computed once by the organizers" in out
 
 
 if __name__ == "__main__":

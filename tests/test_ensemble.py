@@ -27,6 +27,24 @@ def _fake_data(valid, test):
             sys.modules["pipeline.data"] = previous
 
 
+@contextlib.contextmanager
+def _fake_evaluate(evaluate_fn):
+    from pipeline.evaluate import _sorted_by_user
+
+    previous = sys.modules.get("pipeline.evaluate")
+    module = types.ModuleType("pipeline.evaluate")
+    module._sorted_by_user = _sorted_by_user
+    module.evaluate = evaluate_fn
+    sys.modules["pipeline.evaluate"] = module
+    try:
+        yield
+    finally:
+        if previous is None:
+            del sys.modules["pipeline.evaluate"]
+        else:
+            sys.modules["pipeline.evaluate"] = previous
+
+
 def test_complementary_candidate_is_blended_and_saved_for_submission():
     users = np.repeat(np.arange(100), 20)
     labels = (np.random.default_rng(1).random(len(users)) < 0.3).astype(np.int8)
@@ -60,6 +78,76 @@ def test_complementary_candidate_is_blended_and_saved_for_submission():
         assert record["selected_alpha"] == 0.5
 
 
+def test_raw_candidate_primary_scores_saved_raw_predictions_not_internal_blend():
+    users = np.repeat(np.arange(100), 20)
+    labels = (np.random.default_rng(4).random(len(users)) < 0.3).astype(np.int8)
+    rng = np.random.default_rng(5)
+    incumbent = labels + rng.normal(0, 1.5, len(labels))
+    raw_candidate = rng.normal(0, 1.0, len(labels))
+    internal_blend = 0.8 * incumbent + 0.2 * raw_candidate
+    valid = types.SimpleNamespace(user_id=users, y=labels)
+    test = types.SimpleNamespace(user_id=users[::-1], y=labels[::-1])
+
+    with tempfile.TemporaryDirectory() as tmp, _fake_data(valid, test):
+        run = Path(tmp)
+        artifacts = run / "artifacts"
+        out = run / "scripts" / "iter_3_out"
+        artifacts.mkdir()
+        out.mkdir(parents=True)
+        np.save(artifacts / "incumbent_valid_scores.npy", incumbent)
+        np.save(artifacts / "incumbent_test_scores.npy", incumbent[::-1])
+        (artifacts / "incumbent.json").write_text(json.dumps({
+            "iter_id": 2,
+            "valid_primary": evaluate(users, labels, incumbent)["primary"],
+        }), encoding="utf-8")
+        evaluator = types.SimpleNamespace(last_scores=internal_blend,
+                                          last_test_scores=internal_blend[::-1],
+                                          last_raw_scores=raw_candidate)
+        reported = evaluate(users, labels, internal_blend)
+        got = retain_or_blend(reported, evaluator, artifacts, run, 3)
+        raw_primary = evaluate(users, labels, raw_candidate)["primary"]
+
+        assert abs(got["raw_candidate_primary"] - raw_primary) < 1e-12
+        assert abs(got["raw_candidate_primary"] - reported["primary"]) > 1e-6
+        record = json.loads((run / "harness_ensembles.jsonl").read_text())
+        assert abs(record["candidate_primary"] - reported["primary"]) < 1e-12
+        assert abs(record["raw_candidate_primary"] - raw_primary) < 1e-12
+
+
+def test_harness_grid_can_keep_a_small_fold_confirmed_contribution():
+    users = np.repeat(np.arange(20), 4)
+    incumbent = np.tile(np.arange(4, dtype=np.float64), 20)
+    candidate = np.tile(np.array([3.0, 0.0, 2.0, 1.0]), 20)
+    inc_rank = _within_user_rank(users, incumbent)
+    can_rank = _within_user_rank(users, candidate)
+    target = 0.85 * inc_rank + 0.15 * can_rank
+    valid = types.SimpleNamespace(user_id=users, y=target)
+    test = types.SimpleNamespace(user_id=users[::-1], y=target[::-1])
+
+    def mse_metric(_user_id, labels, scores):
+        primary = -float(np.mean((np.asarray(labels) - np.asarray(scores)) ** 2))
+        return {"primary": primary, "gauc": primary, "ndcg@5": primary}
+
+    with tempfile.TemporaryDirectory() as tmp, _fake_data(valid, test), _fake_evaluate(mse_metric):
+        run = Path(tmp)
+        artifacts = run / "artifacts"
+        out = run / "scripts" / "iter_4_out"
+        artifacts.mkdir()
+        out.mkdir(parents=True)
+        np.save(artifacts / "incumbent_valid_scores.npy", incumbent)
+        np.save(artifacts / "incumbent_test_scores.npy", incumbent[::-1])
+        (artifacts / "incumbent.json").write_text(json.dumps({
+            "iter_id": 3, "valid_primary": mse_metric(users, target, incumbent)["primary"],
+        }), encoding="utf-8")
+        evaluator = types.SimpleNamespace(last_scores=candidate, last_test_scores=candidate[::-1])
+        got = retain_or_blend(mse_metric(users, target, candidate), evaluator, artifacts, run, 4)
+        record = json.loads((run / "harness_ensembles.jsonl").read_text())
+
+    assert got["harness_blend_alpha"] == 0.15, got
+    assert record["fold_grid"]["0.15"]["fold_a_gain"] > 0
+    assert record["fold_grid"]["0.15"]["fold_b_gain"] > 0
+
+
 def test_rank_transform_preserves_ties():
     ranks = _within_user_rank(
         np.array([1, 1, 1, 2, 2]), np.array([0.0, 0.0, 1.0, 4.0, 4.0]))
@@ -86,6 +174,34 @@ def test_blend_never_scores_below_the_incumbent_on_fold_a():
     assert got["accepted"], got
     assert got["fold_a_gain"] > 0, got
     assert got["members"], "a complementary pool must produce a blend"
+
+
+def test_portfolio_accepts_sub_epsilon_gain_when_it_clears_ensemble_min_gain():
+    from agent.ensemble import blend_portfolio
+
+    users = np.repeat(np.arange(4), 2)
+    y = np.tile([0, 1], 4).astype(np.int8)
+    fold_a = users < 2
+    fold_b = ~fold_a
+    incumbent = np.array([1, 0, 1, 0, 0, 1, 0, 1], dtype=np.float64)
+    member = np.array([0, 1, 1, 0, 0, 1, 0, 1], dtype=np.float64)
+
+    def tiny_metric(_user_id, labels, scores):
+        primary = float(np.sum(np.asarray(labels) * np.asarray(scores)) / 1000.0)
+        return {"primary": primary, "gauc": primary, "ndcg@5": primary}
+
+    with _fake_evaluate(tiny_metric):
+        accepted = blend_portfolio({"tiny": (member, None)}, incumbent, None,
+                                   users, y, fold_a, fold_b, epsilon=0.002)
+        old_gate = blend_portfolio({"tiny": (member, None)}, incumbent, None,
+                                   users, y, fold_a, fold_b, epsilon=0.002,
+                                   ensemble_min_gain=0.002)
+
+    assert accepted["accepted"], accepted
+    assert 1e-4 < accepted["fold_a_gain"] < 0.002
+    assert accepted["fold_b_gain"] >= -1e-4
+    assert not old_gate["accepted"]
+    assert old_gate["reason"] == "no member improved fold A"
 
 
 def test_blend_rejected_when_it_loses_on_fold_b():

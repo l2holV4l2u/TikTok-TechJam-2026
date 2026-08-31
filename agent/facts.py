@@ -18,34 +18,35 @@ from pipeline.evaluate import evaluate
 
 
 def measure(baseline: dict, seed: int = 0) -> dict:
-    """Row counts, date windows, the perfect-ranking ceiling and the random/item-pop rungs."""
+    """Row/date facts plus validation-only metric ceilings and sanity-check rungs."""
     tr, va, te = load("train"), load("valid"), load("test")
     f: dict = {}
     for name, sp in (("train", tr), ("valid", va), ("test", te)):
         d = np.asarray(sp.date)
-        f[f"{name}_rows"] = len(sp.y)
+        f[f"{name}_rows"] = len(sp)
         f[f"{name}_lo"], f[f"{name}_hi"] = int(d.min()), int(d.max())
         f[f"{name}_days"] = int(len(np.unique(d)))
 
-    te_u, te_y = np.asarray(te.user_id), np.asarray(te.y).astype(np.float64)
+    va_u, va_y = np.asarray(va.user_id), np.asarray(va.y).astype(np.float64)
     # scoring the label itself is a perfect ranking: the ceiling primary can reach here
-    f["ceiling"] = evaluate(te_u, te.y, te_y)["primary"]
+    f["ceiling"] = evaluate(va_u, va.y, va_y)["primary"]
     # users with no positive score 0 on nDCG and are excluded from GAUC -- they are why the
     # ceiling is not 1.0, so the agent needs the number to judge headroom
-    order = np.argsort(te_u, kind="stable")
-    u_sorted, y_sorted = te_u[order], te_y[order]
+    order = np.argsort(va_u, kind="stable")
+    u_sorted, y_sorted = va_u[order], va_y[order]
     _, starts = np.unique(u_sorted, return_index=True)
     pos_per_user = np.add.reduceat(y_sorted, starts)
     f["zero_pos_user_pct"] = 100.0 * float((pos_per_user == 0).mean())
 
     rng = np.random.default_rng(seed)
-    f["random_primary"] = evaluate(te_u, te.y, rng.random(len(te.y)))["primary"]
+    f["random_primary"] = evaluate(va_u, va.y, rng.random(len(va)))["primary"]
 
     tr_v, tr_y = np.asarray(tr.video_id), np.asarray(tr.y).astype(np.float64)
-    n_vid = int(max(tr_v.max(), np.asarray(te.video_id).max())) + 1
+    n_vid = int(max(tr_v.max(), np.asarray(va.video_id).max())) + 1
     pos = np.bincount(tr_v, weights=tr_y, minlength=n_vid)
     cnt = np.maximum(np.bincount(tr_v, minlength=n_vid), 1)
-    f["itempop_primary"] = evaluate(te_u, te.y, (pos / cnt)[np.asarray(te.video_id)])["primary"]
+    f["itempop_primary"] = evaluate(va_u, va.y, (pos / cnt)[np.asarray(va.video_id)])["primary"]
+    f["rung_split"] = "validation"
 
     # '@' is not a legal str.format key, so ndcg@5 -> ndcg5
     f.update({f"baseline_{k}".replace("@", ""): v

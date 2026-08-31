@@ -179,19 +179,30 @@ def test_parent_code_is_truncated_not_unbounded():
     100k-char parent cannot blow the prompt open, not that the prompt stays under any particular
     size.
     """
-    from agent.proposer import MAX_CODE_CHARS, _clip
-
     p, prompts = _capture()
     huge = Node(1, None, "h", "x" * 100_000, 0.6)
     p.propose(phase="improve", parent=huge)
-    assert len(prompts[0]) < MAX_CODE_CHARS + 25_000, len(prompts[0])
-    assert "TRUNCATED BY THE HARNESS" in prompts[0], "a clipped parent must say it is incomplete"
+    assert len(prompts[0]) < 90_000, len(prompts[0])
+    assert "clipped at" in prompts[0]
+
+
+def test_code_clipping_preserves_full_lines():
+    from agent.proposer import _clip_full_lines
+
+    text = "first = 1\n" + "second = '" + ("x" * 200) + "'\nthird = 3\n"
+    clipped = _clip_full_lines(text, max_chars=40)
+    assert "first = 1\n" in clipped
+    assert "second =" not in clipped, clipped
+    assert "clipped at 40 chars on a line boundary" in clipped
+
     # and a script of the size this project actually produces must arrive whole
+    from agent.proposer import MAX_CODE_CHARS, _clip_full_lines
     real = Node(2, None, "h", ("y = 1" + chr(10)) * 4_000, 0.6)   # ~24k chars
     p2, prompts2 = _capture()
     p2.propose(phase="improve", parent=real)
-    assert "TRUNCATED" not in prompts2[0], "a 24k-char script must not be clipped"
-    assert _clip(real.code) == real.code
+    assert "clipped at" not in prompts2[0], "a 24k-char script must not be clipped"
+    assert _clip_full_lines(real.code) == real.code
+    assert MAX_CODE_CHARS >= 25_000, MAX_CODE_CHARS
 
 
 def test_blacklisted_hypothesis_never_returned():
@@ -396,8 +407,8 @@ def test_the_sweep_offers_a_training_distribution_axis_not_only_families():
     # r81 ran recency weighting as a side component the blender damped to +0.00002, so the
     # axis reads as tried unless the prompt says which version is still open.
     assert "MAIN model's sample_weight" in sweep
-    # a chronological selection window ranked worse against test than the full 7 days
-    assert "REFUTED" in sweep, "a measured dead end must not be offered as an axis"
+    assert "Never use test feedback" in sweep
+    assert "Spearman" not in sweep and "worse hidden test" not in sweep
 
 
 def test_sibling_slots_are_disclosed_so_a_turn_does_not_duplicate_itself():

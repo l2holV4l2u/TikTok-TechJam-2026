@@ -1,12 +1,10 @@
 """Guard against the winner's curse when more candidates are compared on one validation split.
 
 Selecting the maximum of k candidates on a finite validation set returns a score inflated by
-selection alone, and that inflation does not transfer to test. Against this benchmark's
+selection alone, and that inflation need not generalise. Against this benchmark's
 reported 5-seed sigma of 0.0008 the expected inflation is roughly +0.00114 at k=8, +0.00145 at
 k=18 and +0.00180 at k=50 -- so a portfolio that triples the number of candidates compared
-buys about +0.0003 of validation that is not real. The run's own history shows the failure
-mode already: r74 has the better validation (0.6049 vs 0.6047) and the worse hidden test
-(0.5991 vs 0.5998).
+buys about +0.0003 of validation that is not real.
 
 The remedy is not to compare fewer things. It is to stop letting one split both propose and
 confirm: choose on fold A, require the choice not to fall apart on fold B. Folds are grouped by

@@ -161,17 +161,18 @@ class Split:
 
 
 class HiddenTestLabels:
-    """Length-only stand-in used inside generated experiment subprocesses.
+    """Stand-in used when the fixed test split is loaded.
 
-    Legitimate test scoring sometimes allocates by ``len(test.y)``; it never needs the label
-    values.  Keeping length/shape compatible avoids breaking that code while any attempted
-    conversion or indexing fails with an actionable leakage error.
+    The challenge FAQ says test labels must not be used in any way.  The test split still
+    exposes row-aligned features, user ids and video ids for prediction/output; code that needs
+    a row count should prefer ``len(test)`` or ``len(test.user_id)``.  Length/shape stay
+    available for legacy controller shape checks, but every value-bearing operation is blocked.
     """
 
     dtype = np.dtype(np.int8)
 
     def __init__(self, n: int):
-        self.shape = (n,)
+        self.shape = (int(n),)
 
     def __len__(self) -> int:
         return self.shape[0]
@@ -193,11 +194,6 @@ class HiddenTestLabels:
         self._blocked()
 
     def __getattr__(self, name):
-        # Any other array-like access -- .astype, .mean, .sum, .tolist -- must give the same
-        # actionable message. Without this it surfaced as a bare AttributeError
-        # ("'HiddenTestLabels' object has no attribute 'astype'. Did you mean: 'dtype'?"),
-        # which reads as a bug in the harness rather than a rule, and cost an iteration to
-        # a script that then had no idea what it had done wrong.
         if name.startswith("_"):
             raise AttributeError(name)
         self._blocked()
@@ -231,6 +227,13 @@ def _cache_root() -> Path:
     return Path(os.environ.get("KUAIRAND_CACHE_DIR", "data/cache"))  # env override lets tests use an isolated cache
 
 
+def _hide_test_labels() -> bool:
+    """Hide the fixed test labels unless a local diagnostic opts in explicitly."""
+    if os.environ.get("AGENT_HIDE_TEST_LABELS") == "1":
+        return True
+    return os.environ.get("AGENT_ALLOW_TEST_LABELS") != "1"
+
+
 def load(split: str) -> Split:
     if split not in ("train", "valid", "test"):
         raise ValueError(f"split must be one of train/valid/test, got {split!r}")
@@ -245,13 +248,14 @@ def load(split: str) -> Split:
 
     user_id = np.load(split_dir / "user_id.npy", mmap_mode="r")
     video_id = np.load(split_dir / "video_id.npy", mmap_mode="r")
-    raw_y = np.load(split_dir / "y.npy", mmap_mode="r")
-    y = (HiddenTestLabels(len(raw_y))
-         if split == "test" and os.environ.get("AGENT_HIDE_TEST_LABELS") == "1"
-         else raw_y)
+    hidden_test = split == "test" and _hide_test_labels()
+    # Do not even open the cached outcome files during a benchmark run. Hiding values only
+    # after np.load() still leaves a code-review trail that touches the forbidden labels.
+    y = (HiddenTestLabels(len(user_id)) if hidden_test
+         else np.load(split_dir / "y.npy", mmap_mode="r"))
     X = {feat: np.load(split_dir / f"X_{feat}.npy", mmap_mode="r") for feat in FEATURE_CARDINALITIES}
     aux = (HiddenTestOutcomes()
-           if split == "test" and os.environ.get("AGENT_HIDE_TEST_LABELS") == "1"
+           if hidden_test
            else {name: np.load(split_dir / f"aux_{name}.npy", mmap_mode="r")
                  for name in AUX_DTYPES})
     # the impression date. It is what the splits are defined by, and the train window is 13 days
