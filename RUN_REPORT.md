@@ -1,154 +1,702 @@
-# Slot-ladder comparison
+# Run report - r96
 
-How many solution lineages the agent should advance per turn. 5 runs across 5 slot counts, 1 to 5 lineages per turn.
+## Loop stages executed by the agent
 
-## Configuration
+- **Inspect data (EDA):** completed at iteration #0 - the agent wrote and ran its own exploratory script; its findings are in `eda_report.txt` and were carried into every later prompt.
+- **Reproduce official baseline (Requirement 1):** 1 attempt(s); the agent's own pipeline reached validation primary **0.6020** against the official 0.6016 (delta +0.0004, inside the baseline's 5-seed noise). That script became the root of the search tree.
+- **Iterate:** 12 experiments proposed, executed and evaluated by the agent, each branching from a node of its own search tree.
 
-| setting | value |
-|---|---|
-| model | gpt-5.6-sol |
-| data contract | train-only-v3 |
-| epsilon | 0.002 |
-| N (patience) | 3 |
-| iteration cap | 50 |
-| dataset | KuaiRand-Pure |
-| runs compared | 5 |
+## Iteration log
 
-Cost columns are omitted: the run records hold token counts, not prices. Pass `--price-in=` and `--price-out=` in USD per 1M tokens to include them.
+A turn is one hypothesis-to-score cycle and advances several lineages at once, so `turn` and `slot` say when an experiment ran and which lineage produced it. The convergence rule is measured against turns; the 50-cap counts scripts.
 
-## What each rung produced
+| # | turn | slot | phase | parent | status | secs | primary | vs baseline | hypothesis |
+|---|---|---|---|---|---|---|---|---|---|
+| 0 | 0 | - | eda | - | ok | 28 | n/a | - | In the data-inspection stage, quantify temporal label drift, user spar |
+| 1 | 0 | - | baseline | - | ok | 144 | 0.6020 | +0.0004 | Reproduce the official baseline at the modeling stage using a k=16 Fac |
+| 2 | 1 | 0 | improve | #1 | ok | 783 | 0.6042 | +0.0026 | At the model/training stage, compare recency-weighted DeepFM, recency- |
+| 3 | 1 | 1 | improve | #1 | kept | 826 | 0.6047 | +0.0031 | At the model and objective stages, compare a rich-feature DCN, a withi |
+| 4 | 1 | 2 | improve | #1 | kept | 1042 | 0.6050 | +0.0034 | At the model and drift-robust training stages, compare recency-weighte |
+| 5 | 2 | 0 | improve | #4 | kept | 161 | 0.6056 | +0.0040 | At the prediction-forming and objective stages, compare a chronologica |
+| 6 | 2 | 1 | improve | #4 | kept | 74 | 0.6056 | +0.0040 | At the objective and prediction-forming stages, compare a recency-weig |
+| 7 | 2 | 2 | improve | #4 | kept | 23 | 0.6056 | +0.0040 | At the prediction-forming and drift-handling stages, compare temporall |
+| 8 | 3 | 0 | improve | #5 | kept | 309 | 0.6056 | +0.0040 | At the prediction-forming and drift-robust training stages, compare ex |
+| 9 | 3 | 1 | improve | #5 | kept | 353 | 0.6056 | +0.0040 | At the feature and prediction-forming stages, leakage-safe date-cross- |
+| 10 | 3 | 2 | improve | #5 | kept | 25 | 0.6056 | +0.0040 | At the drift-aware feature and prediction-forming stages, compare time |
+| 11 | 4 | 0 | improve | #10 | kept | 340 | 0.6058 | +0.0042 | At the objective and sequence-feature stages, compare recency-weighted |
+| 12 | 4 | 1 | improve | #10 | kept | 374 | 0.6058 | +0.0042 | At the model and drift-weighting stages, compare recency-weighted fiel |
+| 13 | 4 | 2 | improve | #10 | kept | 35 | 0.6058 | +0.0042 | At the prediction-forming stage, compare graph diffusion over the trai |
 
-Same agent, same dataset, same data contract, same convergence rule. The only difference is `--slots`. Where a slot count has repeats, the cell shows the mean with the observed range in brackets.
+## Portfolio
 
-| slots | runs | validation | hidden test | vs baseline | wall clock | tokens | scripts | turns |
-|---|---|---|---|---|---|---|---|---|
-| **1** | 1 | 0.604523 | **0.598583** | +0.003983 | 14.4 min | 137,079 | 7 | 5 |
-| **2** | 1 | 0.605608 | **0.598459** | +0.003859 | 16.6 min | 163,773 | 10 | 4 |
-| **3** | 1 | 0.605565 | **0.598832** | +0.004232 | 25.2 min | 236,564 | 14 | 4 |
-| **4** | 1 | 0.604810 | **0.598487** | +0.003887 | 26.4 min | 303,430 | 18 | 4 |
-| **5** | 1 | 0.606296 | **0.598881** | +0.004281 | 36.6 min | 456,617 | 27 | 5 |
+- Lineages advanced per turn: **3**
+- Turns: **4**  ·  scripts executed: **14** of 50
+- A turn is one hypothesis-to-score cycle -- Figure 1's iteration, and what the convergence rule is measured against. Scripts are reported separately so the run can be checked against the stricter reading of the 50-iteration cap as well.
+- Lineages archived: **3**  ·  revived from the archive: **0**
 
-Baseline for the `vs baseline` column is the official baseline: validation 0.6016, hidden test 0.5946. `scripts` and `turns` are listed per run rather than averaged, because they are counts of work done and an average of them describes no run that was actually executed.
+### Did the lineages actually disagree?
 
-## Where the score stops moving
+Within-user rank correlation between the live slots' validation predictions. This is the acceptance test for the whole design: above ~0.95 the extra slots are three copies of one agent and bought nothing.
 
-Marginal change from adding one more lineage. The noise floor here is the baseline's published 5-seed sigma (0.0008), used because no rung has been repeated -- repeat the ladder to measure it directly. A difference below it is not evidence of anything.
-
-| step | test | delta | reading | tokens | delta | wall | delta |
-|---|---|---|---|---|---|---|---|
-| 1 slot | 0.598583 | - | starting point | 137,079 | - | 14.4 min | - |
-| 1 -> 2 | 0.598459 | -0.000124 | within noise | 163,773 | +26,694 | 16.6 min | +2.2 |
-| 2 -> 3 | 0.598832 | +0.000373 | within noise | 236,564 | +72,791 | 25.2 min | +8.6 |
-| 3 -> 4 | 0.598487 | -0.000345 | within noise | 303,430 | +66,866 | 26.4 min | +1.2 |
-| 4 -> 5 | 0.598881 | +0.000394 | within noise | 456,617 | +153,187 | 36.6 min | +10.2 |
-
-**The curve is flat from 1 slot onward.** Rungs 1, 2, 3, 4, 5 all land within 0.00080 of the best result (0.598881 at 5 slots), so on this evidence they are indistinguishable on the hidden test. Across that flat span the spend still rises from 137,079 to 456,617 tokens (3.3x) and from 14.4 to 36.6 minutes.
-
-The honest reading is that everything past 1 slot is bought and not delivered: cost scales close to linearly in the slot count while the scored result does not move outside noise.
-
-## Validation vs test: is the extra search buying score or noise?
-
-`gap` is validation minus hidden test for the submitted iteration. A gap that widens with the slot count, while test does not improve, means the added lineages are winning on validation noise rather than finding transferable signal.
-
-| slots | candidates compared | validation | hidden test | gap | gap vs 1 slot |
-|---|---|---|---|---|---|
-| 1 | 92 | 0.604523 | 0.598583 | 0.005941 | +0.000000 |
-| 2 | 224 | 0.605608 | 0.598459 | 0.007149 | +0.001209 |
-| 3 | 249 | 0.605565 | 0.598832 | 0.006733 | +0.000792 |
-| 4 | 330 | 0.604810 | 0.598487 | 0.006323 | +0.000382 |
-| 5 | 578 | 0.606296 | 0.598881 | 0.007415 | +0.001474 |
-
-Rank correlation between candidates compared and the validation-test gap: **+0.60** over 5 rungs. Positive means more comparison produces more validation inflation. At n=5 this is suggestive at best.
-
-The gap spans 0.001474 across the ladder, against a noise floor of 0.00080. That is larger than the floor, so the differences in generalisation are worth taking seriously.
-
-## Where the gain happens inside a run
-
-Share of each run's total validation gain reached by iteration k. The convergence rule stops these runs at turn 4-5; this shows how much was already banked by then.
-
-| slots | run | improve iters | total gain | by #1 | by #2 | by #4 | last gain at |
-|---|---|---|---|---|---|---|---|
-| 1 | `s1_r1` | 4 | +0.00068 | 43% | 97% | - | #4 of 4 |
-| 2 | `s2_r1` | 8 | +0.00179 | 66% | 66% | 87% | #7 of 8 |
-| 3 | `s3_r1` | 12 | +0.00358 | 10% | 64% | 79% | #11 of 12 |
-| 4 | `s4_r1` | 16 | +0.00136 | 1% | 2% | 90% | #7 of 16 |
-| 5 | `s5_r1` | 20 | +0.00343 | 0% | 37% | 51% | #18 of 20 |
-
-`last gain at` is the final iteration that set a new best. A run whose last gain is well before its final iteration spent the remainder finding nothing.
-
-## Cost of the result
-
-| slots | tokens | wall | test | tokens per 0.0001 of test delta | verdict |
-|---|---|---|---|---|---|
-| 1 | 137,079 | 14.4 min | 0.598583 | 3,442 | **best value** |
-| 2 | 163,773 | 16.6 min | 0.598459 | 4,244 | ties the best for 1.2x the cost |
-| 3 | 236,564 | 25.2 min | 0.598832 | 5,590 | ties the best for 1.7x the cost |
-| 4 | 303,430 | 26.4 min | 0.598487 | 7,806 | ties the best for 2.2x the cost |
-| 5 | 456,617 | 36.6 min | 0.598881 | 10,667 | ties the best for 3.3x the cost |
-
-The `tokens per 0.0001` column divides the whole run's spend by the test gain over the official baseline. It is a blunt figure -- it charges the baseline reproduction and EDA to the improvement -- but it is the number that decides whether a rung is worth running.
-
-## What the spend bought
-
-| slots | tokens | tokens/slot | wall clock | script time | candidates compared | candidates/1k tokens |
-|---|---|---|---|---|---|---|
-| 1 | 137,079 | 137,079 | 14.4 min | 3.6 min | 92 | 0.67 |
-| 2 | 163,773 | 81,886 | 16.6 min | 5.5 min | 224 | 1.37 |
-| 3 | 236,564 | 78,855 | 25.2 min | 15.8 min | 249 | 1.05 |
-| 4 | 303,430 | 75,858 | 26.4 min | 9.7 min | 330 | 1.09 |
-| 5 | 456,617 | 91,323 | 36.6 min | 10.3 min | 578 | 1.27 |
-
-`candidates compared` counts the alternatives evaluated INSIDE scripts, which is where most of the search happens: a script may build and compare a dozen models for one iteration of budget. It rises with the slot count, so the extra lineages are doing real work -- the question the table above answers is whether that work reaches the score.
-
-## Where the wall-clock time goes
-
-`script` is time executing the agent's code; the remainder is dominated by LLM latency. The split matters operationally: a run that is mostly latency parallelises almost free, while one that is mostly compute contends for cores.
-
-| slots | wall | script time | script share | remainder (LLM etc.) |
+| turn | scripts | mean corr | max corr | alert |
 |---|---|---|---|---|
-| 1 | 14.4 min | 3.6 min | 25% | 10.8 min |
-| 2 | 16.6 min | 5.5 min | 33% | 11.1 min |
-| 3 | 25.2 min | 15.8 min | 63% | 9.3 min |
-| 4 | 26.4 min | 9.7 min | 37% | 16.7 min |
-| 5 | 36.6 min | 10.3 min | 28% | 26.2 min |
+| 1 | #2, #3, #4 | 0.9017 | 0.9188 | no |
+| 2 | #5, #6, #7 | 0.6509 | 0.7327 | no |
+| 3 | #8, #9, #10 | 0.7397 | 0.9111 | no |
+| 4 | #11, #12, #13 | 0.5676 | 0.7545 | no |
 
-Compute share ranges from 25% (1 slots) to 63% (3 slots) -- it does not rise monotonically with the slot count, because what a script costs depends on the model the agent chose to write, not only on how many scripts run. Slots already execute concurrently inside a run (`agent/loop.py:737`) and no thread counts are pinned, so running several ladder rungs at once would contend for cores, and would contend by different amounts per rung. That is why this ladder is run sequentially: the wall-clock and token columns above are the comparison, and overlapping the runs would corrupt them.
+### Lineages retired and replaced
 
-## Did the extra lineages disagree?
+A slot that stops beating its own best is archived, not stopped -- the run's convergence counter is untouched by it. Refill alternates fresh drafts with a revival, and a revival is chosen for score AND for disagreeing with what is already live.
 
-Within-user rank correlation between the slots' own pre-blend models. Above ~0.95 the extra lineages rank validation identically and return one lineage's information for n lineages' spend.
+| turn | slot | archived at | choice | detail |
+|---|---|---|---|---|
+| 3 | 0 | 0.6056 | fresh | new draft |
+| 3 | 1 | 0.6056 | fresh | new draft |
+| 3 | 2 | 0.6056 | fresh | new draft |
 
-| slots | run | per-turn mean | mean across turns | last turn (`mean_slot_correlation`) | reading |
-|---|---|---|---|---|---|
-| 2 | `s2_r1` | 0.932 -> 0.759 -> 0.756 -> 0.453 | **0.725** | 0.453 | lineages genuinely differ |
-| 3 | `s3_r1` | 0.831 -> 0.780 -> 0.596 -> 0.720 | **0.732** | 0.720 | lineages genuinely differ |
-| 4 | `s4_r1` | 0.767 -> 0.784 -> 0.803 -> 0.756 | **0.778** | 0.756 | lineages genuinely differ |
-| 5 | `s5_r1` | 0.862 -> 0.741 -> 0.670 -> 0.535 -> 0.459 | **0.653** | 0.459 | lineages genuinely differ |
+### Controller blend of the portfolio
 
-The last-turn column is what `run_meta.json` records; it is a single turn and swings widely, so the verdict above is taken from the average across turns.
+Every turn the controller blends the trusted incumbent, the live slots and the archive, choosing members on one half of validation and confirming on the other. A blend that wins the selection fold and loses the confirmation fold is refused: it won the split, not the task.
 
-## Reliability across the ladder
-
-| slots | run | scripts | crashes | integrity rejections | manual interventions | stop reason |
+| turn | pool | accepted | members | fold A | fold B | reason |
 |---|---|---|---|---|---|---|
-| 1 | `s1_r1` | 7 | 1 | 0 | 0 | `converged` |
-| 2 | `s2_r1` | 10 | 0 | 0 | 0 | `converged` |
-| 3 | `s3_r1` | 14 | 0 | 0 | 0 | `converged` |
-| 4 | `s4_r1` | 18 | 0 | 0 | 0 | `converged` |
-| 5 | `s5_r1` | 27 | 5 | 0 | 0 | `converged` |
+| 1 | 3 | no | - | - | - | no member improved fold A |
+| 2 | 3 | no | - | - | - | no member improved fold A |
+| 3 | 3 | no | - | - | - | no member improved fold A |
+| 4 | 6 | no | - | - | - | no member improved fold A |
 
-`crashes` counts scripts that failed to produce a scored result, separately from integrity rejections, which are results the critic refused. Both are handled in the loop; neither reaches a human.
+## Code diff applied, per iteration
 
-## Score curve within each run
+Each iteration edits a parent script. This is that edit, reconstructed from the two full sources in the ledger, truncated to the first 40 lines per iteration.
 
-The run's best validation score after each scored improve iteration. This is the curve the convergence rule is measured against.
 
-- **1 slot(s)** (`s1_r1`): 0.6038 -> 0.6041 -> 0.6045 -> 0.6045
-- **2 slot(s)** (`s2_r1`): 0.6038 -> 0.6050 -> 0.6050 -> 0.6052 -> 0.6054 -> 0.6054 -> 0.6056 -> 0.6056
-- **3 slot(s)** (`s3_r1`): 0.6020 -> 0.6023 -> 0.6043 -> 0.6048 -> 0.6048 -> 0.6049 -> 0.6051 -> 0.6052 -> 0.6052 -> 0.6052 -> 0.6056 -> 0.6056
-- **4 slot(s)** (`s4_r1`): 0.6035 -> 0.6035 -> 0.6035 -> 0.6044 -> 0.6047 -> 0.6047 -> 0.6048 -> 0.6048 -> 0.6048 -> 0.6048 -> 0.6048 -> 0.6048 -> 0.6048 -> 0.6048 -> 0.6048 -> 0.6048
-- **5 slot(s)** (`s5_r1`): 0.6029 -> 0.6029 -> 0.6041 -> 0.6042 -> 0.6046 -> 0.6046 -> 0.6050 -> 0.6050 -> 0.6050 -> 0.6062 -> 0.6062 -> 0.6062 -> 0.6062 -> 0.6062 -> 0.6062 -> 0.6062 -> 0.6062 -> 0.6063 -> 0.6063 -> 0.6063
+**#1 -> #2**  (+363 / -100 lines)
 
-## Caveat
+```diff
+--- iter_1.py
++++ iter_2.py
+@@ -5,124 +5,389 @@
+ import torch
+ import torch.nn as nn
++import lightgbm as lgb
+ 
+ from pipeline.data import load, FEATURE_CARDINALITIES
++from pipeline.history import historical_features
+ from pipeline.evaluate import evaluate
+ 
+ 
+ START_TIME = time.time()
+-SEED = 2024
+-
++SEED = 2025
+ np.random.seed(SEED)
+ torch.manual_seed(SEED)
+ torch.set_num_threads(min(16, os.cpu_count() or 1))
+ 
+-FIELDS = ["user_id", "video_id", "author_id", "tab", "duration_bucket"]
+-EMBED_DIM = 16
+-LEARNING_RATE = 0.001
+-BATCH_SIZE = 4096
+-EPOCHS = 5
+-
+-
+-def make_matrix(split):
+-    offsets = np.cumsum(
+-        np.asarray([0] + [FEATURE_CARDINALITIES[f] for f in FIELDS[:-1]],
+-                   dtype=np.int64)
+-    )
+-    columns = [
+-        np.asarray(split.X[field], dtype=np.int64) + offsets[j]
+-        for j, field in enumerate(FIELDS)
++OUT_DIR = os.environ.get("ITER_OUT")
++SHARED = os.environ.get("SHARED_ARTIFACTS")
++
++FIELDS = [
++    "author_id", "duration_bucket", "fans_user_num_range",
+... 462 more diff lines
+```
 
-Each rung is a single run. Run-to-run spread on this benchmark is roughly 0.0008 on the scored metric -- the same size as most of the differences above -- so this ladder shows the SHAPE of the cost/score curve rather than a precise value for any rung, and any plateau claim rests on several rungs agreeing rather than on any single pair. Repeating each rung would replace that assumed noise figure with a measured one.
+**#1 -> #3**  (+454 / -103 lines)
+
+```diff
+--- iter_1.py
++++ iter_3.py
+@@ -5,4 +5,6 @@
+ import torch
+ import torch.nn as nn
++import scipy.sparse as sp
++from scipy.sparse.linalg import svds
+ 
+ from pipeline.data import load, FEATURE_CARDINALITIES
+@@ -10,103 +12,414 @@
+ 
+ 
+-START_TIME = time.time()
+-SEED = 2024
+-
++START = time.time()
++SEED = 2025
+ np.random.seed(SEED)
+ torch.manual_seed(SEED)
+ torch.set_num_threads(min(16, os.cpu_count() or 1))
+ 
+-FIELDS = ["user_id", "video_id", "author_id", "tab", "duration_bucket"]
+-EMBED_DIM = 16
+-LEARNING_RATE = 0.001
+-BATCH_SIZE = 4096
+-EPOCHS = 5
+-
+-
+-def make_matrix(split):
+-    offsets = np.cumsum(
+-        np.asarray([0] + [FEATURE_CARDINALITIES[f] for f in FIELDS[:-1]],
+-                   dtype=np.int64)
++FIELDS = list(FEATURE_CARDINALITIES.keys())
++NUM_FIELDS = [
++    "duration_ms",
++    "user_fans_user_num",
++    "user_follow_user_num",
++    "user_friend_user_num",
++    "user_register_days",
++]
+... 548 more diff lines
+```
+
+**#1 -> #4**  (+387 / -79 lines)
+
+```diff
+--- iter_1.py
++++ iter_4.py
+@@ -11,58 +11,277 @@
+ 
+ START_TIME = time.time()
+-SEED = 2024
+-
++SEED = 2025
+ np.random.seed(SEED)
+ torch.manual_seed(SEED)
+ torch.set_num_threads(min(16, os.cpu_count() or 1))
+ 
+-FIELDS = ["user_id", "video_id", "author_id", "tab", "duration_bucket"]
+-EMBED_DIM = 16
+-LEARNING_RATE = 0.001
++FIELDS = [
++    "user_id",
++    "video_id",
++    "author_id",
++    "tab",
++    "duration_bucket",
++    "hour",
++    "tag",
++    "upload_type",
++    "music_type",
++    "user_active_degree",
++    "is_live_streamer",
++    "is_video_author",
++    "follow_user_num_range",
++    "fans_user_num_range",
++    "friend_user_num_range",
++    "register_days_range",
++    "onehot_feat3",
++    "onehot_feat7",
++    "onehot_feat8",
++    "video_type",
++]
++
++EMBED_DIM = 8
+ BATCH_SIZE = 4096
+... 472 more diff lines
+```
+
+**#4 -> #5**  (+413 / -371 lines)
+
+```diff
+--- iter_4.py
++++ iter_5.py
+@@ -2,14 +2,17 @@
+ import time
+ import json
++import gc
+ import numpy as np
+ import torch
+ import torch.nn as nn
++import lightgbm as lgb
+ 
+ from pipeline.data import load, FEATURE_CARDINALITIES
++from pipeline.history import historical_features
+ from pipeline.evaluate import evaluate
+ 
+ 
+-START_TIME = time.time()
+-SEED = 2025
++START = time.time()
++SEED = 7319
+ np.random.seed(SEED)
+ torch.manual_seed(SEED)
+@@ -17,55 +20,20 @@
+ 
+ FIELDS = [
+-    "user_id",
+-    "video_id",
+-    "author_id",
+-    "tab",
+-    "duration_bucket",
+-    "hour",
+-    "tag",
+-    "upload_type",
+-    "music_type",
+-    "user_active_degree",
+-    "is_live_streamer",
+-    "is_video_author",
+-    "follow_user_num_range",
+-    "fans_user_num_range",
+-    "friend_user_num_range",
+... 819 more diff lines
+```
+
+**#4 -> #6**  (+433 / -305 lines)
+
+```diff
+--- iter_4.py
++++ iter_6.py
+@@ -5,11 +5,14 @@
+ import torch
+ import torch.nn as nn
++from scipy import sparse
++from scipy.sparse.linalg import svds
+ 
+ from pipeline.data import load, FEATURE_CARDINALITIES
++from pipeline.history import historical_features
+ from pipeline.evaluate import evaluate
+ 
+ 
+-START_TIME = time.time()
+-SEED = 2025
++START = time.time()
++SEED = 7319
+ np.random.seed(SEED)
+ torch.manual_seed(SEED)
+@@ -25,47 +28,39 @@
+     "tag",
+     "upload_type",
+-    "music_type",
+     "user_active_degree",
+     "is_live_streamer",
+     "is_video_author",
++    "fans_user_num_range",
+     "follow_user_num_range",
+-    "fans_user_num_range",
+-    "friend_user_num_range",
+     "register_days_range",
+-    "onehot_feat3",
+-    "onehot_feat7",
+-    "onehot_feat8",
+-    "video_type",
+ ]
+-
+-EMBED_DIM = 8
+-BATCH_SIZE = 4096
+-PRED_BATCH_SIZE = 16384
+... 813 more diff lines
+```
+
+**#4 -> #7**  (+401 / -386 lines)
+
+```diff
+--- iter_4.py
++++ iter_7.py
+@@ -3,6 +3,6 @@
+ import json
+ import numpy as np
+-import torch
+-import torch.nn as nn
++from scipy import sparse
++from scipy.sparse.linalg import svds
+ 
+ from pipeline.data import load, FEATURE_CARDINALITIES
+@@ -10,62 +10,47 @@
+ 
+ 
+-START_TIME = time.time()
+-SEED = 2025
+-np.random.seed(SEED)
+-torch.manual_seed(SEED)
+-torch.set_num_threads(min(16, os.cpu_count() or 1))
+-
+-FIELDS = [
+-    "user_id",
++START = time.time()
++np.random.seed(2026)
++
++GLOBAL_FIELDS = [
+     "video_id",
+     "author_id",
+-    "tab",
++    "tag",
+     "duration_bucket",
+-    "hour",
+-    "tag",
++    "onehot_feat3",
++    "onehot_feat8",
+     "upload_type",
+     "music_type",
+-    "user_active_degree",
+-    "is_live_streamer",
+-    "is_video_author",
+... 808 more diff lines
+```
+
+**#5 -> #8**  (+427 / -346 lines)
+
+```diff
+--- iter_5.py
++++ iter_8.py
+@@ -6,5 +6,6 @@
+ import torch
+ import torch.nn as nn
+-import lightgbm as lgb
++import scipy.sparse as sp
++from scipy.sparse.linalg import svds
+ 
+ from pipeline.data import load, FEATURE_CARDINALITIES
+@@ -14,5 +15,5 @@
+ 
+ START = time.time()
+-SEED = 7319
++SEED = 19427
+ np.random.seed(SEED)
+ torch.manual_seed(SEED)
+@@ -30,10 +31,9 @@
+     "user_friend_user_num", "user_register_days",
+ ]
+-SEQ_LEN = 12
+ EMBED_DIM = 8
+-BATCH_SIZE = 4096
++TRAIN_BATCH = 4096
+ PRED_BATCH = 16384
+-DIN_EPOCHS = 2
+-DIN_HALF_LIFE = 5.0
++EPOCHS = 2
++HALF_LIFE = 4.0
+ 
+ 
+@@ -43,30 +43,30 @@
+     n = len(scores)
+     order = np.lexsort((np.arange(n, dtype=np.int64), scores, user_ids))
+-    su = user_ids[order]
+-
+-    starts = np.empty(n, dtype=bool)
+-    starts[0] = True
+-    starts[1:] = su[1:] != su[:-1]
+-    start_pos = np.maximum.accumulate(
+... 834 more diff lines
+```
+
+**#5 -> #9**  (+480 / -341 lines)
+
+```diff
+--- iter_5.py
++++ iter_9.py
+@@ -9,20 +9,23 @@
+ 
+ from pipeline.data import load, FEATURE_CARDINALITIES
+-from pipeline.history import historical_features
+ from pipeline.evaluate import evaluate
+ 
+ 
+ START = time.time()
+-SEED = 7319
++SEED = 18437
+ np.random.seed(SEED)
+ torch.manual_seed(SEED)
+ torch.set_num_threads(min(16, os.cpu_count() or 1))
+ 
+-FIELDS = [
++CAT_FIELDS = [
+     "user_id", "video_id", "author_id", "tab", "duration_bucket",
+     "hour", "tag", "upload_type", "music_type", "user_active_degree",
+-    "is_live_streamer", "is_video_author", "follow_user_num_range",
+-    "fans_user_num_range", "friend_user_num_range", "register_days_range",
+-    "onehot_feat3", "onehot_feat7", "onehot_feat8", "video_type",
++    "is_live_streamer", "is_video_author", "onehot_feat3",
++    "onehot_feat8", "video_type",
++]
++PNN_FIELDS = [
++    "user_id", "video_id", "author_id", "tab", "duration_bucket",
++    "hour", "tag", "upload_type", "music_type", "user_active_degree",
++    "onehot_feat3", "onehot_feat8",
+ ]
+ NUM_FIELDS = [
+@@ -30,10 +33,18 @@
+     "user_friend_user_num", "user_register_days",
+ ]
+-SEQ_LEN = 12
++N_FOLDS = 4
++SMOOTH = 12.0
++HALF_LIFE = 4.0
+ EMBED_DIM = 8
+... 890 more diff lines
+```
+
+**#5 -> #10**  (+411 / -404 lines)
+
+```diff
+--- iter_5.py
++++ iter_10.py
+@@ -4,36 +4,34 @@
+ import gc
+ import numpy as np
+-import torch
+-import torch.nn as nn
+-import lightgbm as lgb
++from scipy import sparse
++from scipy.sparse.linalg import svds
+ 
+ from pipeline.data import load, FEATURE_CARDINALITIES
+-from pipeline.history import historical_features
+ from pipeline.evaluate import evaluate
+ 
+ 
+ START = time.time()
+-SEED = 7319
++SEED = 19427
+ np.random.seed(SEED)
+-torch.manual_seed(SEED)
+-torch.set_num_threads(min(16, os.cpu_count() or 1))
+-
+-FIELDS = [
+-    "user_id", "video_id", "author_id", "tab", "duration_bucket",
+-    "hour", "tag", "upload_type", "music_type", "user_active_degree",
+-    "is_live_streamer", "is_video_author", "follow_user_num_range",
+-    "fans_user_num_range", "friend_user_num_range", "register_days_range",
+-    "onehot_feat3", "onehot_feat7", "onehot_feat8", "video_type",
+-]
+-NUM_FIELDS = [
+-    "duration_ms", "user_fans_user_num", "user_follow_user_num",
+-    "user_friend_user_num", "user_register_days",
+-]
+-SEQ_LEN = 12
+-EMBED_DIM = 8
+-BATCH_SIZE = 4096
+-PRED_BATCH = 16384
+-DIN_EPOCHS = 2
+-DIN_HALF_LIFE = 5.0
+... 838 more diff lines
+```
+
+**#10 -> #11**  (+337 / -388 lines)
+
+```diff
+--- iter_10.py
++++ iter_11.py
+@@ -4,33 +4,41 @@
+ import gc
+ import numpy as np
+-from scipy import sparse
+-from scipy.sparse.linalg import svds
+-
+-from pipeline.data import load, FEATURE_CARDINALITIES
++import lightgbm as lgb
++
++from pipeline.data import load
++from pipeline.history import historical_features
+ from pipeline.evaluate import evaluate
+ 
+ 
+ START = time.time()
+-SEED = 19427
++SEED = 73191
+ np.random.seed(SEED)
+ 
+-PAIR_FIELDS = ["video_id", "author_id", "tag", "duration_bucket"]
+-PAIR_WEIGHTS = {
+-    "video_id": 0.38,
+-    "author_id": 0.30,
+-    "tag": 0.20,
+-    "duration_bucket": 0.12,
+-}
+-ENTITY_SMOOTH = {
+-    "video_id": 18.0,
+-    "author_id": 22.0,
+-    "tag": 45.0,
+-    "duration_bucket": 90.0,
+-}
+-PAIR_SMOOTH = {
+-    "video_id": 3.0,
+-    "author_id": 5.0,
+-    "tag": 8.0,
+-    "duration_bucket": 12.0,
++CAT_FIELDS = [
+... 748 more diff lines
+```
+
+**#10 -> #12**  (+416 / -373 lines)
+
+```diff
+--- iter_10.py
++++ iter_12.py
+@@ -4,6 +4,7 @@
+ import gc
+ import numpy as np
+-from scipy import sparse
+-from scipy.sparse.linalg import svds
++import torch
++import torch.nn as nn
++import torch.nn.functional as F
+ 
+ from pipeline.data import load, FEATURE_CARDINALITIES
+@@ -12,26 +13,34 @@
+ 
+ START = time.time()
+-SEED = 19427
++SEED = 27183
+ np.random.seed(SEED)
+-
+-PAIR_FIELDS = ["video_id", "author_id", "tag", "duration_bucket"]
+-PAIR_WEIGHTS = {
+-    "video_id": 0.38,
+-    "author_id": 0.30,
+-    "tag": 0.20,
+-    "duration_bucket": 0.12,
+-}
+-ENTITY_SMOOTH = {
+-    "video_id": 18.0,
+-    "author_id": 22.0,
+-    "tag": 45.0,
+-    "duration_bucket": 90.0,
+-}
+-PAIR_SMOOTH = {
+-    "video_id": 3.0,
+-    "author_id": 5.0,
+-    "tag": 8.0,
+-    "duration_bucket": 12.0,
+-}
++torch.manual_seed(SEED)
++torch.set_num_threads(min(16, os.cpu_count() or 8))
+... 825 more diff lines
+```
+
+**#10 -> #13**  (+506 / -368 lines)
+
+```diff
+--- iter_10.py
++++ iter_13.py
+@@ -5,5 +5,4 @@
+ import numpy as np
+ from scipy import sparse
+-from scipy.sparse.linalg import svds
+ 
+ from pipeline.data import load, FEATURE_CARDINALITIES
+@@ -12,51 +11,58 @@
+ 
+ START = time.time()
+-SEED = 19427
++SEED = 27183
+ np.random.seed(SEED)
+ 
+-PAIR_FIELDS = ["video_id", "author_id", "tag", "duration_bucket"]
+-PAIR_WEIGHTS = {
+-    "video_id": 0.38,
+-    "author_id": 0.30,
+-    "tag": 0.20,
+-    "duration_bucket": 0.12,
+-}
+-ENTITY_SMOOTH = {
+-    "video_id": 18.0,
+-    "author_id": 22.0,
+-    "tag": 45.0,
+-    "duration_bucket": 90.0,
+-}
+-PAIR_SMOOTH = {
+-    "video_id": 3.0,
+-    "author_id": 5.0,
+-    "tag": 8.0,
+-    "duration_bucket": 12.0,
+-}
+-
+ 
+ def rank_percentile(user_ids, scores):
++    """Tie-aware percentile ranks independently within each user."""
+     user_ids = np.asarray(user_ids, dtype=np.int64)
+     scores = np.asarray(scores, dtype=np.float64)
+... 915 more diff lines
+```
+
+## Alternatives compared inside iterations
+
+316 candidate solutions were built and scored across 12 iteration(s). The convergence rule charges one iteration per experiment, so searching inside an iteration buys comparisons the iteration budget cannot.
+
+| iteration | candidates (validation primary) |
+|---|---|
+| #2 | deepfm_recency 0.6032, deepfm_recency_incumbent_blend 0.6041, empirical_bayes_history 0.5802, empirical_bayes_history_incumbent_blend 0.6020, lightgbm_recency_history 0.5784, lightgbm_recency_history_incumbent_blend 0.6021 |
+| #3 | dcn 0.6045, deep_pair_wide 0.6027, incumbent 0.6020, incumbent+dcn@0.10 0.6027, incumbent+dcn@0.20 0.6030, incumbent+dcn@0.30 0.6033, incumbent+dcn@0.40 0.6037, incumbent+dcn@0.50 0.6040 |
+| #4 | autoint_blend_0.25 0.6025, autoint_blend_0.50 0.6034, autoint_blend_0.75 0.6034, autoint_standalone 0.6030, mmoe_blend_0.25 0.6025, mmoe_blend_0.50 0.6037, mmoe_blend_0.75 0.6043, mmoe_standalone 0.6041 |
+| #5 | din_blend_0.20 0.6051, din_blend_0.40 0.6056, din_blend_0.60 0.6049, din_blend_0.80 0.6050, din_standalone 0.6047, empirical_bayes_blend_0.20 0.6048, empirical_bayes_blend_0.40 0.6000, empirical_bayes_blend_0.60 0.5912 |
+| #6 | empirical_bayes 0.5801, empirical_bayes_incblend_0.25 0.6040, empirical_bayes_incblend_0.50 0.5961, empirical_bayes_incblend_0.75 0.5848, latent_svd 0.5193, latent_svd_incblend_0.25 0.6016, latent_svd_incblend_0.50 0.5755, latent_svd_incblend_0.75 0.5360 |
+| #7 | affinity_recent3 0.5649, affinity_recent3_incblend_0.10 0.6051, affinity_recent3_incblend_0.20 0.6043, affinity_recent3_incblend_0.35 0.6003, affinity_recent3_incblend_0.50 0.5925, affinity_recent7 0.5688, affinity_recent7_incblend_0.10 0.6051, affinity_recent7_incblend_0.20 0.6044 |
+| #8 | fibinet_blend_0.15 0.6056, fibinet_blend_0.30 0.6055, fibinet_blend_0.50 0.6053, fibinet_blend_0.70 0.6043, fibinet_standalone 0.6039, incumbent_reference 0.6056, signed_svd_blend_0.15 0.6050, signed_svd_blend_0.30 0.6004 |
+| #9 | crossfit_binary_lgb_blend_0.20 0.6053, crossfit_binary_lgb_blend_0.40 0.6037, crossfit_binary_lgb_blend_0.60 0.5986, crossfit_binary_lgb_blend_0.80 0.5940, crossfit_binary_lgb_standalone 0.5925, crossfit_family_ensemble_blend_0.20 0.6055, crossfit_family_ensemble_blend_0.40 0.6050, crossfit_family_ensemble_blend_0.60 0.6023 |
+| #10 | entity_pair_svd_incblend_0.10 0.6056, entity_pair_svd_incblend_0.20 0.6054, entity_pair_svd_incblend_0.35 0.6032, entity_pair_svd_incblend_0.50 0.5982, entity_pair_svd_standalone 0.5772, incumbent 0.6056, personalized_plus_residual_incblend_0.10 0.6055, personalized_plus_residual_incblend_0.20 0.6051 |
+| #11 | chronological_transition_incblend_0.10 0.6054, chronological_transition_incblend_0.20 0.6044, chronological_transition_incblend_0.35 0.5991, chronological_transition_incblend_0.50 0.5888, chronological_transition_incblend_0.65 0.5776, chronological_transition_standalone 0.5568, incumbent 0.6056, recency_lambdamart_incblend_0.10 0.6056 |
+| #12 | ffm_pnn_equal_incblend_0.10 0.6055, ffm_pnn_equal_incblend_0.20 0.6055, ffm_pnn_equal_incblend_0.35 0.6057, ffm_pnn_equal_incblend_0.50 0.6052, ffm_pnn_equal_incblend_0.75 0.6042, ffm_pnn_equal_standalone 0.6018, incumbent 0.6056, pnn_fibinet_equal_incblend_0.10 0.6055 |
+| #13 | all_graph_sequence_incblend_0.10 0.6057, all_graph_sequence_incblend_0.20 0.6046, all_graph_sequence_incblend_0.35 0.5981, all_graph_sequence_incblend_0.50 0.5887, all_graph_sequence_incblend_0.70 0.5707, all_graph_sequence_standalone 0.5568, chronological_markov_incblend_0.10 0.6056, chronological_markov_incblend_0.20 0.6052 |
+
+## Resource usage (Feasibility & Practicality)
+
+- **Agent wall-clock to converged result: 0.88 h (53 min)**
+- Total LLM tokens: **260,967** (167,466 in / 93,501 out), including the knowledge-revision stage
+- Iterations used: **14 of 50** (13 accepted scores, 0 failed, 0 rejected)
+- Compute inside generated scripts: **1.25 h (75 min)** on CPU.
+- Mean tokens per iteration: 18,640
+- Stop reason: `converged`
+
+## Autonomy (Impact & Relevance)
+
+- **Manual interventions: 0.** No human edited code, restarted the loop, chose a hypothesis, or selected a result during the run.
+- The agent inspected the data, reproduced the baseline, and chose every subsequent experiment itself. The prompt it starts from contains the task specification, the pipeline API and the output contract - no findings about what works on this dataset.
+- Failures recovered by in-loop retry: 0
+- Ideas retired after repeated failure or underperformance: 0
+
+## Robustness (Technical Execution)
+
+- **No failures occurred in this run.** The recovery machinery was therefore never exercised here; the evidence that it works is below.
+
+The loop never stalled, crashed, or escalated to a human. Guards in place: retry-with-source on crash, distinct handling for timeouts (which are not bugs to fix), method-keyed retirement so a reworded idea cannot evade the blacklist, process-tree kill so a timed-out script leaves no orphan burning CPU, tolerance of LLM outages and rate limits, node retirement with backtracking so the search cannot grind on one exhausted branch, and a circuit breaker that halts on repeated instant failures (a broken environment rather than broken code).
+
+### Evidence from development runs
+
+Across 71 development runs of this agent, 703 iterations were executed and 199 failed. Every one was handled in-loop; none was escalated to a human. Failure taxonomy:
+
+- `(no output)`: 93
+- `IndexError`: 30
+- `RuntimeError`: 23
+- `TypeError`: 15
+- `TIMEOUT`: 8
+- `}`: 7
+- `ValueError`: 6
+- `AttributeError`: 6
+
+Each recovery path, with a concrete instance:
+
+- **Retry with source.** `r11` #1 crashed with `RuntimeError: The size of tensor a (8192) must match the size of tenso`. The traceback *and the failing script* went back to the proposer, which fixed it: #2 scored 0.6001.
+- **Timeout, handled as distinct from a bug.** `r11` #8 was killed at the limit after 420s. The feedback says the approach is too slow rather than wrong, because re-running a slow script unchanged just times out again.
+- **Idea retirement.** `r2` #16: an idea was retired after repeated failure and never proposed again. Retirement keys on the named method, so restating it in different words does not evade the blacklist.
+- **Circuit breaker.** `r7` hit 32 consecutive instant, output-less failures: the interpreter could not spawn children at all. That is a broken machine, not broken code, and grinding on would shred the budget for nothing. The loop now halts with `environment_broken` after five such failures — this incident is what the guard was written for.
+
+## Result
+
+- Best validation primary: **0.6058** (baseline 0.6016, delta +0.0042)
+- From iteration #11: At the objective and sequence-feature stages, compare recency-weighted LambdaMART, setwise boosted rank_xendcg, and a non-parametric chronological transition model; ranking losses directly emphasize within-user ordering while transition rates exploit short-term feed context that static identity models miss.
+- Selection is on validation only, per the scoring rules; the hidden test set was never used to choose between iterations.
+- Submission: written to `runs\r96\submission.csv`
+
+### Results table
+
+| split | GAUC | nDCG@5 | primary |
+|---|---|---|---|
+| validation (best iteration) | 0.6729 | 0.5386 | 0.6058 |
+| official baseline (validation) | 0.6674 | 0.5357 | 0.6016 |
+| hidden test (this submission) | unscored | unscored | unscored |
+
+Test predictions were written without reading labels; final test metrics are computed once by the organizers.
