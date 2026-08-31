@@ -1,8 +1,7 @@
 import { ShieldCheck } from "lucide-react";
 import type { RunIndex } from "@/lib/runIndex";
-import { selectable } from "@/lib/runIndex";
 import { duration, int, score, signed } from "@/lib/format";
-import { Empty, KeyValue, Note, Panel, Row, Stat, StatGrid } from "@/components/common";
+import { Empty, Panel, Stat, StatGrid } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 
@@ -10,7 +9,10 @@ import { Separator } from "@/components/ui/separator";
 const RANDOM_PRIMARY = 0.4753;
 const CEILING_PRIMARY = 0.8645;
 const FALLBACK_BASELINE = 0.5946;
+/** Official baseline on validation -- a different scale from the test one above. */
+const VALID_BASELINE = 0.6016;
 const WALLCLOCK_CAP_S = 21600; // 6 h feasibility ceiling
+const ITER_CAP = 50; // the organizers' iteration cap
 
 /** Track + tick calibration bar: random, baseline, ceiling, and the submission's own score. */
 function CalibrationBar({
@@ -101,61 +103,98 @@ function BudgetBar({
 
 export default function Verdict({
   index,
-  onOpenRun,
+  onReadHypotheses,
 }: {
   index: RunIndex;
-  onOpenRun: (run: string) => void;
+  onReadHypotheses: () => void;
 }) {
   const submitted = index.submittedRun
     ? (index.runs.find((r) => r.run === index.submittedRun && r.eligibility === "submitted") ??
       null)
     : null;
 
-  if (!submitted || submitted.testPrimary === null) {
+  if (!submitted) {
     return (
       <Empty>
-        No run's submission matches <code className="font-mono">submission_best.csv</code>. The
-        verdict board needs a run whose <code className="font-mono">submission.csv</code> is
-        byte-identical to the repo's submission file and carries hidden-test scores.
+        No run's predictions match <code className="font-mono">submission_best.csv</code>. The
+        verdict board needs a run holding a <code className="font-mono">submission.csv</code> or{" "}
+        <code className="font-mono">submission_checkpoint.csv</code> byte-identical to the repo's
+        submission file.
       </Empty>
     );
   }
 
-  const runs = selectable(index);
-  const scriptFailures = runs.reduce((a, r) => a + r.scriptFailures, 0);
-  const infraFailures = runs.reduce((a, r) => a + r.infraFailures, 0);
+  // A run is scored on the hidden test only after it finishes; until then the board runs on the
+  // validation number the agent selected with, and says so.
+  const scored = submitted.testPrimary !== null;
+  const { scriptFailures, infraFailures } = submitted;
   // The bar is on the hidden-test scale, so the baseline must be too. baselineTarget is the
   // VALIDATION baseline and belongs to a different scale; test always runs lower on this
   // benchmark, so plotting it here would show a winning submission as a loss.
   const baseline =
-    submitted.testDelta !== null ? submitted.testPrimary - submitted.testDelta : FALLBACK_BASELINE;
+    submitted.testPrimary !== null && submitted.testDelta !== null
+      ? submitted.testPrimary - submitted.testDelta
+      : FALLBACK_BASELINE;
 
-  const zeroIntervention = runs.filter((r) => r.manualInterventions === 0);
-  const nonZeroIntervention = runs.filter(
-    (r) => r.manualInterventions !== null && r.manualInterventions !== 0,
-  );
-
-  const iterPct =
-    submitted.iterations !== null && submitted.iterationCap
-      ? (submitted.iterations / submitted.iterationCap) * 100
-      : null;
+  const iterCap = submitted.iterationCap ?? ITER_CAP;
+  const iterPct = submitted.iterations !== null ? (submitted.iterations / iterCap) * 100 : null;
   const wallPct = submitted.wallClockS !== null ? (submitted.wallClockS / WALLCLOCK_CAP_S) * 100 : null;
 
   return (
     <div className="flex flex-col gap-4">
-      <Panel title={`Submitted run - ${submitted.run}`}>
-        <StatGrid>
-          <Stat label="Hidden test primary" value={score(submitted.testPrimary)} />
-          <Stat
-            label="Delta vs baseline"
-            value={signed(submitted.testDelta ?? undefined)}
-            tone={submitted.testDelta !== null && submitted.testDelta > 0 ? "good" : undefined}
-            note="on the hidden test split"
-          />
-          <Stat label="Test GAUC" value={score(submitted.testGauc)} />
-          <Stat label="Test nDCG@5" value={score(submitted.testNdcg5)} />
-          <Stat label="Validation primary" value={score(submitted.validPrimary)} />
-        </StatGrid>
+      <Panel title="Final submission">
+        {scored ? (
+          <StatGrid>
+            <Stat label="Hidden test primary" value={score(submitted.testPrimary)} />
+            <Stat
+              label="Delta vs baseline"
+              value={signed(submitted.testDelta ?? undefined)}
+              tone={submitted.testDelta !== null && submitted.testDelta > 0 ? "good" : undefined}
+              note="on the hidden test split"
+            />
+            <Stat label="Test GAUC" value={score(submitted.testGauc)} />
+            <Stat label="Test nDCG@5" value={score(submitted.testNdcg5)} />
+            <Stat label="Validation primary" value={score(submitted.validPrimary)} />
+          </StatGrid>
+        ) : (
+          <>
+            <StatGrid>
+              <Stat
+                label="Validation-best primary"
+                value={score(submitted.bestValid)}
+                note={
+                  submitted.bestValidIter !== null
+                    ? `reached at iteration ${submitted.bestValidIter}`
+                    : undefined
+                }
+              />
+              <Stat
+                label="Delta vs baseline"
+                value={signed(
+                  submitted.bestValid !== null
+                    ? submitted.bestValid - (submitted.baselineTarget ?? VALID_BASELINE)
+                    : undefined,
+                )}
+                tone={
+                  submitted.bestValid !== null &&
+                  submitted.bestValid > (submitted.baselineTarget ?? VALID_BASELINE)
+                    ? "good"
+                    : undefined
+                }
+                note="on validation"
+              />
+              <Stat
+                label="Stopped at"
+                value={submitted.turns !== null ? `turn ${submitted.turns}` : "--"}
+                note={
+                  submitted.epsilon !== null && submitted.patience !== null
+                    ? `convergence rule: eps ${submitted.epsilon} over N = ${submitted.patience}`
+                    : "the run's declared convergence rule"
+                }
+              />
+            </StatGrid>
+          </>
+        )}
         {index.submissionSha256 && (
           <div className="text-foreground flex items-center gap-2 text-xs">
             <ShieldCheck className="text-good size-4 shrink-0" aria-hidden />
@@ -165,7 +204,7 @@ export default function Verdict({
               </code>{" "}
               is byte-identical to{" "}
               <code className="bg-secondary rounded px-1 py-0.5 font-mono">
-                runs/{submitted.run}/submission.csv
+                runs/{submitted.run}/{submitted.submissionFile}
               </code>{" "}
               - sha256{" "}
               <span className="tnum font-mono font-semibold">
@@ -178,12 +217,14 @@ export default function Verdict({
       </Panel>
 
       <Panel title="Technical execution · 35%">
+        {scored ? (
+        <>
         <p className="text-ink-2 text-sm">
           Everything on this bar is on the <strong className="text-foreground">hidden-test</strong>{" "}
           scale: random scoring, the official baseline, the submission, and the perfect-ranking
           ceiling.
         </p>
-        <CalibrationBar baseline={baseline} submission={submitted.testPrimary} />
+        <CalibrationBar baseline={baseline} submission={submitted.testPrimary!} />
         <p className="text-ink-2 -mt-2 text-xs">
           Random ({score(RANDOM_PRIMARY)}) and the ceiling ({score(CEILING_PRIMARY)}) are fixed
           properties of the benchmark - 27.1% of test users have no positive label, so a perfect
@@ -192,13 +233,15 @@ export default function Verdict({
           scale and are not plotted here; test runs lower than validation on this benchmark for
           the baseline and the agent alike.
         </p>
+        </>
+        ) : null}
         <Separator />
         <StatGrid>
           <Stat
             label="Script failures"
             value={int(scriptFailures)}
             tone={scriptFailures > 0 ? "bad" : "good"}
-            note={`the agent's own code errored, across ${runs.length} selectable runs`}
+            note="the agent's own code errored, in this run"
           />
           <Stat
             label="API outages"
@@ -218,18 +261,21 @@ export default function Verdict({
             <span className="tnum font-mono font-semibold">{int(submitted.iterations)}</span>{" "}
             iterations.
           </p>
-          <p className="text-[15px] leading-relaxed">
+          <p className="text-ink-2 text-sm">
+            The convergence rule charges per iteration, not per model, so one script can build and
+            score many candidates for the price of one. That is the whole point of the design: the
+            run stopped at its declared rule and still compared{" "}
             <span className="tnum font-mono font-semibold">
-              {int(submitted.claimsEstablished)}
+              {int(submitted.candidatesEvaluated)}
             </span>{" "}
-            beliefs established.
+            models.
           </p>
         </div>
         <Button
           variant="outline"
           size="xs"
           className="w-fit"
-          onClick={() => onOpenRun(submitted.run)}
+          onClick={onReadHypotheses}
         >
           read the agent's hypotheses
         </Button>
@@ -248,61 +294,47 @@ export default function Verdict({
             manual interventions to reach the converged result
           </span>
         </div>
-        <p className="text-ink-2 text-sm">
-          <span className="tnum font-mono font-semibold">{zeroIntervention.length}</span> of{" "}
-          <span className="tnum font-mono font-semibold">{runs.length}</span> selectable runs also
-          recorded zero manual interventions.
-        </p>
-        {nonZeroIntervention.length > 0 && (
-          <Note tone="warning">
-            Not every run was hands-off:{" "}
-            {nonZeroIntervention.map((r, i) => (
-              <span key={r.run}>
-                {i > 0 && ", "}
-                <code>{r.run}</code> ({r.manualInterventions})
-              </span>
-            ))}
-            .
-          </Note>
-        )}
       </Panel>
 
       <Panel title="Feasibility · 15%">
+        <p className="text-ink-2 text-sm">
+          What it cost to reach the converged result - every figure read back out of this run's
+          own records.
+        </p>
         <div className="flex flex-col gap-2">
-          {iterPct !== null && submitted.iterationCap !== null ? (
+          {iterPct !== null && (
             <BudgetBar
               label="Iterations"
               pct={iterPct}
               usedLabel={int(submitted.iterations)}
-              capLabel={int(submitted.iterationCap)}
+              capLabel={int(iterCap)}
             />
-          ) : (
-            <KeyValue>
-              <Row k="Iterations">
-                {int(submitted.iterations)} <span className="text-muted-foreground">(no cap recorded)</span>
-              </Row>
-            </KeyValue>
           )}
-          {wallPct !== null ? (
+          {wallPct !== null && (
             <BudgetBar
               label="Wall clock"
               pct={wallPct}
               usedLabel={duration(submitted.wallClockS ?? undefined)}
               capLabel={duration(WALLCLOCK_CAP_S)}
             />
-          ) : (
-            <KeyValue>
-              <Row k="Wall clock">unknown</Row>
-            </KeyValue>
           )}
-          <div className="mt-1 flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Tokens</span>
-            <span className="tnum font-mono">
-              {int(submitted.tokensTotal)}{" "}
-              <span className="text-muted-foreground font-sans">uncapped</span>
-            </span>
-          </div>
         </div>
+        <Separator />
+        <StatGrid>
+          <Stat label="Turns" value={int(submitted.turns)} note="3 slots run in parallel per turn" />
+          <Stat
+            label="Script time, summed"
+            value={duration(submitted.scriptSeconds ?? undefined)}
+            note="above wall-clock because slots overlap"
+          />
+          <Stat label="LLM calls" value={int(submitted.llmCalls)} />
+          <Stat
+            label="Tokens"
+            value={int(submitted.tokensTotal)}
+            note={`${int(submitted.tokensIn)} in, ${int(submitted.tokensOut)} out - uncapped`}
+          />
+          <Stat label="GPU-hours" value="0" note="CPU only" />
+        </StatGrid>
       </Panel>
     </div>
   );

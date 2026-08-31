@@ -12,6 +12,34 @@ async function fetchText(url: string): Promise<string | null> {
   return res.text();
 }
 
+/** knowledge.json holds a bare array; a revision reply wraps the same shape in {claims: [...]}. */
+function asBeliefs(parsed: unknown): Belief[] {
+  const raw = Array.isArray(parsed)
+    ? parsed
+    : parsed && typeof parsed === "object" && Array.isArray((parsed as { claims?: unknown }).claims)
+      ? ((parsed as { claims: unknown[] }).claims)
+      : [];
+  return raw.filter(
+    (c): c is Belief => Boolean(c) && typeof (c as Belief).text === "string",
+  );
+}
+
+/** The prompt the harness sends to revise beliefs is the one that shows the agent its own set. */
+const REVISION_PROMPT = "WHAT YOU CURRENTLY BELIEVE";
+
+function beliefsFromRevisions(calls: { prompt?: string; response?: string }[]): Belief[] {
+  for (let i = calls.length - 1; i >= 0; i--) {
+    if (!calls[i].prompt?.includes(REVISION_PROMPT)) continue;
+    try {
+      const beliefs = asBeliefs(JSON.parse(calls[i].response ?? ""));
+      if (beliefs.length) return beliefs;
+    } catch {
+      /* a truncated or non-JSON reply: fall through to the revision before it */
+    }
+  }
+  return [];
+}
+
 export async function loadRun(run: string): Promise<RunData> {
   const warnings: string[] = [];
 
@@ -102,10 +130,20 @@ export async function loadRun(run: string): Promise<RunData> {
   let beliefs: Belief[] = [];
   if (knowledgeText) {
     try {
-      const parsed = JSON.parse(knowledgeText);
-      if (Array.isArray(parsed)) beliefs = parsed as Belief[];
+      beliefs = asBeliefs(JSON.parse(knowledgeText));
     } catch (e) {
       warnings.push(`knowledge.json did not parse (${(e as Error).message})`);
+    }
+  }
+  // knowledge.json is written only when a run exits cleanly. A halted run still revised its
+  // beliefs every turn, and each revision's reply is the whole set -- so the last one stands in.
+  if (!beliefs.length) {
+    const recovered = beliefsFromRevisions(llmCalls);
+    if (recovered.length) {
+      beliefs = recovered;
+      warnings.push(
+        "no knowledge.json: beliefs recovered from the last knowledge revision in llm_calls.jsonl",
+      );
     }
   }
 

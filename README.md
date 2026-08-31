@@ -21,32 +21,65 @@ try, and why, has to come from the agent, or the Autonomy and Innovation claims 
 
 ## Result
 
-`submission_best.csv` is the submission. It is `runs/r79/submission.csv`, written by the harness
-from that run's validation-best iteration — no human rebuilt it, and selection never looked at
-the test split.
+`submission_best.csv` is the submission. It is `runs/r96/`, iteration 11 — the validation-best
+checkpoint at the point the convergence rule fired.
 
 | | GAUC | nDCG@5 | primary |
 |---|---|---|---|
 | official baseline, hidden test | 0.6610 | 0.5282 | 0.59460 |
-| **this submission, hidden test** | **0.6673** | **0.5321** | **0.59969** |
-| delta | +0.0063 | +0.0039 | **+0.00509** |
+| **this submission, hidden test** | **0.6668** | **0.5315** | **0.59912** |
+| delta | +0.0058 | +0.0033 | **+0.00452** |
 
-Validation 0.6053 against the baseline's 0.6016. Test always runs below validation on this
-benchmark — a later date window — and the baseline shows the same drop.
+Validation 0.60576 against the baseline's 0.6016.
 
-Some later runs scored higher, but they read the supplied `video_features_statistic` fields,
-whose full-month aggregates overlap the validation and test windows. Those runs are excluded from
-the submission, from cross-run memory and from every comparison in the write-up.
+**Stopping rule: the organizers' default, ε = 0.002 and N = 3, with no minimum-iteration floor.**
+FAQ 2.9.1 lets a team declare its own values; we declare the defaults. `run_meta.json` records
+ε, N and the floor, so the rule can be checked against the curve in `ledger.jsonl`. It fired at
+turn 4, on 11 executed scripts.
+
+**Training data: the train split only** (20220408–20220421). No model whose predictions are saved
+is fitted on validation — not for the test predictions, not through a refit, and not through
+early stopping, feature statistics or any quantity chosen by watching validation. FAQ 2.9.2.
+`agent/critic.py` rejects an iteration that violates this.
+
+**The run never reads test labels.** They are hidden by default in `pipeline/data.py`; a normal
+test load does not open `test/y.npy` or any test auxiliary file. The harness writes the
+submission without scoring it. FAQ 2.9.3.
+
+Earlier runs in this repository scored higher — r79 reached +0.00509 — by refitting the final
+model on train+validation before predicting test. FAQ 2.9.2 settles that as out of scope, and
+those runs are kept as the record of what that reading was worth (0.00229 measured, r79 against
+r94 on the same harness) rather than as submissions.
+
+## Resource usage
+
+To reach the converged result (`runs/r96`, iterations 0-13, turns 0-4):
+
+| | |
+|---|---|
+| iterations / scripts | **14** of the 50 cap |
+| turns | 4 (3 parallel slots) |
+| agent wall-clock | **53.0 min** of the 6 h ceiling |
+| script time, summed | 75.3 min (exceeds wall-clock because slots run concurrently) |
+| LLM calls | 19 |
+| tokens in / out | 167,466 / 93,501 |
+| **tokens total** | **260,967** |
+| GPU-hours | **0** — CPU only |
+| manual interventions | **0** |
+| failures | 0 |
+| candidates compared | **316 models inside those 14 scripts** |
+
+The last row is the point of the design: the convergence rule charges per ITERATION, so one
+script may build and compare many models for the price of one. 316 models were evaluated across
+14 charged iterations.
+
+The run was launched with an exploratory minimum-iteration floor and continued past its declared
+stop before being halted; total spend over that longer trajectory was 160.6 min and 820,954
+tokens. Those later turns are not part of the submission and are not in the run directory. The
+figures above are the ones required to reach the converged result.
 
 `python -m research.verify_claims` re-derives every row of the DEVPOST.md ablation table from the
-run records and exits non-zero on any disagreement. It checks that table, not every number in the
-write-up.
-
-Cost to reach this result: **6 iterations of the 50 allowed, 20.2 min wall-clock, 96,359 tokens,
-CPU only, 0 failures, 0 manual interventions.**
-
-Bonus benchmark: on KuaiRand-1K the same agent reached **+0.0422** over a reference we measured
-ourselves, since no official baseline exists for it (`research/transfer-1k.md`).
+run records and exits non-zero on any disagreement. It checks that table, not every number here.
 
 ## The loop
 

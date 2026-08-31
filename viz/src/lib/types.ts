@@ -37,6 +37,11 @@ export interface Submission {
   "test_ndcg@5"?: number;
   test_delta?: number;
   hypothesis?: string;
+  /** False when the run never read test labels, which is the compliant case. */
+  test_scored?: boolean;
+  /** The predictions file this run wrote. */
+  file?: string;
+  source?: string;
 }
 
 export interface RunMeta {
@@ -63,6 +68,12 @@ export interface RunMeta {
   failures?: number;
   integrity_rejections?: number;
   strict_convergence_iteration?: number;
+  epsilon?: number;
+  patience?: number;
+  turns?: number;
+  slots?: number;
+  /** Present when run_meta.json was rebuilt from the records after a halt. */
+  reconstructed_note?: string;
   api_surface?: string[];
   submission?: Submission;
   [k: string]: unknown;

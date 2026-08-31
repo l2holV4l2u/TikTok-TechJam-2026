@@ -4,11 +4,14 @@ import { primaryOf } from "../lib/derive";
 import { score, truncate } from "../lib/format";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ITER_STATUS_LABEL } from "@/components/common";
 
 /* Geometry in viewBox units; CSS scales the svg to the card width. */
 const W = 760;
 const H = 320;
-const PAD = { top: 16, right: 118, bottom: 52, left: 54 };
+// right must fit the longest reference label ("reproduced 0.6058"); 118 clipped it against
+// the viewBox edge, since a root svg clips overflow by default.
+const PAD = { top: 16, right: 156, bottom: 52, left: 54 };
 const PLOT_W = W - PAD.left - PAD.right;
 const PLOT_H = H - PAD.top - PAD.bottom;
 /** Iterations with no score (crashed scripts) sit on their own band under the axis. */
@@ -25,16 +28,11 @@ const stateOf = (it: Iteration): MarkState => {
   return s === "kept" || s === "reverted" || s === "failed" ? s : "ok";
 };
 
-const STATE_LABEL: Record<MarkState, string> = {
-  kept: "kept",
-  ok: "ok",
-  reverted: "reverted",
-  failed: "failed",
-  infra: "api outage (never ran)",
-};
+// Shared wording (common.tsx), so "ok"/"kept" read the same way everywhere in the site.
+const STATE_LABEL: Record<MarkState, string> = ITER_STATUS_LABEL as Record<MarkState, string>;
 
 const STATE_COLOR: Record<MarkState, string> = {
-  kept: "var(--good)",
+  kept: "var(--accent-blue)",
   ok: "var(--accent-blue)",
   reverted: "var(--serious)",
   failed: "var(--critical)",
@@ -79,7 +77,10 @@ export default function ProgressChart({
   const [hover, setHover] = useState<number | null>(null);
   const [showTable, setShowTable] = useState(false);
 
-  const iters = data.iterations;
+  // EDA (iteration #0) inspects the data rather than proposing a solution, so it carries no
+  // score -- plotting it just puts a mystery point in the "no score" row. Same exclusion as
+  // the search tree.
+  const iters = data.iterations.filter((it) => (it.phase ?? "").toLowerCase() !== "eda");
   if (!iters.length) return null;
 
   const target = data.meta?.baseline_target;
@@ -118,7 +119,6 @@ export default function ProgressChart({
   const ticks = Array.from({ length: 5 }, (_, i) => yMin + ((yMax - yMin) * i) / 4);
 
   const hovered = hover === null ? null : points[hover];
-  const states = [...new Set(iters.map(stateOf))];
 
   return (
     <div className="flex flex-col gap-3">
@@ -248,17 +248,13 @@ export default function ProgressChart({
         )}
       </div>
 
-      <div className="text-ink-2 mt-3 flex flex-wrap gap-4 text-xs">
-        {states.map((s) => (
-          <span className="inline-flex items-center gap-1.5" key={s}>
-            <svg width={14} height={14} viewBox="0 0 14 14">
-              <Marker state={s} cx={7} cy={7} selected={false} />
-            </svg>
-            {STATE_LABEL[s]}
-          </span>
-        ))}
-        <span className="text-muted-foreground inline-flex items-center gap-1.5">click a point to open that iteration</span>
-      </div>
+      {points.some((p) => p.y === null) && (
+        <p className="text-ink-2 text-xs leading-relaxed">
+          Points with no validation score - a script error or an API outage - have nothing to
+          plot, so they sit on their own "no score" row below the axis instead of at y = 0.
+        </p>
+      )}
+
 
       {showTable && (
         <Table>
