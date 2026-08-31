@@ -51,6 +51,33 @@ model on train+validation before predicting test. FAQ 2.9.2 settles that as out 
 those runs are kept as the record of what that reading was worth (0.00229 measured, r79 against
 r94 on the same harness) rather than as submissions.
 
+## Resource usage
+
+To reach the converged result (`runs/r96`, iterations 0-13, turns 0-4):
+
+| | |
+|---|---|
+| iterations / scripts | **14** of the 50 cap |
+| turns | 4 (3 parallel slots) |
+| agent wall-clock | **53.0 min** of the 6 h ceiling |
+| script time, summed | 75.3 min (exceeds wall-clock because slots run concurrently) |
+| LLM calls | 19 |
+| tokens in / out | 167,466 / 93,501 |
+| **tokens total** | **260,967** |
+| GPU-hours | **0** — CPU only |
+| manual interventions | **0** |
+| failures | 0 |
+| candidates compared | **316 models inside those 14 scripts** |
+
+The last row is the point of the design: the convergence rule charges per ITERATION, so one
+script may build and compare many models for the price of one. 316 models were evaluated across
+14 charged iterations.
+
+The run was launched with an exploratory minimum-iteration floor and continued past its declared
+stop before being halted; total spend over that longer trajectory was 160.6 min and 820,954
+tokens. Those later turns are not part of the submission and are not in the run directory. The
+figures above are the ones required to reach the converged result.
+
 `python -m research.verify_claims` re-derives every row of the DEVPOST.md ablation table from the
 run records and exits non-zero on any disagreement. It checks that table, not every number here.
 
