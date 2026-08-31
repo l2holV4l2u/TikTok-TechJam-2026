@@ -288,3 +288,37 @@ Still open: `retain_or_blend` also OVERWRITES `iter_N_out/scores_valid.npy` and
 `scores_test.npy` on disk with the selected scores, so after a run the raw candidate is
 unrecoverable from the artifacts. The in-memory fix repairs the gate and the blend; the audit
 trail still loses what each script actually produced. It should be saved alongside, not over.
+
+## Slot decorrelation does not predict the score either
+
+The gate was worth fixing because it was measuring nothing. It does not follow that the number
+it now produces is worth optimising, and r92 is the run that separates those two claims.
+
+r92 ran the merged harness -- the `prem` branch's two portfolio fixes (pre-blend correlation,
+sibling disclosure firing on turn 1) plus this branch's drift axis pointing recency weighting at
+the main model's `sample_weight`. No earlier run had both. It produced the best decorrelation on
+record, under the 0.90 "proceed" line on every turn:
+
+    turn 1  0.7794      turn 3  0.6991
+    turn 2  0.6687      turn 4  0.2757
+
+and the worst hidden-test delta of any converged 3-slot run:
+
+| run | mean correlation | valid | test | delta |
+|---|---|---|---|---|
+| r90 (gate broken, slots were near-clones) | ~0.99 | 0.605282 | 0.599904 | +0.00530 |
+| r87 (gate fixed) | 0.741 | 0.605713 | 0.600410 | +0.00581 |
+| r92 (gate fixed + drift axis) | 0.276 | 0.605454 | 0.599289 | +0.00469 |
+
+Both directions are now measured. Slots that were literally copies of one another scored
++0.00530; slots that disagreed as much as anything we have produced scored +0.00469. Diversity
+is not the axis the score moves along, and a run cannot be steered by pushing the correlation
+down.
+
+r92 also has the second-best validation of any run whose submission CSV exists and the worst
+test of those three, which is the same validation/test disagreement recorded above -- and again
+it is a comparison BETWEEN runs, which the harness never makes.
+
+What this costs to know: three converged runs, ~90 minutes, ~830k tokens. What it buys is the
+end of a line of investigation. The remaining spread across r79, r90 and r92 is 0.0006 with no
+trend, which is seed noise; further runs of this kind are a coin flip rather than a method.
