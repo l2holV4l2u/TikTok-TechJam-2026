@@ -23,48 +23,85 @@ ROW = re.compile(r"\|\s*\*{0,2}(r\d+\w*)\*{0,2}\s*\|.*?\|\s*\*{0,2}(0\.\d{4})\*{
                  r"\s*\*{0,2}([+-]0\.\d{4})\*{0,2}\s*\|")
 
 
-CORR = re.compile("^\|\s*(\d)\s*\|\s*([0-9.]+|[-—])\s*\|\s*([0-9.]+|[-—])\s*\|\s*$")
+_CELLS = re.compile(r"^\|(.+)\|\s*$")
+
+
+def _table_rows(md: str):
+    """Every markdown table row in the document, as a list of stripped cells."""
+    for line in md.splitlines():
+        m = _CELLS.match(line)
+        if m:
+            yield [c.strip().strip("*") for c in m.group(1).split("|")]
+
+
+def _resolve(run: str, roots):
+    """Map a short run id in the write-up to its directory, which may carry a _Nslot suffix."""
+    for r in roots:
+        if (r / run).is_dir():
+            return r / run
+        hit = sorted(r.glob(f"{run}_*"))
+        if hit:
+            return hit[0]
+    return None
 
 
 def _check_correlations(root: Path, roots, checked: int, bad: int):
-    """The portfolio gate table cites per-turn slot correlations; re-read them from the runs.
+    """The slot-correlation table and the slot ladder, re-read from the runs themselves.
 
-    The gate is the reason Phases 3-5 were abandoned, so a wrong number here would misreport a
-    negative result -- the one kind of claim nobody else will re-derive for us.
+    These carry the retraction: the gate reversed a delete-the-subsystem decision, and the ladder
+    picks the submitted run. A stale number in either would misreport the project's main finding,
+    and unlike the ablation table nobody else re-derives them for us.
     """
-    logged = {}
-    for run in ("r82", "r83"):
-        path = next((r / run / "portfolio.jsonl" for r in roots
-                     if (r / run / "portfolio.jsonl").exists()), None)
-        if path is None:
+    md = (root / "DEVPOST.md").read_text(encoding="utf-8")
+    logged, header = {}, None
+    for cells in _table_rows(md):
+        if cells and cells[0] == "turn" and len(cells) > 2:
+            header = [c.split()[0] for c in cells[1:]]
             continue
-        for line in path.read_text(encoding="utf-8").splitlines():
-            try:
-                rec = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if rec.get("event") == "turn" and (rec.get("correlation") or {}).get("mean") is not None:
-                logged[(run, rec["turn"])] = float(rec["correlation"]["mean"])
-    if not logged:
-        return checked, bad
-    for line in (root / "DEVPOST.md").read_text(encoding="utf-8").splitlines():
-        m = CORR.match(line)
-        if not m:
+        if header and cells and cells[0].isdigit() and len(cells) == len(header) + 1:
+            turn = int(cells[0])
+            for run, claim in zip(header, cells[1:]):
+                if not re.fullmatch(r"0\.\d+", claim):
+                    continue
+                d = _resolve(run, roots)
+                actual = None
+                if d is not None and (d / "portfolio.jsonl").exists():
+                    for line in (d / "portfolio.jsonl").read_text(encoding="utf-8").splitlines():
+                        try:
+                            rec = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        if rec.get("event") == "turn" and rec.get("turn") == turn:
+                            mean = (rec.get("correlation") or {}).get("mean")
+                            actual = None if mean is None else float(mean)
+                checked += 1
+                if actual is None:
+                    print(f"  {run} turn {turn}: UNVERIFIABLE -- no portfolio.jsonl record")
+                    bad += 1
+                    continue
+                ok = abs(actual - float(claim)) < 1e-4
+                print(f"  {run} turn {turn} correlation: claims {float(claim):.4f}  "
+                      f"actual {actual:.4f}  {'OK' if ok else '<-- MISMATCH'}")
+                bad += not ok
             continue
-        turn = int(m.group(1))
-        for run, claim in (("r82", m.group(2)), ("r83", m.group(3))):
-            if claim in ("-", "—"):
-                continue
-            actual = logged.get((run, turn))
+        # the slot ladder: | slots | run | validation | test | delta | ... |
+        if len(cells) >= 5 and re.fullmatch(r"r\d+", cells[1] or "") and                 re.fullmatch(r"0\.\d+", cells[2] or "") and re.fullmatch(r"0\.\d+", cells[3] or ""):
+            run = cells[1]
+            d = _resolve(run, roots)
+            meta = None if d is None else d / "run_meta.json"
             checked += 1
-            if actual is None:
-                print(f"  {run} turn {turn}: UNVERIFIABLE -- no portfolio.jsonl record")
+            if meta is None or not meta.exists():
+                print(f"  {run}: UNVERIFIABLE -- no run_meta.json")
                 bad += 1
                 continue
-            ok = abs(actual - float(claim)) < 1e-4
-            print(f"  {run} turn {turn} correlation: claims {float(claim):.4f}  "
-                  f"actual {actual:.4f}  {'OK' if ok else '<-- MISMATCH'}")
-            bad += not ok
+            sub = json.loads(meta.read_text(encoding="utf-8")).get("submission") or {}
+            okv = abs(float(sub.get("valid_primary", -9)) - float(cells[2])) < 1e-5
+            okt = abs(float(sub.get("test_primary", -9)) - float(cells[3])) < 1e-5
+            print(f"  {run} ladder: claims valid {cells[2]} test {cells[3]}  "
+                  f"actual valid {sub.get('valid_primary', float('nan')):.6f} "
+                  f"test {sub.get('test_primary', float('nan')):.6f}  "
+                  f"{'OK' if okv and okt else '<-- MISMATCH'}")
+            bad += not (okv and okt)
     return checked, bad
 
 
