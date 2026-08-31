@@ -288,6 +288,26 @@ def test_breadth_modes_branch_instead_of_extending_the_leader():
     assert t.select("refine").iter_id == 3, "exploit still takes the best score"
 
 
+
+def test_a_truncated_proposal_does_not_end_the_run_as_exhausted():
+    """r98 stopped at 7 of 50 iterations with 43 unspent.
+
+    Two proposals came back at exactly the output-token cap -- truncated mid-script, so no
+    HYPOTHESIS line survived and propose() returned None. The loop read that as an exhausted
+    search space. An output-cap truncation is transient; only CONSECUTIVE failures mean the
+    search is actually out of ideas.
+    """
+    from agent.loop import MAX_EMPTY_PROPOSALS
+    from agent.llm import DEFAULT_MAX_TOKENS
+
+    assert MAX_EMPTY_PROPOSALS >= 2, "one unlucky truncation must not end a run"
+    # scripts reach ~22k chars; at ~4 chars/token an 8192 cap cannot emit one
+    assert DEFAULT_MAX_TOKENS >= 16384, DEFAULT_MAX_TOKENS
+
+    src = Path("agent/loop.py").read_text(encoding="utf-8")
+    assert "empty_proposals >= MAX_EMPTY_PROPOSALS" in src
+    assert src.count("empty_proposals = 0") >= 2, "the counter must reset on a usable proposal"
+
 if __name__ == "__main__":
     # Kept at the very end: discovery reads globals(), so any test defined below this block
     # would never run. Two were, silently, for the whole life of the sweep-mode change.

@@ -12,7 +12,12 @@ ANTHROPIC_VERSION = "2023-06-01"
 DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5"
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"
 DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
-DEFAULT_MAX_TOKENS = 8192  # blend scripts overflow 4096 and arrive truncated
+# Raised from 4096, then from 8192. r98 died at 7 of 50 iterations because two consecutive
+# proposals came back at exactly 8192 output tokens -- truncated mid-script, so no
+# HYPOTHESIS line and no closing fence survived, propose() returned None twice and the
+# loop read that as an exhausted search space. Scripts grew because MAX_CODE_CHARS went
+# 14000 -> 60000, so parents now arrive whole and successors are longer.
+DEFAULT_MAX_TOKENS = 32768
 DEFAULT_TIMEOUT_S = 120
 MAX_RETRIES = 8            # 5xx and connection errors cost time, nothing else
 # A 429 is different: the attempt still counts against the account's daily request cap, so
