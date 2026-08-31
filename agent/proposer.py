@@ -25,7 +25,7 @@ MAX_HISTORY = 8
 MAX_FEEDBACK_CHARS = 1200
 MAX_KB = 3
 MAX_ATTEMPTS = 2
-MAX_CODE_CHARS = 14000     # a parent script is sent in full; truncating it produces bad edits
+MAX_CODE_CHARS = 60000     # was 14000; a parent script is sent in full; truncating it produces bad edits
 MAX_EDA_CHARS = 4000
 
 # ---------------------------------------------------------------- task specification only

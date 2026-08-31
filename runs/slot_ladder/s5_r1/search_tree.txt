@@ -1,0 +1,21 @@
+#1 0.6006  Reproduce the official baseline by training a second-order k=16 Factor
+  #2 0.6029  I am targeting training-time drift robustness and prediction-family co
+  #3 0.6029  I am targeting prediction-family complementarity with binary GBDT, que
+  #5 0.6041  I am testing additive wide, sequential DIN, and auxiliary-supervised M
+  #6 0.6042 [retired]  I am targeting prediction formation with a breadth test spanning field
+    #7 0.6046  I am targeting training-time drift and loss alignment by comparing rec
+    #8 0.6046  I am targeting metric-aligned preference formation with three untried 
+    #9 0.6050  I am targeting prediction formation by comparing DCNv2 explicit crosse
+    #10 0.6050  I am targeting slate-context feature formation and prediction aggregat
+    #11 0.6050 [retired]  I am targeting non-parametric feature formation and rank aggregation: 
+      #12 0.6062 [retired]  I am targeting label-independent feed-order and repeated-exposure feat
+        #20 0.6062 [retired]  I am targeting drift-aware prediction formation with three non-neural 
+          #22 0.6062  I am targeting interaction feature formation with a drift-robust wide 
+          #23 0.6062  I am targeting training-time drift robustness in the main predictor: a
+          #24 0.6063  I am targeting prediction formation with three structurally distinct m
+          #25 0.6063  I am targeting post-model temporal calibration: train-only global tren
+          #26 0.6063  I am targeting training-sample weighting: equalising each training use
+      #13 0.6062  I am targeting feature formation under temporal drift by exposing trai
+      #14 0.6062  I am targeting drift-robust feature formation by comparing a recency-w
+      #15 0.6062  I am targeting the training objective with conditional pairwise learni
+      #16 0.6062  I am targeting the training objective and prediction aggregation with 

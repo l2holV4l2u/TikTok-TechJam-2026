@@ -1,0 +1,55 @@
+SHAPE|train=1141112|valid=124909|test=170588|X=37 scalar_fields|num=5
+LABEL|train=0.33662 (384121)|valid=0.31328 (39132)
+USR|train|U=26210|rowsq=5/31/97/207|posq=1/10/34/67|zero=5.1%|mixed=92.7%
+USR|valid|U=22377|rowsq=1/4/12/26|posq=0/1/4/9|zero=30.3%|mixed=57.8%
+DAY|train|0409:0.336,0410:0.341,0411:0.333,0412:0.332,0413:0.317,0414:0.319,0415:0.363,0416:0.377,0417:0.364,0418:0.331,0419:0.323,0420:0.311,0421:0.315
+DAY|valid|0422:0.319,0423:0.338,0424:0.303,0425:0.312,0426:0.311,0427:0.297,0428:0.290
+OVL|user_id|unseen_rows valid/test=1.59/3.62%|seen_unique valid/test=98.11/96.75%
+OVL|video_id|unseen_rows valid/test=0.01/0.01%|seen_unique valid/test=99.88/99.85%
+SHIFT|valid user_id|label seen/unseen=0.3125/0.3608|unseen_n=1990
+SHIFT|valid video_id|label seen/unseen=0.3133/0.4118|unseen_n=17
+F legend: K=declared,O=train/valid/test observed,U=valid/test unseen-row%,M=train mode%,V=train/valid bias-corrected Cramer
+F|user_id|K=30000|O=26210/21956/23099|U=1.6/3.6|M=0.1|V=0.378/0.358
+F|video_id|K=8000|O=7538/5945/5974|U=0.0/0.0|M=0.8|V=0.326/0.320
+F|tab|K=20|O=15/15/15|U=0.0/0.0|M=73.2|V=0.277/0.255
+F|hour|K=32|O=24/24/24|U=0.0/0.0|M=7.8|V=0.030/0.020
+F|user_active_degree|K=16|O=9/9/9|U=0.0/0.0|M=77.0|V=0.060/0.062
+F|is_lowactive_period|K=4|O=1/1/1|U=0.0/0.0|M=100.0|V=0.000/0.000
+F|is_live_streamer|K=4|O=2/2/2|U=0.0/0.0|M=77.1|V=0.028/0.030
+F|is_video_author|K=4|O=2/2/2|U=0.0/0.0|M=85.4|V=0.015/0.007
+F|follow_user_num_range|K=16|O=8/8/8|U=0.0/0.0|M=19.8|V=0.020/0.016
+F|fans_user_num_range|K=16|O=9/9/9|U=0.0/0.0|M=37.9|V=0.043/0.032
+F|friend_user_num_range|K=16|O=7/7/7|U=0.0/0.0|M=27.8|V=0.031/0.021
+F|register_days_range|K=16|O=7/8/8|U=0.0/0.0|M=75.1|V=0.052/0.043
+F|onehot_feat0|K=8|O=2/2/2|U=0.0/0.0|M=50.0|V=0.047/0.039
+F|onehot_feat1|K=12|O=7/7/7|U=0.0/0.0|M=27.2|V=0.067/0.074
+F|onehot_feat2|K=64|O=50/50/49|U=0.0/0.0|M=24.8|V=0.034/0.035
+F|onehot_feat3|K=1600|O=1436/1330/1359|U=0.1/0.1|M=4.2|V=0.123/0.128
+F|onehot_feat4|K=24|O=16/16/16|U=0.0/0.0|M=36.9|V=0.017/0.023
+F|onehot_feat5|K=48|O=33/31/31|U=0.0/0.0|M=99.5|V=0.015/0.017
+F|onehot_feat6|K=8|O=3/3/3|U=0.0/0.0|M=52.7|V=0.034/0.029
+F|onehot_feat7|K=160|O=117/105/106|U=0.0/0.0|M=8.7|V=0.060/0.058
+F|onehot_feat8|K=512|O=452/438/439|U=0.0/0.0|M=2.0|V=0.090/0.087
+F|onehot_feat9|K=12|O=7/7/7|U=0.0/0.0|M=22.8|V=0.025/0.020
+F|onehot_feat10|K=8|O=5/5/5|U=0.0/0.0|M=40.0|V=0.013/0.015
+F|onehot_feat11|K=8|O=5/5/4|U=0.0/0.0|M=74.9|V=0.038/0.044
+F|onehot_feat12|K=8|O=3/3/3|U=0.0/0.0|M=67.7|V=0.043/0.038
+F|onehot_feat13|K=8|O=3/3/3|U=0.0/0.0|M=93.7|V=0.010/0.007
+F|onehot_feat14|K=8|O=3/3/3|U=0.0/0.0|M=88.4|V=0.011/0.012
+F|onehot_feat15|K=8|O=3/3/3|U=0.0/0.0|M=95.5|V=0.013/0.008
+F|onehot_feat16|K=8|O=3/3/3|U=0.0/0.0|M=93.3|V=0.021/0.016
+F|onehot_feat17|K=8|O=3/3/3|U=0.0/0.0|M=96.8|V=0.000/0.000
+F|author_id|K=7000|O=6482/5311/5333|U=0.0/0.0|M=0.8|V=0.322/0.319
+F|video_type|K=8|O=3/3/3|U=0.0/0.0|M=98.7|V=0.010/0.020
+F|upload_type|K=20|O=14/11/12|U=0.0/0.0|M=43.0|V=0.106/0.086
+F|music_type|K=12|O=6/6/6|U=0.0/0.0|M=88.1|V=0.063/0.056
+F|tag|K=64|O=44/43/43|U=0.0/0.0|M=26.4|V=0.160/0.158
+F|duration_bucket|K=12|O=10/10/10|U=0.0/0.0|M=10.3|V=0.071/0.071
+F|register_days_bucket|K=12|O=10/10/10|U=0.0/0.0|M=10.0|V=0.057/0.047
+N|duration_ms|miss=0.0/0.0|med95=70233,286166/70640,304883|logcorr=0.074/0.049
+N|user_follow_user_num|miss=0.0/0.0|med95=146,1557/141,1560|logcorr=0.016/0.009
+N|user_fans_user_num|miss=0.0/0.0|med95=60,1172/53,1132|logcorr=-0.043/-0.033
+N|user_friend_user_num|miss=0.0/0.0|med95=20,574/17,542|logcorr=-0.030/-0.021
+N|user_register_days|miss=0.0/0.0|med95=1223,2408/1183,2391|logcorr=-0.053/-0.044
+HIST|video_id|video_id_train_count_log1p:float32:(1141112,),video_id_long_view_rate:float32:(1141112,),video_id_is_like_rate:float32:(1141112,),video_id_is_follow_rate:float32:(1141112,),video_id_is_comment_rate:float32:(1141112,),video_id_is_forward_rate:float32:(1141112,),video_id_is_hate_rate:float32:(1141112,),video_id_is_click_rate:float32:(1141112,),video_id_is_profile_enter_rate:float32:(1141112,),video_id_play_time_ms_logmean:float32:(1141112,),video_id_profile_stay_time_logmean:float32:(1141112,),video_id_comment_stay_time_logmean:float32:(1141112,)
+HIST|author_id|author_id_train_count_log1p:float32:(1141112,),author_id_long_view_rate:float32:(1141112,),author_id_is_like_rate:float32:(1141112,),author_id_is_follow_rate:float32:(1141112,),author_id_is_comment_rate:float32:(1141112,),author_id_is_forward_rate:float32:(1141112,),author_id_is_hate_rate:float32:(1141112,),author_id_is_click_rate:float32:(1141112,),author_id_is_profile_enter_rate:float32:(1141112,),author_id_play_time_ms_logmean:float32:(1141112,),author_id_profile_stay_time_logmean:float32:(1141112,),author_id_comment_stay_time_logmean:float32:(1141112,)

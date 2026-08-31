@@ -1,0 +1,14 @@
+cross-run memory: OFF -- this run sees no prior run of this agent
+dataset: KuaiRand-Pure  train 1,141,112 / valid 124,909 / test 170,588
+
+submission from iteration #6 (validation primary 0.6045) -> runs/slot_ladder/s1_r1/submission.csv
+  hypothesis: Training-stage drift weighting and model-formation breadth: compare half-life-swept AutoIn
+  test primary 0.5986  gauc 0.6657  ndcg@5 0.5314   delta vs baseline +0.0040
+
+stopped: converged
+iterations: 7 of 50   failures: 1
+agent wall-clock: 14.4 min   script time: 3.6 min
+tokens (incl. knowledge revision): 137,079
+EDA completed: True   baseline reproduced: 0.6026091312872222
+manual interventions: 0
+run log: runs/slot_ladder/s1_r1
