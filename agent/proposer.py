@@ -107,15 +107,13 @@ PIPELINE API -- import these, do not reimplement them:
   Printing it costs one call and the aggregate score alone cannot tell you the same thing.
 
 RULES:
-  - The validation score you report MUST come from a model fit on "train" only. Every
-    comparison and every selection is made on that number, so a model that has seen
-    validation labels would make it meaningless.
-  - The TEST scores you save may come from the SAME recipe refit on train + validation
-    together. Validation is the week immediately before the test period and the rules
-    allow developing on both splits; a model fit only on data that stops a week earlier
-    is fitting staler behaviour than the one being scored. Fit train-only, evaluate and
-    report validation, then refit the identical recipe on the two splits combined and
-    use that model for scores_test.npy.
+  - TRAINING DATA IS THE "train" SPLIT ONLY -- dates 20220408-20220421. Every model whose
+    predictions you save, for validation OR for test, must be fit on that split and nothing
+    else. This is a hard rule of the benchmark and it is checked by reading this code.
+  - Specifically, `valid` is for EVALUATION, never for fitting. Do not concatenate train and
+    validation, do not refit on the two combined before scoring test, and do not compute
+    feature statistics, encodings, normalisers or histories over validation rows. Reading
+    `valid.y` to score a model is correct; using it to fit one is not.
   - Never fit or select anything on "test", and never read test labels.
   - load("test").y DOES NOT EXIST. Touching it -- .y, .y.sum(), .y.astype(), len(s.y),
     anything -- raises RuntimeError and the whole iteration is lost. The test split gives

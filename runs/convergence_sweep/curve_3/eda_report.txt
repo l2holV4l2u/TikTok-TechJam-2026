@@ -1,0 +1,37 @@
+schema X_fields=37 num_fields=5 X_scalar=True dtypes=['int64']
+train: n=1141112 users=26210 videos=7538 pos=0.3366
+valid: n=124909 users=22377 videos=5951 pos=0.3133
+test: n=170588 users=23875 videos=5982
+train_day 0409:52736/0.336 0410:227808/0.341 0411:278835/0.333 0412:166076/0.332 0413:94711/0.317 0414:71252/0.319 0415:58892/0.363 0416:60904/0.377 0417:44023/0.364 0418:24560/0.331 0419:20443/0.323 0420:20851/0.311 0421:20021/0.315
+valid_day 0422:22283/0.319 0423:26645/0.338 0424:18240/0.303 0425:14911/0.312 0426:14530/0.311 0427:14328/0.297 0428:13972/0.290
+train_user rows_q=[1, 13, 31, 59, 97, 207] pos_q=[0.0, 4.0, 10.0, 21.0, 34.0, 67.0] zero=0.051 all=0.023
+valid_user rows_q=[1, 2, 4, 7, 12, 26] pos_q=[0.0, 0.0, 1.0, 2.0, 4.0, 9.0] zero=0.303 all=0.119
+overlap user: uniq=26210/22377/23875 unseen_row V=0.016 T=0.036
+overlap video: uniq=7538/5951/5982 unseen_row V=0.000 T=0.000
+overlap author: uniq=6482/5311/5333 unseen_row V=0.000 T=0.000
+cat legend: MI=rare-pooled(>=50) train bits; obs/card; dom; unseen-row V/T
+cat video_id: MI=0.08222 7538/8000 dom=0.008 unseen=0.000/0.000
+cat author_id: MI=0.08108 6482/7000 dom=0.008 unseen=0.000/0.000
+cat user_id: MI=0.07984 26210/30000 dom=0.001 unseen=0.016/0.036
+cat tab: MI=0.07064 15/20 dom=0.732 unseen=0.000/0.000
+cat tag: MI=0.01969 44/64 dom=0.264 unseen=0.000/0.000
+cat onehot_feat3: MI=0.01083 1436/1600 dom=0.042 unseen=0.001/0.001
+cat upload_type: MI=0.00964 14/20 dom=0.430 unseen=0.000/0.000
+cat onehot_feat8: MI=0.00594 452/512 dom=0.020 unseen=0.000/0.000
+cat duration_bucket: MI=0.00373 10/12 dom=0.103 unseen=0.000/0.000
+cat onehot_feat1: MI=0.00315 7/12 dom=0.272 unseen=0.000/0.000
+cat music_type: MI=0.00305 6/12 dom=0.881 unseen=0.000/0.000
+cat onehot_feat7: MI=0.00257 117/160 dom=0.087 unseen=0.000/0.000
+cat user_active_degree: MI=0.00256 9/16 dom=0.770 unseen=0.000/0.000
+cat register_days_bucket: MI=0.00235 10/12 dom=0.100 unseen=0.000/0.000
+cat register_days_range: MI=0.00193 7/16 dom=0.751 unseen=0.000/0.000
+cat_rank_all video_id:0.08222,author_id:0.08108,user_id:0.07984,tab:0.07064,tag:0.01969,onehot_feat3:0.01083,upload_type:0.009638,onehot_feat8:0.005944,duration_bucket:0.003731,onehot_feat1:0.003145,music_type:0.003049,onehot_feat7:0.00257,user_active_degree:0.002557,register_days_bucket:0.002346,register_days_range:0.001932,onehot_feat0:0.001585,onehot_feat12:0.001337,fans_user_num_range:0.00131,onehot_feat11:0.0009898,onehot_feat6:0.0008261,onehot_feat2:0.0008178,friend_user_num_range:0.000679,hour:0.0006657,is_live_streamer:0.0005788,onehot_feat9:0.0004561,onehot_feat16:0.0003069,follow_user_num_range:0.0003002,onehot_feat4:0.0002114,onehot_feat5:0.0001555,is_video_author:0.0001552,onehot_feat10:0.0001252,onehot_feat15:0.000122,onehot_feat14:8.938e-05,onehot_feat13:7.786e-05,video_type:7.394e-05,onehot_feat17:2.011e-07,is_lowactive_period:0
+num duration_ms: missT/V=0.000/0.000 q=[11633.0, 70233.0, 235766.0, 420483.0] logcorr=+0.074
+num user_follow_user_num: missT/V=0.000/0.000 q=[17.0, 146.0, 918.0, 3827.0] logcorr=+0.016
+num user_fans_user_num: missT/V=0.000/0.000 q=[3.0, 60.0, 710.0, 4094.0] logcorr=-0.043
+num user_friend_user_num: missT/V=0.000/0.000 q=[0.0, 20.0, 318.0, 1587.0] logcorr=-0.030
+num user_register_days: missT/V=0.000/0.000 q=[299.0, 1223.0, 2125.0, 2702.0] logcorr=-0.053
+history video_id keys=video_id_train_count_log1p,video_id_long_view_rate,video_id_is_like_rate,video_id_is_follow_rate,video_id_is_comment_rate,video_id_is_forward_rate,video_id_is_hate_rate,video_id_is_click_rate,video_id_is_profile_enter_rate,video_id_play_time_ms_logmean,video_id_profile_stay_time_logmean,video_id_comment_stay_time_logmean
+history_top video_id_long_view_rate:r=+0.320,nan=0.00 video_id_is_click_rate:r=+0.300,nan=0.00 video_id_play_time_ms_logmean:r=+0.236,nan=0.00 video_id_train_count_log1p:r=+0.111,nan=0.00 video_id_comment_stay_time_logmean:r=+0.103,nan=0.00 video_id_is_profile_enter_rate:r=+0.057,nan=0.00 video_id_is_comment_rate:r=+0.044,nan=0.00 video_id_is_like_rate:r=+0.033,nan=0.00
+history author_id keys=author_id_train_count_log1p,author_id_long_view_rate,author_id_is_like_rate,author_id_is_follow_rate,author_id_is_comment_rate,author_id_is_forward_rate,author_id_is_hate_rate,author_id_is_click_rate,author_id_is_profile_enter_rate,author_id_play_time_ms_logmean,author_id_profile_stay_time_logmean,author_id_comment_stay_time_logmean
+history_top author_id_long_view_rate:r=+0.317,nan=0.00 author_id_is_click_rate:r=+0.297,nan=0.00 author_id_play_time_ms_logmean:r=+0.233,nan=0.00 author_id_train_count_log1p:r=+0.108,nan=0.00 author_id_comment_stay_time_logmean:r=+0.102,nan=0.00 author_id_is_profile_enter_rate:r=+0.057,nan=0.00 author_id_is_comment_rate:r=+0.045,nan=0.00 author_id_is_like_rate:r=+0.032,nan=0.00
