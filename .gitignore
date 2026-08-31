@@ -57,8 +57,12 @@ run_slot_ladder.sh
 # record of what was removed -- those citations do not resolve in a clone.
 archive/aliccp/
 
-scripts/
-
+# Anchored to the repo root. Written bare as `scripts/` it matched EVERY directory named
+# scripts at any depth -- including runs/*/scripts/ -- and since a negation cannot re-include
+# a file whose parent directory is excluded, `!runs/**/scripts/*.py` could not save them. The
+# agent's own per-iteration scripts are a graded deliverable; no new run would have shipped one.
+run_1k.sh
+RUN_REPORT_1K_test.md
 __pycache__/
 *.pyc
 .env

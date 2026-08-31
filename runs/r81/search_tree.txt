@@ -1,5 +1,0 @@
-#1 0.6028  Reproduce the official baseline at the modeling stage by training a ra
-  #2 0.6043  Target the prediction-formation stage by comparing additive memorizati
-    #3 0.6045 [retired]  Target training under temporal drift and prediction formation by compa
-      #5 0.6045  At the prediction-formation and supervision stages, a leakage-free bre
-        #6 0.6045  Target drift-aware feature construction and prediction formation by co

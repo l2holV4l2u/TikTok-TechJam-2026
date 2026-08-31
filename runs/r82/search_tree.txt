@@ -1,9 +1,0 @@
-#1 0.6020  Reproduce the official baseline by training a k=16 pointwise Factoriza
-  #2 0.6035  Target the prediction-formation and fusion stages by comparing additiv
-  #4 0.6040 [retired]  Target the prediction-formation stage by comparing additive memorizati
-    #6 0.6048 [retired]  Target the training-objective and temporal-adaptation stages by compar
-      #14 0.6049  Target the supervision and prediction-formation stages by comparing sh
-      #15 0.6049  Target the training-objective and candidate-set prediction stages by c
-      #16 0.6049  Target the feature-construction and prediction stages with NumPy-nativ
-    #7 0.6048  Target the training-loss and prediction-formation stages by comparing 
-      #9 0.6048  Target leakage-free history representation and temporal selection by c

@@ -1,5 +1,0 @@
-#1 0.6016  Reproduce the official baseline by training a k=16 Factorization Machi
-  #2 0.6049  Target the feature-interaction representation stage by replacing the f
-    #3 0.6051  Target the feature-interaction representation stage by adding a low-ra
-      #4 0.6053  Target the tabular numeric/context modeling stage by blending the incu
-        #5 0.6056  Target the memorization stage with a jointly trained Wide & DeepFM mod

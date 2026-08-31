@@ -1,6 +1,0 @@
-# What the agent established
-
-- (active) A k=16 five-field Factorization Machine trained with Adam at lr=0.001 using pairwise interactions among user, video, author, tab, and duration bucket matches the official 0.6016 validation baseline within seed noise (observed primary 0.6021) and provides no measurable improvement. [iters 1]
-- (active) For the five-field Factorization Machine, inverse-square-root per-user loss weighting with observed weights from 0.2814 to 4.5023 produces no measurable primary-score change relative to unweighted training (0.6006 versus 0.6021, a difference of 0.0015). [iters 1,2]
-- (active) Adding FiBiNET-style squeeze-excitation and a bilinear interaction residual to the five-field FM produces no measurable primary-score improvement over the plain FM (0.6025 versus 0.6021, a difference of 0.0004), with epoch 2 and residual alpha 0.25 selected on validation. [iters 1,3]
-- (active) Adding an MMoE residual trained jointly on long-view, click, like, and follow outcomes to the five-field FM produces no measurable primary-score improvement over the plain FM (0.6037 versus 0.6021, a difference of 0.0016), despite validation selecting epoch 5 and residual alpha 0.70 and learning task-dependent expert gates. [iters 1,4]
