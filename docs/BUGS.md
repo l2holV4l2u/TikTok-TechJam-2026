@@ -322,3 +322,39 @@ it is a comparison BETWEEN runs, which the harness never makes.
 What this costs to know: three converged runs, ~90 minutes, ~830k tokens. What it buys is the
 end of a line of investigation. The remaining spread across r79, r90 and r92 is 0.0006 with no
 trend, which is seed noise; further runs of this kind are a coin flip rather than a method.
+
+## Which earlier findings the non-compliant contract actually invalidates
+
+Every run before r94 carries `data_contract: train-plus-valid-v2`: the final model was refit on
+train+validation before scoring test, and the run inherited cross-run memory. Both are now off.
+The question is which conclusions drawn from those runs still stand.
+
+The refit changed TEST predictions only. The validation score in every run always came from a
+train-only fit -- that rule predates all of this and the audit of 36 submitted scripts confirms
+it. So the split is clean:
+
+**Still valid (measured on validation):**
+- slot correlations, and the whole portfolio gate reversal. Correlations are computed from each
+  slot's validation predictions, which no refit touched.
+- family-sweep gains and the exhaustion of architecture search (validation primary).
+- the r81 recency-weighting A/B.
+
+**Invalidated (measured on test):**
+- the slot-count ladder's deltas, and with them "three slots is the knee". The ordering
+  r87 > r89 > r88 > r90 > r79 > r92 is between models whose test scores all came from refit
+  fits. Re-deriving it needs a compliant ladder.
+- "slot decorrelation does not predict the score". Both sides of that comparison are test
+  deltas from refit models.
+- the chronological-selector experiment. It ranked 49 iterations by how well a validation
+  window predicted TEST, and those test scores are refit scores. The conclusion may well
+  survive -- the refit is a constant applied to every iteration alike -- but it is no longer
+  a clean measurement.
+
+**What the compliant contract costs, measured:** r79 scored +0.00509 with the refit; r94, the
+same harness under train-only with memory off, scored +0.00280. That is a loss of 0.00229, and
+it is the honest size of what the refit was contributing. An earlier estimate of +0.0009, taken
+from a small stand-in model rather than from the agent's own pipeline, was low by 2.5x and
+should not have been quoted.
+
+Two effects are stacked in that 0.00229 -- no refit and no memory -- and r94 cannot separate
+them. A run with `--memory` under the train-only contract would.
