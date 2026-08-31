@@ -192,3 +192,20 @@ A.6 Annotated Reading List
 The goal here is only to understand how a recommender system is structured — the recall → ranking → re-ranking pipeline — and where the ranking stage (which this challenge targets) sits within it. You do not need to read a whole course; the introductory overview is enough. Read just one of the following:
 - Google, Recommendation Systems (Machine Learning Crash Course), the Overview section — https://developers.google.com/machine-learning/recommendation A short, official overview of the pipeline. Note: Google calls the ranking stage "scoring" — this is the same thing as ranking, and it is the part this challenge focuses on.
 - Wang Shusen, Recommender Systems, Chapter 1 (Overview) — https://github.com/wangshusen/RecommenderSystem The most beginner-friendly Chinese resource; the first chapter alone gives the full architecture.
+
+2.9 FAQs
+2.9.1 Convergence rule clarification
+The stated rule (ε = 0.002, N = 3) is the organizers' default stopping criterion, not a constraint on your run. A team may declare its own ε, N, and an optional minimum-iteration floor, provided that:
+(a) the values are fixed before the run and recorded in the run log;
+(b) the run still respects the hard caps — 50 iterations and 6 h wall-clock per benchmark;
+(c) the scored submission is still the validation-best checkpoint at the point the run stops, evaluated once on the hidden test.
+For the default rule, the window is cumulative: a run is converged when the best validation primary score over the last N scored iterations exceeds the best score from before that window by no more than ε. Iterations that crash or produce no validation score are logged and count toward the 50-iteration cap and the 6 h ceiling, but do not advance or reset the convergence window.
+2.9.2 Training data clarification
+For the required benchmark (KuaiRand-Pure), training data is the train split only: date 20220408–20220421, taken from log_standard_4_08_to_4_21_pure.csv, with log_standard_4_22_to_5_08_pure.csv supplying validation (20220422–20220428) and test (20220429–20220508).
+Two consequences, both of which follow from the split being date-based:
+1. log_random_4_22_to_5_08_pure.csv may not be used as training data. Its date range covers both the validation and the test window, so training on it injects in-period information about the scored rows and breaks the temporal split. It may be used for analysis and EDA; it may not enter model training.
+2. KuaiRand-1k / 27k may not be used as auxiliary training data for KuaiRand-Pure (e.g. pre-training user/video embeddings on 1k, then fine-tuning on Pure). They cover the same 20220408–20220508 window and share users and videos with Pure, so the same temporal leak applies one level removed. 1k and 27k remain available as their own bonus benchmarks, each trained on its own splits.
+Both are checkable in code review — see under 'what is judged'
+2.9.3 What is judged
+The test rows are provided in the Starter Kit; the split is fixed and date-based, and final judging scores your submitted predictions on exactly those rows. There is no separate private dataset. "Hidden test" means you must not train on the test split or use its labels in any way — including model selection, early stopping, threshold tuning, or feature statistics computed over it.
+This is enforced by review, not by withholding the file: we evaluate both the submitted prediction file and the code/run logs. A pipeline that touches test labels will be disqualified on that basis.
