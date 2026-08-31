@@ -65,6 +65,8 @@ runs/*
 !runs/r90/
 !runs/r91/
 !runs/r92/
+!runs/r94/
+!runs/r95/
 # the epsilon/N convergence sweep: three --patience 999 curves run to the 50-script cap so
 # that no candidate N is censored by the stop rule. The logs and the agent's scripts are the
 # evidence; the numbers drawn from them live in reports/convergence_sweep/.
