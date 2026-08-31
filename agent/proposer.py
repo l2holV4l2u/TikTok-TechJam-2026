@@ -107,18 +107,18 @@ PIPELINE API -- import these, do not reimplement them:
   Printing it costs one call and the aggregate score alone cannot tell you the same thing.
 
 RULES:
-  - The validation score you report MUST come from a model fit on "train" only. Every
-    comparison and every selection is made on that number, so a model that has seen
-    validation labels would make it meaningless.
-  - The TEST scores you save MUST come from that SAME train-only model. Do NOT refit on
-    train + validation before predicting test. The task says the agent "develops using only
-    the training split and the public validation feedback" -- validation is FEEDBACK, not a
-    second training set. Fitting on it, even for test predictions only, reads that sentence
-    the other way, and we are not going to submit a result that depends on the loose reading.
-  - Validation labels must not reach ANY fitted quantity. That includes early stopping:
-    `valid_sets=[<validation>]` with `early_stopping(...)`, or anything else that picks a
-    round count, a learning rate, a threshold or a combination weight by watching validation
-    while the same rows are then scored and reported. Hold out the last days of TRAIN for that.
+  - TRAINING DATA IS THE "train" SPLIT ONLY -- dates 20220408-20220421. Every model whose
+    predictions you save, for validation OR for test, must be fit on that split and nothing
+    else. The task says the agent "develops using only the training split and the public
+    validation feedback": validation is FEEDBACK, not a second training set.
+  - Specifically, `valid` is for EVALUATION, never for fitting. Do not concatenate train and
+    validation, do not refit on the two combined before scoring test, and do not compute
+    feature statistics, encodings, normalisers or histories over validation rows. Reading
+    `valid.y` to score a model is correct; using it to fit one is not.
+  - That includes anything CHOSEN by watching validation, not only weights: early stopping
+    with `valid_sets=[<validation>]`, or picking a round count, a learning rate, a threshold
+    or a combination weight from validation and then scoring the same rows. Hold out the last
+    days of TRAIN for that.
   - Never fit or select anything on "test", and never read test labels.
   - load("test").y DOES NOT EXIST. Touching it -- .y, .y.sum(), .y.astype(), len(s.y),
     anything -- raises RuntimeError and the whole iteration is lost. The test split gives

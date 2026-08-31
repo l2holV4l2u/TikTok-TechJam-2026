@@ -40,6 +40,12 @@ def _load_probe() -> list[str]:
     return names
 
 
+# Which splits a run was allowed to fit on. `train-plus-valid-v2` runs refit the final
+# model on train+validation before scoring test; benchmark rule 2.9.2 states training
+# data is the train split only (20220408-20220421), so those runs are not compliant and
+# must stay distinguishable from these in the record.
+DATA_CONTRACT = "train-only-v3"
+
 BASELINE_VALID = 0.6016
 BASELINE_TEST = 0.5946
 
@@ -181,7 +187,15 @@ def main() -> None:
                          "pressure on the proposer's quota and costs less for a summarising task")
     ap.add_argument("--facts", default="research/facts_pure.json",
                     help="dataset facts for the brief, produced by agent.facts")
-    ap.add_argument("--no-memory", action="store_true", help="ignore this agent's prior runs")
+    # OFF by default. The rules budget "50 iterations per benchmark run", and the unit is the
+    # run: a run that inherits several hundred scored experiments from earlier ones is not the
+    # N-iteration run its own metadata reports, so the cap stops meaning anything. Which runs
+    # sit in runs/ is also a human decision, which routes human judgement into a run through a
+    # channel `manual_interventions` cannot see. Both go away when it is off, and the cost is
+    # small. `--memory` opts back in; `--no-memory` still parses so existing commands and the
+    # docs that use it keep working.
+    ap.add_argument("--memory", action=argparse.BooleanOptionalAction, default=False,
+                    help="distil this agent's prior runs into the brief (default: off)")
     ap.add_argument("--dry-run", action="store_true", help="use a canned LLM, no network")
     ap.add_argument("--replay", default=None,
                     help="replay a previous run's llm_calls.jsonl: no network, no cost. Tests loop/parsing/reporting changes, NOT prompt changes")
@@ -248,11 +262,14 @@ def main() -> None:
     from pipeline.data import NUMERIC_FEATURES
     _probe = _load_probe()
     api_surface = sorted(_probe)
-    memory = "" if args.no_memory else distil("runs", exclude=run_dir.name,
-                                              baseline=args.baseline_valid,
-                                              api_surface=api_surface)
+    memory = distil("runs", exclude=run_dir.name, baseline=args.baseline_valid,
+                    api_surface=api_surface) if args.memory else ""
     if memory:
         print(f"cross-run memory: {len(memory.splitlines())} lines from this agent's prior runs")
+    else:
+        # Say it out loud. A silent absence reads as "there was no history to find", which is
+        # the opposite of what happened, and the run log is what a judge reads.
+        print("cross-run memory: OFF -- this run sees no prior run of this agent")
 
     facts = json.loads(Path(args.facts).read_text(encoding="utf-8"))
     # Measured, not asserted: an over-powered model reaches 0.9245 primary in-sample on
@@ -305,7 +322,7 @@ def main() -> None:
             "model": getattr(complete, "model", "unknown"),
             "dataset": facts.get("variant", "unknown"),
             "api_surface": api_surface,
-            "data_contract": "train-plus-valid-v2",
+            "data_contract": DATA_CONTRACT,
             "stop_reason": f"crashed: {type(exc).__name__}: {exc}"[:400],
             "crashed": True,
             "iterations": len(ledger.read()),
@@ -331,7 +348,7 @@ def main() -> None:
         "model": getattr(complete, "model", "unknown"),
         "dataset": facts.get("variant", "unknown"),
         "api_surface": api_surface,
-        "data_contract": "train-plus-valid-v2",
+        "data_contract": DATA_CONTRACT,
         "provider": ("replay" if args.replay else "dry-run" if args.dry_run
                      else __import__("os").environ.get("LLM_PROVIDER", "anthropic")),
         "stop_reason": r.stop_reason,
@@ -339,6 +356,11 @@ def main() -> None:
         # is how the spec words it. This records where the stricter per-iteration reading
         # would have stopped, so the run can be checked against either.
         "strict_convergence_iteration": r.strict_converged_iter,
+        # The two values the entrant chooses in the stopping rule. Recorded so a run is
+        # self-describing about them: without this a --patience 999 diagnostic curve is
+        # indistinguishable from a default run that simply never converged.
+        "epsilon": args.epsilon,
+        "patience": args.patience,
         "iterations": len(entries),
         "iteration_cap": args.iters,
         # A turn is one hypothesis-to-score cycle -- Figure 1's iteration, and what the

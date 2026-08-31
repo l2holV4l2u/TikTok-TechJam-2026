@@ -1,0 +1,54 @@
+SHAPE train=1141112 valid=124909 X=37 num=5 aux=10
+TR n=1141112 y=0.3366 users=26210 rowsQ=[13, 31, 59, 97] posQ=[10.0, 21.0, 34.0] zero=0.051 mixed=0.927
+VA n=124909 y=0.3133 users=22377 rowsQ=[2, 4, 7, 12] posQ=[1.0, 2.0, 4.0] zero=0.303 mixed=0.578
+TR_dates 409:52736/0.336 410:227808/0.341 411:278835/0.333 412:166076/0.332 413:94711/0.317 414:71252/0.319 415:58892/0.363 416:60904/0.377 417:44023/0.364 418:24560/0.331 419:20443/0.323 420:20851/0.311 421:20021/0.315
+VA_dates 422:22283/0.319 423:26645/0.338 424:18240/0.303 425:14911/0.312 426:14530/0.311 427:14328/0.297 428:13972/0.290
+OV user trU=26210 vaU=22377 vaRowUn=0.016 vaUniUn=0.019
+OV video trU=7538 vaU=5951 vaRowUn=0.000 vaUniUn=0.001
+OV author trU=6482 vaU=5311 vaRowUn=0.000 vaUniUn=0.000
+XSCALAR=True sample_dtype=int64 time=(1141112,)/int64
+F author_id C=7000 T=6482 V=5311 U=0.000 D=0.008 R=+0.309
+F duration_bucket C=12 T=10 V=10 U=0.000 D=0.103 R=+0.064
+F fans_user_num_range C=16 T=9 V=9 U=0.000 D=0.379 R=+0.031
+F follow_user_num_range C=16 T=8 V=8 U=0.000 D=0.198 R=+0.015
+F friend_user_num_range C=16 T=7 V=7 U=0.000 D=0.278 R=+0.021
+F hour C=32 T=24 V=24 U=0.000 D=0.078 R=+0.019
+F is_live_streamer C=4 T=2 V=2 U=0.000 D=0.771 R=+0.030
+F is_lowactive_period C=4 T=1 V=1 U=0.000 D=1.000 R=-0.000
+F is_video_author C=4 T=2 V=2 U=0.000 D=0.854 R=+0.008
+F music_type C=12 T=6 V=6 U=0.000 D=0.881 R=+0.052
+F onehot_feat0 C=8 T=2 V=2 U=0.000 D=0.500 R=+0.039
+F onehot_feat1 C=12 T=7 V=7 U=0.000 D=0.272 R=+0.073
+F onehot_feat10 C=8 T=5 V=5 U=0.000 D=0.400 R=+0.014
+F onehot_feat11 C=8 T=5 V=5 U=0.000 D=0.749 R=+0.044
+F onehot_feat12 C=8 T=3 V=3 U=0.000 D=0.677 R=+0.038
+F onehot_feat13 C=8 T=3 V=3 U=0.000 D=0.937 R=+0.008
+F onehot_feat14 C=8 T=3 V=3 U=0.000 D=0.884 R=+0.013
+F onehot_feat15 C=8 T=3 V=3 U=0.000 D=0.955 R=+0.009
+F onehot_feat16 C=8 T=3 V=3 U=0.000 D=0.933 R=+0.016
+F onehot_feat17 C=8 T=3 V=3 U=0.000 D=0.968 R=+0.001
+F onehot_feat2 C=64 T=50 V=50 U=0.000 D=0.248 R=+0.028
+F onehot_feat3 C=1600 T=1436 V=1330 U=0.001 D=0.042 R=+0.100
+F onehot_feat4 C=24 T=16 V=16 U=0.000 D=0.369 R=+0.018
+F onehot_feat5 C=48 T=33 V=31 U=0.000 D=0.995 R=+0.012
+F onehot_feat6 C=8 T=3 V=3 U=0.000 D=0.527 R=+0.030
+F onehot_feat7 C=160 T=117 V=105 U=0.000 D=0.087 R=+0.055
+F onehot_feat8 C=512 T=452 V=438 U=0.000 D=0.020 R=+0.068
+F onehot_feat9 C=12 T=7 V=7 U=0.000 D=0.228 R=+0.019
+F register_days_bucket C=12 T=10 V=10 U=0.000 D=0.100 R=+0.047
+F register_days_range C=16 T=7 V=8 U=0.000 D=0.751 R=+0.043
+F tab C=20 T=15 V=15 U=0.000 D=0.732 R=+0.255
+F tag C=64 T=44 V=43 U=0.000 D=0.264 R=+0.150
+F upload_type C=20 T=14 V=11 U=0.000 D=0.430 R=+0.086
+F user_active_degree C=16 T=9 V=9 U=0.000 D=0.770 R=+0.062
+F user_id C=30000 T=26210 V=21956 U=0.016 D=0.001 R=+0.296
+F video_id C=8000 T=7538 V=5945 U=0.000 D=0.008 R=+0.313
+F video_type C=8 T=3 V=3 U=0.000 D=0.987 R=+0.020
+N duration_ms missT=0.000 missV=0.000 Q=[11633.0, 70233.0, 235766.0] RlogV=+0.049
+N user_fans_user_num missT=0.000 missV=0.000 Q=[3.0, 60.0, 710.0] RlogV=-0.033
+N user_follow_user_num missT=0.000 missV=0.000 Q=[17.0, 146.0, 918.0] RlogV=+0.009
+N user_friend_user_num missT=0.000 missV=0.000 Q=[0.0, 20.0, 318.0] RlogV=-0.021
+N user_register_days missT=0.000 missV=0.000 Q=[299.0, 1223.0, 2125.0] RlogV=-0.044
+H video_id n=12 video_id_train_count_log1p:(124909,)/float32,video_id_long_view_rate:(124909,)/float32,video_id_is_like_rate:(124909,)/float32,video_id_is_follow_rate:(124909,)/float32,video_id_is_comment_rate:(124909,)/float32,video_id_is_forward_rate:(124909,)/float32,video
+H author_id n=12 author_id_train_count_log1p:(124909,)/float32,author_id_long_view_rate:(124909,)/float32,author_id_is_like_rate:(124909,)/float32,author_id_is_follow_rate:(124909,)/float32,author_id_is_comment_rate:(124909,)/float32,author_id_is_forward_rate:(124909,)/float32
+AUX outcomes_only n=10 names=comment_stay_time,is_click,is_comment,is_follow,is_forward,is_hate,is_like,is_profile_enter,play_time_ms,profile_stay_time
