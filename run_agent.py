@@ -141,9 +141,12 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-dir", default="runs/latest")
     ap.add_argument("--iters", type=int, default=50, help="organizer hard cap is 50")
-    # 50 scripts at 3 slots is ~17 waves inside the 6h ceiling, so a wave can afford ~1200s.
-    # Nothing has come near even 900 (median 80s, max 350), so this is headroom, not a target.
-    ap.add_argument("--timeout", type=float, default=1200.0,
+    # 50 scripts at 3 slots is ~17 waves inside the 6h ceiling. If every wave ran to the cap
+    # 1270s would be the arithmetic limit, but they do not: r96 averaged ~400s with one 1042s
+    # outlier on its first turn. 1800 buys room for that outlier to finish instead of being
+    # killed and scored as a failure, which would also teach the agent that big models fail.
+    # The 6h ceiling remains the real backstop and stops the run regardless.
+    ap.add_argument("--timeout", type=float, default=1800.0,
                     help="per-script timeout; one iteration is one script and may search internally, so this is generous — the 6h ceiling binds first")
     ap.add_argument("--wall-clock-s", type=float, default=6 * 3600.0,
                     help="organizer backstop is 6 hours")
