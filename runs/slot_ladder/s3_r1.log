@@ -1,0 +1,14 @@
+cross-run memory: OFF -- this run sees no prior run of this agent
+dataset: KuaiRand-Pure  train 1,141,112 / valid 124,909 / test 170,588
+
+submission from iteration #12 (validation primary 0.6056) -> runs/slot_ladder/s3_r1/submission.csv
+  hypothesis: At the temporal-context and objective stages, compare a recency-weighted boosted pointwise
+  test primary 0.5988  gauc 0.6664  ndcg@5 0.5312   delta vs baseline +0.0042
+
+stopped: converged
+iterations: 14 of 50   failures: 0
+agent wall-clock: 25.2 min   script time: 15.8 min
+tokens (incl. knowledge revision): 236,564
+EDA completed: True   baseline reproduced: 0.6009384986377277
+manual interventions: 0
+run log: runs/slot_ladder/s3_r1

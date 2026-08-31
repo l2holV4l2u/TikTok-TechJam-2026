@@ -1,0 +1,14 @@
+cross-run memory: OFF -- this run sees no prior run of this agent
+dataset: KuaiRand-Pure  train 1,141,112 / valid 124,909 / test 170,588
+
+submission from iteration #8 (validation primary 0.6056) -> runs/slot_ladder/s2_r1/submission.csv
+  hypothesis: At the prediction-formation and training-weighting stages, compare recency-weighted pointw
+  test primary 0.5985  gauc 0.6654  ndcg@5 0.5315   delta vs baseline +0.0039
+
+stopped: converged
+iterations: 10 of 50   failures: 0
+agent wall-clock: 16.6 min   script time: 5.5 min
+tokens (incl. knowledge revision): 163,773
+EDA completed: True   baseline reproduced: 0.6013090530469687
+manual interventions: 0
+run log: runs/slot_ladder/s2_r1

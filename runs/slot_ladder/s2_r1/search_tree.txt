@@ -1,0 +1,9 @@
+#1 0.6013  Reproduce the official baseline at the modeling stage by training a k=
+  #2 0.6038  At the modeling and training-weighting stages, compare recency-weighte
+  #3 0.6050 [retired]  At the training, prediction-formation, and aggregation stages, recency
+    #4 0.6050  At the prediction-feature stage, compare three non-neural history-base
+    #5 0.6052 [retired]  At the representation and auxiliary-training stages, compare target-co
+      #6 0.6054  At the representation and drift-weighted training stages, compare Deep
+      #7 0.6054 [retired]  At the objective and temporal-representation stages, compare recency-w
+        #8 0.6056  At the prediction-formation and training-weighting stages, compare rec
+        #9 0.6056  At the prediction-formation stage, test graph diffusion families over 

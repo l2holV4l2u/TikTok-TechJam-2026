@@ -1,0 +1,17 @@
+#1 0.6026 [retired]  Reproduce the official baseline end-to-end by training a rank-16 Facto
+  #2 0.6035  Target the training/feature stage with three structurally different fa
+  #3 0.6035  Target training under temporal drift by comparing recency-weighted bin
+  #4 0.6035  Target prediction formation and post-processing by comparing recency-w
+  #5 0.6044 [retired]  Target the training objective and prediction family: compare recency-w
+    #6 0.6047  Target the sequential feature/model stage: a causal DIN using each use
+    #7 0.6047  Target the ranking objective and prediction-formation stages with a ha
+    #8 0.6048 [retired]  Target prediction formation and drift-robust ensembling by comparing f
+      #10 0.6048  Target session-context and ranking-objective stages: a recency-weighte
+      #11 0.6048  Target the objective and prediction-formation stages with three comple
+      #12 0.6048  Target prediction formation with three low-correlation families—explic
+      #13 0.6048  Target non-parametric prediction formation with generative categorical
+    #9 0.6048 [retired]  Target prediction formation under drift with three non-FM families—a r
+      #14 0.6048  Target query construction and objective under drift: candidate-set-rel
+      #15 0.6048  Target prediction formation under drift with an out-of-fold user-condi
+      #16 0.6048  Target temporal robustness and prediction formation by comparing domai
+      #17 0.6048  Target prediction formation with three non-parametric but structurally

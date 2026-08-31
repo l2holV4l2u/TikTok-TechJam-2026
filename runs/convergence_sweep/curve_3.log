@@ -1,0 +1,14 @@
+cross-run memory: OFF -- this run sees no prior run of this agent
+dataset: KuaiRand-Pure  train 1,141,112 / valid 124,909 / test 170,588
+
+submission from iteration #21 (validation primary 0.6051) -> runs/convergence_sweep/curve_3/submission.csv
+  hypothesis: Target multi-task supervision and prediction formation under drift: joint-state classifica
+  test primary 0.5989  gauc 0.6661  ndcg@5 0.5317   delta vs baseline +0.0043
+
+stopped: exhausted
+iterations: 22 of 50   failures: 1
+agent wall-clock: 57.9 min   script time: 12.8 min
+tokens (incl. knowledge revision): 528,461
+EDA completed: True   baseline reproduced: 0.601046062500658
+manual interventions: 0
+run log: runs/convergence_sweep/curve_3

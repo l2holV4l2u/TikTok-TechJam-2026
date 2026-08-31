@@ -1,0 +1,13 @@
+#1 0.6009 [retired]  Reproduce the official baseline at the modeling stage by training a k=
+  #2 0.6020  At the training and model-family stages, applying four-day recency wei
+  #3 0.6023  At the prediction-formation stage, additive wide logits, latent user-v
+  #4 0.6043 [retired]  At the model and training-objective stages, compare DCN, AutoInt, FiBi
+    #5 0.6048  At the history-aggregation and prediction-forming stages, compare atte
+    #6 0.6048  At the training-objective and rank-aggregation stages, compare pointwi
+    #7 0.6049 [retired]  At the prediction-formation and training-objective stages, compare fie
+      #8 0.6051  At the sequential representation and sample-weighting stages, compare 
+      #9 0.6052 [retired]  At the training-objective and prediction-formation stages, compare NFM
+        #11 0.6052  At the drift-handling and non-parametric prediction stages, I will com
+        #12 0.6056  At the temporal-context and objective stages, compare a recency-weight
+        #13 0.6056  At the prediction-formation and drift-robustness stages, compare a sta
+      #10 0.6052  At the representation stage, LightGCN propagation over positive user–v

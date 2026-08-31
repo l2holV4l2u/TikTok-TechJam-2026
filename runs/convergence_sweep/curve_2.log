@@ -1,0 +1,61 @@
+
+CRASHED after 26 iterations: KeyboardInterrupt: 
+cross-run memory: OFF -- this run sees no prior run of this agent
+dataset: KuaiRand-Pure  train 1,141,112 / valid 124,909 / test 170,588
+Traceback (most recent call last):
+  File "/Users/kanisornswsw/TikTok-TechJam-2026/run_agent.py", line 411, in <module>
+    main()
+  File "/Users/kanisornswsw/TikTok-TechJam-2026/run_agent.py", line 288, in main
+    r = run_loop(
+        ^^^^^^^^^
+  File "/Users/kanisornswsw/TikTok-TechJam-2026/agent/loop.py", line 701, in run_loop
+    p = proposer.propose(phase=phase, history=ledger.read(),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kanisornswsw/TikTok-TechJam-2026/agent/proposer.py", line 474, in propose
+    prompt = self._build_prompt(phase, history, blacklist, feedback, parent, context, note)
+                   ^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/kanisornswsw/TikTok-TechJam-2026/agent/llm.py", line 329, in __call__
+    @property
+              
+  File "/Users/kanisornswsw/TikTok-TechJam-2026/agent/llm.py", line 275, in __call__
+    headers = {
+               ^
+  File "/Users/kanisornswsw/TikTok-TechJam-2026/agent/llm.py", line 122, in _post_json
+    raise LLMRetryExhausted(
+         ^^^^^^^^^^^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.11/urllib/request.py", line 216, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.11/urllib/request.py", line 519, in open
+    response = self._open(req, data)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.11/urllib/request.py", line 536, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.11/urllib/request.py", line 496, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.11/urllib/request.py", line 1391, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.11/urllib/request.py", line 1352, in do_open
+    r = h.getresponse()
+        ^^^^^^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.11/http/client.py", line 1386, in getresponse
+    response.begin()
+  File "/opt/anaconda3/lib/python3.11/http/client.py", line 325, in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.11/http/client.py", line 286, in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.11/socket.py", line 706, in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.11/ssl.py", line 1315, in recv_into
+    return self.read(nbytes, buffer)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/anaconda3/lib/python3.11/ssl.py", line 1167, in read
+    return self._sslobj.read(len, buffer)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt

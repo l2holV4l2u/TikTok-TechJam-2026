@@ -1,0 +1,90 @@
+[
+  {
+    "text": "A k=16 categorical Factorization Machine trained with Adam at lr=0.001 on user_id, video_id, author_id, tab, and duration_bucket matches the official validation baseline within seed noise: primary 0.6026 versus 0.6016, a difference of 0.0010. It is a reproduced reference rather than a measurable improvement.",
+    "status": "active",
+    "evidence": [
+      1
+    ]
+  },
+  {
+    "text": "The iteration-2 comparison selected deepfm_blend_a0.60 with primary 0.6038, measurably above the official baseline by 0.0022 but only 0.0012 above the reproduced categorical FM, so it did not measurably improve on that reference.",
+    "status": "active",
+    "evidence": [
+      1,
+      2
+    ]
+  },
+  {
+    "text": "Among the iteration-3 interaction families, MMoE had the highest reported raw family primary at 0.6039, but its 0.0015 advantage over field-weighted FM at 0.6024 is inside seed noise and is not evidence that MMoE is better.",
+    "status": "active",
+    "evidence": [
+      3
+    ]
+  },
+  {
+    "text": "The iteration-3 selected candidate scored primary 0.6041, measurably above the official baseline by 0.0025 but within seed noise of both the reproduced categorical FM at 0.6026 and the iteration-2 candidate at 0.6038; the tested interaction operators, four-day recency weighting, and rank blending produced no measurable incumbent-relative ",
+    "status": "active",
+    "evidence": [
+      1,
+      2,
+      3
+    ]
+  },
+  {
+    "text": "The iteration-5 xDeepFM blend scored primary 0.6045, measurably above the official baseline by 0.0029 but only 0.0004 above the iteration-3 incumbent, 0.0007 above the iteration-2 candidate, and 0.0019 above the reproduced categorical FM; none of those incumbent-relative differences exceeds seed noise.",
+    "status": "active",
+    "evidence": [
+      1,
+      2,
+      3,
+      5
+    ]
+  },
+  {
+    "text": "Although iteration 5 selected an internal 0.50 rank blend from the xDeepFM family, there is no evidence that xDeepFM, PNN, FiBiNET, PLE, recency-weighted empirical Bayes, or their tested rank aggregations provide useful complementarity over the trusted incumbent because no gain exceeded 0.002.",
+    "status": "active",
+    "evidence": [
+      5
+    ]
+  },
+  {
+    "text": "Half-life-swept AutoInt and leakage-safe sequential DIN did not measurably outperform the trusted 0.6045 incumbent: their best standalone scores were 0.602218 and 0.602817, and their best 0.25 blends ranged from 0.604141 to 0.604509, all within 0.002 of the incumbent.",
+    "status": "active",
+    "evidence": [
+      6
+    ]
+  },
+  {
+    "text": "The tested recency-weighted latent SVD is not competitive in this setup: it scored 0.533247 standalone, and its best 0.25 blend scored 0.601430, providing no evidence of useful collaborative-signal complementarity with the incumbent.",
+    "status": "active",
+    "evidence": [
+      6
+    ]
+  },
+  {
+    "text": "Iteration 6 retained the trusted incumbent at primary 0.6045 rather than selecting any new AutoInt, sequential DIN, or latent-SVD candidate; its apparent 0.0000 change from iteration 5 is inside seed noise and is not a gain.",
+    "status": "active",
+    "evidence": [
+      5,
+      6
+    ]
+  },
+  {
+    "text": "The recent search sequence has exhausted the stopping rule: iterations 3 through 6 produced no gain above 0.002, including the failed iteration 4, so further trials of the currently tested interaction-family, drift-weighting, sequential-history, collaborative, and rank-blending variants are not supported without a new mechanism.",
+    "status": "active",
+    "evidence": [
+      3,
+      4,
+      5,
+      6
+    ]
+  },
+  {
+    "text": "The iteration-4 implementation failure no longer blocks evaluation of its intended model families: iteration 5 fixed the xDeepFM CIN tensor-shape crash and completed the comparison, selecting xdeepfm_blend_a0.50 with primary 0.6045.",
+    "status": "invalidated",
+    "evidence": [
+      4,
+      5
+    ]
+  }
+]

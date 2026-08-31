@@ -71,6 +71,12 @@ runs/*
 # that no candidate N is censored by the stop rule. The logs and the agent's scripts are the
 # evidence; the numbers drawn from them live in reports/convergence_sweep/.
 !runs/convergence_sweep/
+# the slot-count ladder under the train-only contract, named s<slots>_r<repeat> so repeats of
+# the same slot count sort together. Run SEQUENTIALLY: slots execute concurrently inside a run
+# (loop.py:737) and nothing pins thread counts, so overlapping runs would inflate the wall-clock
+# and token-cost columns that this ladder exists to compare -- and inflate them unevenly, since
+# compute share rises with slot count.
+!runs/slot_ladder/
 # the KuaiRand-1K bonus run behind RUN_REPORT_1K.md (logs only; its 532MB of scores,
 # submission CSV and cached artifacts stay out).
 !runs/r38_1k/
@@ -91,9 +97,22 @@ research/*.csv
 # produced it are excluded above -- shipping its scores would contradict that
 submission_fallback_r26.csv
 
+# The rules above are written as runs/*/... and so miss runs nested one level deeper, such as
+# runs/convergence_sweep/curve_1/. These repeat them at any depth so a nested run cannot smuggle
+# in a 4.9MB submission CSV or a cache of model weights.
+runs/**/artifacts/
+runs/**/submission.csv
+runs/**/scripts/**
+!runs/**/scripts/*.py
+
 blend/artifacts/
 checkpoints/
 components.npz
+
+# local run driver: sources .env and loops the ladder. The protocol it encodes -- sequential
+# execution, eps/N left at the run_agent.py defaults, s<slots>_r<repeat> naming -- is documented
+# in reports/slot_ladder/README.md, so the repo keeps the method without shipping the script.
+run_slot_ladder.sh
 
 __pycache__/
 *.pyc

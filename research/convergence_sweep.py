@@ -43,9 +43,13 @@ from agent.loop import converged  # the rule itself, never a second copy of it
 # The grid. eps spans well below the seed noise floor (sigma ~ 0.0008 on this benchmark) through
 # the organizers' 0.002 and out to a coarse value; N runs from 2 to the largest value a 50-script
 # curve can resolve without the answer running into the cap.
-EPSILONS = [0.0005, 0.001, 0.002, 0.003, 0.005]
+EPSILONS = [0.0, 0.0001, 0.00025, 0.0005, 0.001, 0.002, 0.003, 0.005]
+# 0.0 is the floor of the rule: stop only if the window produced NO improvement at all.
+# Anything below it is unreachable, so this brackets the parameter from both ends.
 PATIENCES = [2, 3, 4, 5, 6, 8, 10, 12, 15, 20]
-OFFICIAL = (0.002, 3)
+# marked in the summary table only so the reader can locate it; it carries no weight in
+# the selection, which ranks every cell on measured test score alone.
+REFERENCE = (0.002, 3)
 
 
 def load_curve(run_dir: Path) -> list[dict]:
@@ -242,14 +246,14 @@ def _print_summary(grid: list[dict], curves: dict) -> None:
         mt = _mean([p["test"] for p in pcs])
         md = _mean([None if p["test"] is None or p["test_full"] is None
                     else p["test"] - p["test_full"] for p in pcs])
-        flag = " *" if (cell["epsilon"], cell["patience"]) == OFFICIAL else ""
+        flag = " *" if (cell["epsilon"], cell["patience"]) == REFERENCE else ""
         cen = " (censored)" if any(p["censored"] for p in pcs) else ""
         print(f"| {cell['epsilon']}{flag} | {cell['patience']} | "
               f"{_mean([p['stop_turn'] for p in pcs]):.1f} | "
               f"{_mean([p['forgone'] for p in pcs]):.5f} | "
               f"{'-' if mt is None else f'{mt:.6f}'} | "
               f"{'-' if md is None else f'{md:+.6f}'}{cen} |")
-    print("\n`*` = the organizers' example values.")
+    print("\n`*` = the value quoted in the task description, shown for orientation only.")
 
 
 if __name__ == "__main__":
