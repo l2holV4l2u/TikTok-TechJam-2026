@@ -34,6 +34,8 @@ SIX_HOURS = 6 * 3600.0
 BASELINE_TOLERANCE = 0.002  # organizer epsilon ~= 2.5 times Pure's reported 5-seed std
 MAX_BASELINE_ATTEMPTS = 4
 MAX_EDA_ATTEMPTS = 2
+# Consecutive unusable proposals before the search is called exhausted rather than unlucky.
+MAX_EMPTY_PROPOSALS = 4
 
 
 @dataclass
@@ -512,6 +514,7 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
     out = LoopResult("max_iters", tree=tree, slots=len(slots))
     spent = 0.0
     stale = 0
+    empty_proposals = 0   # consecutive unusable proposals; see MAX_EMPTY_PROPOSALS
     best_curve: list[float] = []   # validation best after each scored improve iteration
     best = float("-inf")
     selection_best = float("-inf")
@@ -719,9 +722,18 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
             proposer_errors = 0
             slot.seed_note = ""     # the revival note is context for one proposal, not forever
             if p is None:
-                if not batch:
+                # A None here is ambiguous: it means "no usable proposal", which covers both a
+                # genuinely exhausted search space AND a response truncated at the output cap.
+                # r98 ended at 7 of 50 iterations on the latter, reported as "exhausted" with 43
+                # iterations of budget unspent. Treat it as transient until it repeats.
+                empty_proposals += 1
+                if empty_proposals >= MAX_EMPTY_PROPOSALS and not batch:
                     return finish("exhausted")
+                if not batch:
+                    i += 1
+                    continue
                 break
+            empty_proposals = 0
             out.llm_tokens_in += p.tokens_in
             out.llm_tokens_out += p.tokens_out
             # Record the hypothesis HERE, not after scoring, so the next slot in this same

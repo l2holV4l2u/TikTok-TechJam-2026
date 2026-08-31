@@ -46,6 +46,31 @@ def test_a_script_really_cannot_see_them_end_to_end():
         os.environ.pop("OPENAI_API_KEYS", None)
 
 
+
+def test_openmp_preload_only_for_scripts_that_import_torch():
+    """The childenv sitecustomize imports LightGBM in every child to win the OpenMP race.
+
+    It costs +3.8s per subprocess (0.16s -> 3.96s measured) and a script that never touches
+    torch cannot hit the clash it guards against. Unconditional, it took agent.demo from
+    seconds to nine minutes.
+    """
+    import tempfile
+    from pathlib import Path as _P
+    from agent.executor import _CHILD_ENV_DIR, run_script
+
+    d = _P(tempfile.mkdtemp())
+    show = 'import os' + chr(10) + "print(os.environ.get('PYTHONPATH', ''))" + chr(10)
+    plain = d / 'plain.py'
+    plain.write_text(show, encoding='utf-8')
+    torchy = d / 'torchy.py'
+    torchy.write_text('# torch' + chr(10) + show, encoding='utf-8')
+
+    assert str(_CHILD_ENV_DIR) not in run_script(plain, timeout=120).stdout, \
+        'a script with no torch must not pay for the preload'
+    assert str(_CHILD_ENV_DIR) in run_script(torchy, timeout=120).stdout, \
+        'a script mentioning torch must still get the import-order fix'
+    print('ok: test_openmp_preload_only_for_scripts_that_import_torch')
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for t in tests:

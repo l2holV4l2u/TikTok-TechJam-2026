@@ -62,9 +62,15 @@ def run_script(path: Path, timeout: float = 1800, cwd=None, pythonpath=None, ext
     # always build the child environment explicitly, even with no extras: inheriting the parent's
     # wholesale hands the script every credential the controller holds
     env = _strip_credentials(dict(os.environ))
-    # childenv goes first so its sitecustomize wins, and applies whether or not a caller
-    # passed a pythonpath -- every generated script needs the import-order fix.
-    parts = [str(_CHILD_ENV_DIR)]
+    # childenv goes first so its sitecustomize wins -- but only for scripts that actually
+    # import torch. The preload costs +3.8s per subprocess (0.16s -> 3.96s measured), and a
+    # script that never touches torch cannot hit the OpenMP ordering clash it guards against.
+    # Roughly half of generated scripts, and every script in the test suite, are in that class.
+    try:
+        needs_openmp_fix = "torch" in path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        needs_openmp_fix = True      # unreadable: assume it needs the guard
+    parts = [str(_CHILD_ENV_DIR)] if needs_openmp_fix else []
     if pythonpath:
         parts.append(str(pythonpath))
     parts.append(env.get("PYTHONPATH", ""))
