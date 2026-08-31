@@ -1,0 +1,710 @@
+% architecture.tex -- system description of the autonomous ML research agent
+% Build:  pdflatex architecture.tex   (twice, for cross-references)
+\documentclass[11pt,a4paper]{article}
+
+\usepackage{lmodern}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{caption}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+
+\emergencystretch=3em
+
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric}
+
+% ---------------------------------------------------------------- conveniences
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\file}[1]{\texttt{#1}}
+\newcommand{\primary}{\textsc{primary}}
+
+% ---------------------------------------------------------------- figure palette
+% Flat and quiet: one weight of rule, one text colour, three pale fills that mark
+% WHO owns a step -- the model, the sandbox, the trusted evaluator. Nothing else.
+\definecolor{nline}{HTML}{C4C4C4}    % every border and every arrow
+\definecolor{ntext}{HTML}{2B2B2B}    % every label
+\definecolor{nmuted}{HTML}{8A8A8A}   % annotations
+\definecolor{naccent}{HTML}{FBE3CC}  % the LLM -- the only call in the loop
+\definecolor{nsand}{HTML}{F6DFD6}    % untrusted, model-written
+\definecolor{nverify}{HTML}{DCEBDA}  % the verification chain
+
+\tikzset{
+  n/.style  = {draw=nline, fill=white, line width=0.5pt, rounded corners=1.5pt,
+               minimum width=44mm, minimum height=9mm, align=center,
+               font=\small, text=ntext},
+  ns/.style = {n, minimum width=30mm, minimum height=8mm},
+  nt/.style = {n, minimum width=28mm, minimum height=8mm},
+  na/.style = {n, fill=naccent},
+  nu/.style = {n, fill=nsand},
+  nv/.style = {n, fill=nverify},
+  d/.style  = {draw=nline, fill=white, line width=0.5pt, diamond, aspect=3.4,
+               inner sep=2pt, minimum height=10mm, align=center,
+               font=\small, text=ntext},
+  a/.style  = {-{Stealth[length=1.8mm,width=1.4mm]}, line width=0.5pt, draw=nline},
+  al/.style = {font=\scriptsize, text=nmuted, inner sep=2pt},
+  as/.style = {font=\scriptsize\itshape, text=nmuted, inner sep=0pt},
+  node distance = 7mm,
+}
+
+\captionsetup{font=small, labelfont=bf}
+
+
+% ================================================================== title
+\title{\vspace{-1.2cm}\textbf{An Autonomous ML Research Agent for KuaiRand-Pure}\\[2pt]
+       \large System Architecture}
+\author{TikTok TechJam 2026, Track 2}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-0.9cm}
+
+\begin{abstract}
+\noindent
+This document describes the architecture of an LLM-driven agent that runs an end-to-end machine
+learning research loop without human intervention: it inspects a dataset it has never seen,
+reproduces a published baseline, then repeatedly forms a hypothesis, writes the training script,
+executes it in a sandbox, verifies the result against a trusted evaluator, revises what it
+believes, and chooses what to try next. The design question it answers is not ``can a model write
+a training script'' but ``what has to surround the model so that an unattended run produces a
+result you can trust.'' Most of the system is that surrounding machinery: a trust boundary
+between the controller and model-written code, an evaluator that never believes a script's own
+reported score, an integrity critic, a search tree with retirement, and a revisable belief set.
+Section~\ref{sec:measured} reports what the system has actually been measured to do --- including
+one component that has never fired and one hypothesis the run records refute.
+Section~\ref{sec:gaps} records where the implementation and the project's own documentation
+currently disagree.
+\end{abstract}
+
+% ================================================================== 1
+\section{Overview}
+
+The task is within-user ranking of logged short-video impressions from the KuaiRand-Pure
+dataset. The scored label is the native column \code{long\_view}; the metric is
+\[
+  \primary \;=\; \tfrac{1}{2}\bigl(\mathrm{GAUC} + \mathrm{nDCG@5}\bigr),
+\]
+with GAUC the positive-count-weighted mean of per-user AUC over users satisfying
+$0 < \text{positives} < \text{impressions}$, and nDCG@5 averaged over \emph{all} users, so a user
+with no positive contributes zero. Splits are fixed by date: train
+\mbox{20220408--20220421} ($1{,}141{,}112$ rows), validation \mbox{20220422--20220428}
+($124{,}909$), hidden test \mbox{20220429--20220508} ($170{,}588$).
+
+The agent is dataset-agnostic in construction: everything it knows about KuaiRand is either
+measured from the cache at start-up (\file{agent/facts.py}) or established by its own experiments.
+The system is roughly $12{,}100$ lines of Python with no third-party dependency in the controller
+itself --- the LLM client is written against \code{urllib} --- plus a $4{,}300$-line React viewer
+that reads the run records off disk.
+
+\paragraph{The training-data rule.} One constraint runs through the whole design and is enforced
+at four separate layers, so it is worth stating once up front. Models may be fit on the
+\textbf{train split only} (20220408--20220421), for \emph{both} the validation and the test
+predictions they save. Validation is feedback, not a second training set, and that extends beyond
+weights to anything \emph{chosen} by watching validation --- an early-stopping round count, a
+threshold, a blend weight. The four layers are: the proposer's \code{RULES} block states it; the
+critic detects violations by AST (Section~\ref{sec:trust}); \code{data\_contract} in
+\file{run\_meta.json} records which contract a run ran under; and the run viewer classifies runs
+under a superseded contract as \code{legacy-contract} rather than counting them.
+
+\subsection{Design constraints that shaped it}
+
+Four scored criteria drive most of the non-obvious decisions:
+
+\begin{itemize}[leftmargin=1.3em, itemsep=2pt]
+  \item \textbf{Autonomy} is measured by intervention count, so every failure mode has to be
+        handled in-loop. A crashed script's traceback is returned to the proposer with its own
+        source; a timeout is fed back differently, because a timeout is not a bug to fix. Ideas
+        are retired rather than escalated.
+  \item \textbf{Cost} is scored, so the LLM is kept out of the training loop entirely. It is
+        called twice per iteration in the sequential configuration --- once to propose, once to
+        revise beliefs --- and everything else is deterministic Python. Prompt history is
+        summarised to a fixed window so per-iteration token use stays flat as a run grows.
+  \item \textbf{Feasibility} is scored on wall-clock, not accumulated script time, so the loop
+        measures and enforces true elapsed time against a six-hour backstop.
+  \item \textbf{Innovation} is scored on what \emph{the agent} identified as worth trying, which
+        is why the task brief is restricted to specification and API. Section~\ref{sec:gaps}
+        reports where that restriction currently leaks.
+\end{itemize}
+
+% ================================================================== 2
+\section{Repository layout}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{@{}llr l@{}}
+\toprule
+\textbf{Module} & \textbf{Role} & \textbf{LOC} & \textbf{Trust} \\
+\midrule
+\multicolumn{4}{@{}l@{}}{\textit{\file{agent/} --- the product}}\\
+\file{loop.py}       & controller; the three phases, budgets, turn loop & 955 & trusted \\
+\file{proposer.py}   & prompt construction and response parsing        & 623 & trusted \\
+\file{llm.py}        & stdlib LLM client, recording, replay            & 393 & trusted \\
+\file{portfolio.py}  & slots, archive, refill, correlation gate        & 288 & trusted \\
+\file{memory.py}     & distils prior run ledgers into context          & 229 & trusted \\
+\file{knowledge.py}  & the revisable belief set                        & 225 & trusted \\
+\file{consultant.py} & one cross-slot synthesis per turn               & 203 & trusted \\
+\file{ensemble.py}   & incumbent retention and rank blending           & 196 & trusted \\
+\file{tree.py}       & search over solution scripts                    & 173 & trusted \\
+\file{recovery.py}   & retry, then retire the idea                     & 136 & trusted \\
+\file{critic.py}     & integrity gate on a scored result               & 154 & trusted \\
+\file{executor.py}   & sandboxed subprocess, credential stripping      & 110 & boundary \\
+\file{selection.py}  & user-grouped fold split, accept/reject          & 108 & trusted \\
+\file{diagnose.py}   & per-segment error profile, drift report         &  99 & trusted \\
+\file{facts.py}      & measures dataset facts from the cache           &  86 & trusted \\
+\file{kb.py}         & keyword retrieval over the paper catalogue      &  57 & trusted \\
+\file{ledger.py}     & append-only JSONL, one record per iteration     &  52 & trusted \\
+\midrule
+\multicolumn{4}{@{}l@{}}{\textit{\file{pipeline/} --- the sandbox the agent works in}}\\
+\file{data.py}       & loader, fixed date splits, train-only vocabs    & 525 & trusted \\
+\file{evaluate.py}   & GAUC / nDCG@5, pinned to the official metric    & 202 & trusted \\
+\file{history.py}    & leakage-safe train-only entity histories        & 109 & trusted \\
+\file{submit.py}     & submission writer and validator                 & 141 & trusted \\
+\bottomrule
+\end{tabular}
+\caption{Principal modules. \emph{Boundary} marks the single place where trusted control passes
+into model-written code. \file{report\_run.py} (488) and the \file{viz/} React app read finished
+runs; \file{research/} holds human analysis explicitly off the submission path.}
+\end{table}
+
+\paragraph{Reading a finished run.} \file{viz/} is a local React application over the run records.
+Its landing view is derived entirely from \file{runs/}, never from the prose write-ups, so it
+cannot drift away from what the runs recorded. Its most useful piece is \file{run-index.ts}, which
+\emph{classifies} every run folder from its own metadata rather than from a hand-maintained list:
+\code{submitted} (the run's \file{submission.csv} is sha256-identical to
+\file{submission\_best.csv}), \code{eligible}, \code{leakage} (\code{api\_surface} exposed
+full-month item outcome columns), \code{legacy-contract}, \code{bonus-dataset},
+\code{unverified} (no \file{run\_meta.json}, so the contract cannot be checked), and
+\code{scratch}. \code{unverified} is deliberately not a verdict --- those runs are neither claimed
+nor excluded, because the records alone cannot settle it.
+
+% ================================================================== 3
+\section{The control loop}
+\label{sec:loop}
+
+\file{run\_agent.py} builds the collaborators --- proposer, evaluator, ledger, tree, recovery,
+knowledge --- and hands them to \code{agent.loop.run\_loop}, which owns the entire run.
+Figure~\ref{fig:arch} shows one iteration end to end.
+
+% ---------------------------------------------------------------- FIGURE 1
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+
+% ---- main column
+\node[n]                    (prop) {propose};
+\node[na, below=of prop]    (llm)  {LLM};
+\node[nu, below=of llm]     (exec) {run the script};
+\node[nv, below=of exec]    (ver)  {recompute the score};
+\node[nv, below=of ver]     (bl)   {blend vs.\ incumbent};
+\node[nv, below=of bl]      (cr)   {critic};
+\node[n,  below=of cr]      (com)  {ledger $+$ tree};
+\node[d,  below=of com]     (conv) {converged?};
+\node[n,  below=of conv]    (sub)  {submission};
+
+% ---- flow
+\draw[a] (prop) -- (llm);
+\draw[a] (llm)  -- node[al,right] {script} (exec);
+\draw[a] (exec) -- node[al,right] {arrays, not a verdict} (ver);
+\draw[a] (ver)  -- (bl);
+\draw[a] (bl)   -- (cr);
+\draw[a] (cr)   -- (com);
+\draw[a] (com)  -- (conv);
+\draw[a] (conv) -- node[al,right,pos=0.35] {yes} (sub);
+
+% ---- feedback: not converged, go again
+\draw[a] (conv.east) -- ++(2.6,0) |- node[al,pos=0.24,right,align=left]
+         {no --- beliefs,\\tree, diagnosis} (prop.east);
+
+% ---- side annotations, the one thing worth saying about each band
+\node[as, left=3mm of llm]  {one call};
+\node[as, left=3mm of exec] {untrusted};
+\node[as, left=3mm of ver]  {trusted again};
+
+\end{tikzpicture}
+\caption{One iteration. The arrow leaving the sandbox carries \emph{arrays, never a verdict}:
+a generated script is part of the search space, not part of the evaluator. Nothing reaches the
+ledger, the tree or the submission until the score has been recomputed, blended by the
+controller and passed by the critic.}
+\label{fig:arch}
+\end{figure}
+
+\subsection{Phases}
+
+\code{run\_loop} walks three phases in order, choosing on each pass of the \code{while} loop
+(\file{loop.py}:534--545):
+
+\begin{enumerate}[leftmargin=1.5em, itemsep=3pt]
+  \item \textbf{\code{eda}} --- the agent writes and runs its own inspection script. Judged only
+        on whether it ran and printed something; there is no score. Its stdout is persisted to
+        \file{eda\_report.txt} and injected into every later prompt. This is the agent's
+        \emph{only} source of dataset knowledge. Two attempts.
+  \item \textbf{\code{baseline}} --- the agent stands up an end-to-end Factorization Machine
+        pipeline. Accepted only if it lands within $0.002$ of the organizers' published
+        validation $\primary = 0.6016$. A score far \emph{above} the baseline is fed back as a
+        suspected leak, a score far below as a pipeline error. On success the script becomes the
+        root of the search tree. Four attempts, after which the run stops with
+        \code{baseline\_not\_reproduced}.
+  \item \textbf{\code{improve}} --- the turn loop of Figure~\ref{fig:arch}, until a stop condition
+        fires.
+\end{enumerate}
+
+A run terminates on the first of: convergence, the 50-script cap, the six-hour wall-clock
+backstop, an exhausted proposer, a daily LLM quota, or a broken environment (five consecutive
+sub-second failures with no output at all).
+
+\subsection{The convergence rule}
+
+The organizers specify that a run has converged when the validation score ``has not improved by
+more than $\varepsilon = 0.002$ over the last $N = 3$ consecutive iterations.'' This is read as
+written --- the gain \emph{across} the window, not each single step clearing $\varepsilon$
+(\file{loop.py}:479):
+\[
+  \text{converged} \;\iff\; |c| > N \;\wedge\; c_{-1} - c_{-1-N} \le \varepsilon,
+\]
+where $c$ is the running best-validation curve. The distinction is material: a run climbing
+$+0.0008$ per iteration has improved by $0.0024$ over three and is not converged, whereas the
+per-step reading would stop it. The stricter reading is nonetheless recorded as
+\code{strict\_convergence\_iteration} in \file{run\_meta.json}, so a run can be checked against
+either. Both $\varepsilon$ and $N$ are also written to the metadata, so a diagnostic run launched
+with \code{-{}-patience 999} is distinguishable from a default run that simply never converged.
+
+% ================================================================== 4
+\section{Prompt construction}
+
+\file{proposer.py} assembles the prompt from ordered blocks. The ordering is not cosmetic:
+providers discount input that repeats as a stable \emph{prefix}, so blocks that are identical
+across a run --- the task brief, the paper catalogue, the parent script --- are placed first, and
+blocks rewritten every iteration follow. The same text is sent either way; only the cache hit
+rate differs.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{@{}p{4.2cm}p{10.6cm}@{}}
+\toprule
+\textbf{Block} & \textbf{Contents} \\
+\midrule
+\code{TASK\_BRIEF} & Metric definitions, split row counts and date windows, the pipeline API
+  signature by signature, the output contract, the training-data rule, the environment. Numbers
+  are interpolated from \file{agent/facts.py}, measured from the cache, so pointing the harness at
+  another KuaiRand variant does not feed it false premises. \\
+phase instruction & \code{\_EDA\_TASK}, \code{\_BASELINE\_TASK} or \code{\_IMPROVE\_TASK}. \\
+literature catalogue & All 33 entries, one line each --- ``it lists every method available,
+  including ones that may not suit this data; deciding which are relevant is your job.'' \\
+EDA output & The agent's own inspection results, truncated to 4000 characters. \\
+parent script & The chosen node's \emph{actual source}, in full (14\,000 characters). This is
+  what makes iteration $N{+}1$ able to build on $N$ rather than restarting from a skeleton. \\
+diagnosis & \code{diagnose.segment\_report}: the incumbent's nDCG@5 against the per-user ceiling,
+  bucketed by impression count, with each bucket's share of the total gap. \\
+history, beliefs, blacklist & The last 8 iterations relabelled by what happened to the
+  \emph{score} rather than the loop status; the current belief set; retired ideas. \\
+mode instruction & \code{\_SWEEP\_}, \code{\_TUNE\_}, \code{\_BROADEN\_INSTRUCTION}. \\
+siblings, seed note & Portfolio only: what other slots are attempting this turn; why a revived
+  slot is resuming. \\
+\bottomrule
+\end{tabular}
+\caption{Prompt blocks, in assembly order.}
+\end{table}
+
+The response contract is one \code{HYPOTHESIS:} line and exactly one \code{python} fence. A reply
+that fails to parse, or whose hypothesis matches a retired idea, is retried once with a corrective
+note; a second failure returns \code{None} and the run stops with \code{exhausted}.
+
+% ================================================================== 5
+\section{The trust boundary}
+\label{sec:trust}
+
+The generated script is treated as adversarial in three distinct ways, because the three risks are
+independent.
+
+\paragraph{Credentials.} Model-written code runs unsandboxed with the controller's environment.
+A measured run exposed \code{OPENAI\_API\_KEYS}, \code{GITHUB\_PACKAGE\_TOKEN} and others to the
+child. \code{executor.\_strip\_credentials} therefore denies by pattern
+(\code{KEY}, \code{TOKEN}, \code{SECRET}, \code{AUTH}, \dots) rather than allowing by name: an
+allowlist of what a training script needs is impossible to keep correct across platforms, and
+getting the denylist slightly wide only costs a variable nothing needed.
+
+\paragraph{The hidden test set.} \code{AGENT\_HIDE\_TEST\_LABELS=1} makes
+\code{load("test").y} return a \code{HiddenTestLabels} stand-in that keeps \code{len} and
+\code{shape} --- legitimate scoring code allocates against them --- while every conversion,
+index or attribute access raises a \code{RuntimeError} naming the rule. \code{load("test").aux}
+is similarly name-visible and value-hidden. Selection on the hidden split is thus not a policy the
+model is asked to respect but a capability it does not have.
+
+\paragraph{The reported score.} \code{SavedScoresEvaluator} (\file{loop.py}:104--190) requires the
+script to save the exact arrays behind its metrics, reloads them, checks shape, finiteness and
+length against the split, and recomputes $\primary$, GAUC and nDCG@5 with the pinned evaluator. The
+script's own \code{METRICS} line is compared to that at a $10^{-6}$ tolerance --- tight enough that
+a fabrication worth making is caught, loose enough that a script printing six significant figures
+is not. The tolerance was $10^{-9}$ and cost a legitimate iteration to a $5\times10^{-7}$
+display-rounding gap.
+
+\paragraph{Validation reaching a fitted quantity.} The critic's fourth rung is the subtlest and was
+added last. An audit of 36 submitted scripts found two that fit weights on train but chose the
+\emph{round count} by early stopping against \code{valid\_sets=[<validation>]} --- and then scored
+and reported those same validation rows. The critic now walks every call node for a
+\code{valid\_sets}, \code{eval\_set} or \code{validation\_data} keyword whose value references a
+variable bound to \code{load("valid")}, and rejects it. What makes this rung necessary rather than
+redundant is that the effect is small: measured at $+0.00041$, roughly half a seed sigma, so it
+never trips the score-jump rung and nothing else in the chain was looking for it. The feedback
+returned to the proposer names the remedy --- hold out the last days of \emph{train} instead.
+
+\paragraph{An externally checkable claim.} \file{research/leakage\_check.py} (28 lines) exists so
+that a reader does not have to take the preceding four layers on trust. It fits one LightGBM
+configuration twice --- train-only and train+validation --- and prints both splits' scores. If the
+agent were training on validation, its reported validation number would sit near the train+valid
+row rather than the train-only row. The submitted run's $0.605309$ is printed alongside for
+comparison. The design intent is stated in the module docstring: \emph{``Run this yourself; trust
+the output, not us.''}
+
+\medskip
+\noindent
+Leakage in the features themselves is handled a layer down. The post-click signals
+(\code{play\_time\_ms}, \code{is\_click}, \code{is\_like}, \dots) are outcomes of the row being
+scored; \file{pipeline/data.py} exposes them only as \code{Split.aux}, never in \code{Split.X},
+and the dataset's supplied \file{video\_features\_statistic} file is not loaded at all because its
+counts aggregate over the full month and overlap the evaluation windows.
+\file{pipeline/history.py} recovers the same mechanism safely: entity histories aggregated over
+train rows only, leave-one-out on train so an example never receives its own target.
+
+% ================================================================== 6
+\section{Search over solution scripts}
+
+Each scored script is a node in \file{tree.py} carrying its source, hypothesis, score, and counts
+of children, misses and crashes.
+
+\begin{itemize}[leftmargin=1.3em, itemsep=2pt]
+  \item \textbf{Miss.} A child failing to clear its parent by $\varepsilon$ increments
+        \code{misses}; two retire the node.
+  \item \textbf{Crash.} A child that crashed or timed out counts half --- the idea may be sound and
+        the code wrong, and recovery already retries it --- so four retire the node. Without this,
+        a node that produced only crashes never approached retirement; one historical node spent
+        five children and 78 minutes that way, one of them timing out at $4{,}373$\,s.
+  \item \textbf{Selection.} \code{select("refine")} returns the highest-scoring live node;
+        \code{select("sweep")} returns \code{min(live, key=(children, -score))} --- the
+        least-explored node, ties broken toward the higher score. Retirement plus this fallback is
+        the backtracking a linear greedy walk cannot do.
+\end{itemize}
+
+\code{max\_misses} defaults to 2 and must stay strictly below \code{patience}. When both were 3,
+checked against the same $\varepsilon$ against the same reigning leader, a node was retired on
+exactly the iteration the run converged, and \code{select} never got to return the fallback ---
+backtracking existed only for crash-heavy nodes.
+
+\paragraph{Idea retirement.} \file{recovery.py} keys an idea by the \emph{method it names}, not the
+sentence, via an alias table (\code{lambdamart}, \code{ranknet}, \code{listwise}
+$\rightarrow$ \code{lambdarank}) and an overlap-coefficient match at $0.6$. Overlap rather than
+Jaccard, because the model restates one idea at very different lengths and Jaccard reads a wordier
+rephrasing as a new idea. Two retries; six if the family has already scored well, on the reasoning
+that it is failing on code bugs rather than on being wrong. An idea that runs cleanly but loses to
+the incumbent by more than $2\varepsilon$ three times is retired too --- crash-based blacklisting
+never fires for code that works.
+
+% ================================================================== 7
+\section{Belief revision}
+
+After each scored iteration the agent rewrites a bounded set of claims, each with a status of
+\code{active}, \code{qualified} or \code{invalidated} and a list of supporting iteration numbers
+(\file{knowledge.py}). The point of the status field is that later evidence can \emph{demote} an
+earlier conclusion rather than accumulating beside it; an append-only reflection log produced runs
+that recommended the same next experiment four times because nothing could overturn it. The
+rendered set --- not a human-authored brief --- is what guides the next proposal.
+
+Two properties are enforced by construction: the set is capped at 14 claims so token use stays
+flat, and revision never raises. An LLM outage, a non-JSON reply or a malformed element leaves the
+previous belief set standing rather than ending an unattended run.
+
+% ================================================================== 8
+\section{Portfolio mode}
+
+With \code{-{}-slots $n$} for $n \in \{2,\dots,5\}$ the loop advances $n$ lineages per turn.
+Figure~\ref{fig:turn} shows the turn structure.
+
+% ---------------------------------------------------------------- FIGURE 2
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+
+\node[n] (turn) {turn $t$};
+
+% three lineages, one row per stage. Row labels sit outside the columns so they
+% cannot collide with the rightmost slot.
+\foreach \i/\x in {0/-38, 1/0, 2/38} {
+  \node[nt, below=9mm of turn, xshift=\x mm] (s\i) {slot \i};
+  \node[nt, below=7mm of s\i]                (c\i) {script};
+  \node[nt, below=7mm of c\i]                (r\i) {score};
+  \draw[a] (turn) -- (s\i);
+  \draw[a] (s\i)  -- (c\i);
+  \draw[a] (c\i)  -- (r\i);
+}
+
+\node[as, left=7mm of s0] {propose};
+\node[as, left=7mm of c0] {execute};
+\node[as, left=7mm of r0] {process};
+
+\node[n, below=9mm of r1] (best) {best of the turn};
+\foreach \i in {0,1,2} { \draw[a] (r\i) -- (best); }
+
+\node[d, below=of best] (conv) {converged?};
+\draw[a] (best) -- (conv);
+
+\end{tikzpicture}
+\caption{One portfolio turn. Proposals are drawn one slot at a time (the LLM client mutates
+shared key-failover state), the scripts then run \emph{concurrently}, and their results are
+processed back in slot order so a later slot can blend against an earlier one's result. The
+organizers' stopping rule is singular --- there is no per-agent counter in it --- so $n$ lineages
+cannot each carry one. What they \emph{can} do is share a turn: the turn's score is the best of
+its slots, and that single curve is what the rule is measured against. Stale slots are archived
+and refilled between turns.}
+\label{fig:turn}
+\end{figure}
+
+The justification for the whole portfolio is falsifiable and is measured every turn.
+\code{pairwise\_rank\_correlation} computes within-user rank correlation between the slots'
+pre-blend validation predictions; ranks are taken inside each user because the metric only ever
+compares rows belonging to the same user. If that number sits above $0.95$, the slots are ranking
+validation identically and the extra cost bought nothing. Measuring it \emph{pre-blend} matters:
+one run read $1.000$ because two slots had blended to $\alpha = 0$ and were literally holding the
+same incumbent array.
+
+% ================================================================== 9
+\section{Measured behaviour}
+\label{sec:measured}
+
+\subsection{The submitted run}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+ & \textbf{GAUC} & \textbf{nDCG@5} & \textbf{\primary} \\
+\midrule
+Official baseline, hidden test & 0.6610 & 0.5282 & 0.59460 \\
+Run \code{r79} iteration 4, hidden test & \textbf{0.6673} & \textbf{0.5321} & \textbf{0.59969} \\
+\midrule
+Delta & $+0.0063$ & $+0.0039$ & $\mathbf{+0.00509}$ \\
+\bottomrule
+\end{tabular}
+\caption{Selection was on validation only ($0.60531$ against the baseline's $0.6016$); the hidden
+test set never chose the winner. Cost: 6 iterations of the 50 allowed, 20.2 minutes wall-clock,
+$96{,}359$ tokens, CPU only, 0 failures, 0 manual interventions. Verified against
+\file{runs/r79/run\_meta.json}.}
+\end{table}
+
+\subsection{The slot ladder}
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{@{}lrrrrr@{}}
+\toprule
+\textbf{Run} & \textbf{Slots} & \textbf{Scripts} & \textbf{Wall-clock} & \textbf{Validation} & \textbf{Hidden test} \\
+\midrule
+\code{r85} & 1 &  8 & 10.8\,min & 0.604424 & 0.598788 \\
+\code{r86} & 2 & 11 & 15.4\,min & 0.604452 & 0.599473 \\
+\code{r87} & 3 & 14 & 22.0\,min & 0.605713 & \textbf{0.600410} \\
+\code{r88} & 4 & 18 & 27.4\,min & 0.605090 & 0.600194 \\
+\code{r89} & 5 & 22 & 32.9\,min & 0.605716 & 0.600256 \\
+\bottomrule
+\end{tabular}
+\caption{All four turns each, so the comparison is at equal turn budget. Re-derivable with
+\code{python -m research.verify\_claims}, which re-checks these against the run records and reports
+disagreements.}
+\end{table}
+
+\subsection{Where the gain actually comes from}
+
+The controller-side blend does most of the work, and not where the design expected. In
+\code{r87}, iterations 6 and 7 both produced candidates scoring \emph{below} the standing
+incumbent and still advanced the leader, because \code{retain\_or\_blend} found a mixture that beat
+both:
+
+\begin{center}
+\small
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+\textbf{Iteration} & \textbf{Candidate} & \textbf{Incumbent} & \textbf{Selected $\alpha$} & \textbf{Retained} \\
+\midrule
+6 & 0.6045 & 0.6043 & 0.50 & 0.6049 \\
+7 & 0.6046 & 0.6049 & 0.25 & 0.6052 \\
+9 & 0.6055 & 0.6052 & 1.00 & 0.6055 \\
+10 & 0.6053 & 0.6055 & 0.00 & 0.6055 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+By contrast the \emph{portfolio-level} blend of Figure~\ref{fig:turn} step 5b has never once been
+accepted: 0 of 40 attempts across all ten portfolio runs, every one recording
+\code{"reason": "no member improved fold A"}, and \code{portfolio\_blend\_primary} null in every
+\file{run\_meta.json}. The fold-A/fold-B gate is doing exactly what it was written to do --- it is
+refusing blends that do not clear $\varepsilon$ on the selection fold --- but the consequence is
+that this component contributes nothing at present and should either be re-tuned or removed.
+
+\subsection{A refuted hypothesis: decorrelation does not predict the score}
+\label{sec:decorr}
+
+Section~\ref{sec:trust} argued that the portfolio is worth its cost only if its slots disagree, and
+the correlation gate was built as the acceptance test for that argument. The gate was worth fixing
+--- measured post-blend it was reading $1.000$ by construction --- but it does not follow that the
+number it now produces is worth \emph{optimising}, and the run records refute the stronger claim.
+
+\begin{table}[htbp]
+\centering
+\small
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+\textbf{Run} & \textbf{Configuration} & \textbf{Mean corr.} & \textbf{Validation} & \textbf{Hidden-test delta} \\
+\midrule
+\code{r90} & gate broken; slots were near-clones & ${\sim}0.99$ & 0.605282 & $+0.00530$ \\
+\code{r87} & gate fixed                          & $0.741$      & 0.605713 & $\mathbf{+0.00581}$ \\
+\code{r92} & gate fixed $+$ drift axis           & $0.276$      & 0.605454 & $+0.00469$ \\
+\bottomrule
+\end{tabular}
+\caption{Three converged 3-slot runs. \code{r92} produced the best decorrelation on record ---
+per-turn means $0.7794$, $0.6687$, $0.6991$, $0.2757$, under the $0.90$ ``proceed'' line on every
+turn --- and the \emph{worst} hidden-test delta of the three. All figures re-derived from
+\file{portfolio.jsonl} and \file{run\_meta.json}.}
+\end{table}
+
+Both directions are now measured. Slots that were literally copies of one another scored
+$+0.00530$; slots that disagreed as much as anything the harness has produced scored $+0.00469$.
+Diversity is not the axis the score moves along, and a run cannot be steered by pushing the
+correlation down. The remaining spread across \code{r79}, \code{r90} and \code{r92} is $0.0006$
+with no trend, which is seed noise. Cost of establishing this: three converged runs, roughly
+90 minutes and 830k tokens. What it buys is the end of a line of investigation --- recorded in
+\file{docs/BUGS.md} rather than quietly dropped, because a negative result that closes a direction
+is worth as much as the positive one that opened it.
+
+\subsection{Cross-run memory is off by default}
+
+\file{memory.py} distils prior run ledgers into the next run's context. It is now disabled unless
+\code{-{}-memory} is passed, and the loop prints \code{cross-run memory: OFF} rather than staying
+silent, since a silent absence reads as ``there was no history to find.'' The reasoning is a rules
+argument rather than a performance one: the benchmark budgets 50 iterations \emph{per run}, and a
+run inheriting several hundred scored experiments from earlier ones is not the $N$-iteration run
+its own metadata reports. Which folders sit in \file{runs/} is also a human decision, so memory
+routes human judgement into a run through a channel \code{manual\_interventions} cannot see.
+
+% ================================================================== 10
+\section{Documentation and implementation divergences}
+\label{sec:gaps}
+
+The following were found by reading the code against \file{README.md} and confirmed against the
+run records. They are recorded here rather than silently corrected because several of them bear on
+claims the project makes about itself.
+
+\paragraph{1. The ``no human priors'' guarantee does not cover the live prompt.}
+\file{README.md} states that ``nothing in the agent's prompt tells it what works on this dataset,''
+guarded by \code{test\_brief\_\allowbreak carries\_no\_\allowbreak human\_findings}. That test scans
+\code{TASK\_BRIEF} only (\file{tests/test\_proposer.py}:38). Every improve iteration also appends
+\code{\_SWEEP\_INSTRUCTION} (\file{proposer.py}:285, injected at :581), which contains
+hand-written measured findings --- \emph{``uniform days score 0.4597 and a 4-day half-life scores
+0.5518''}, \emph{``Seventeen architectures have been tried''}, \emph{``selection protocol REFUTED,
+do not spend an iteration on it''}, \emph{``the blend has beaten every standalone family, every
+time''} --- and names specific architectures. Running the test's own banned-term list against the
+blocks it does not scan:
+\begin{center}\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Block} & \textbf{Banned terms present} \\
+\midrule
+\code{\_SWEEP\_INSTRUCTION}   & \code{blend}, \code{lambdarank}, \code{deepfm} \\
+\code{\_TUNE\_INSTRUCTION}    & \code{blend} \\
+\code{\_BROADEN\_INSTRUCTION} & --- \\
+\bottomrule
+\end{tabular}
+\end{center}
+It does reach the model: 12 of \code{r87}'s 12 improve prompts contain the block. Either the
+guarantee should be narrowed to ``the task specification carries no findings,'' or the guard should
+be extended over every block \code{\_build\_prompt} can emit --- which would require rewriting the
+sweep instruction.
+
+\paragraph{2. Three of the four search modes are unreachable in a normal run.}
+\file{loop.py}:571 sets \code{mode = "sweep"} unconditionally for every improve iteration.
+\code{\_EDIT\_PARENT}, \code{\_BROADEN\_INSTRUCTION} and \code{\_TUNE\_INSTRUCTION} fire only under
+the diagnostic \code{-{}-force-mode} flag. Prompt-block counts over \code{r87}: sweep 12, broaden 0,
+tune 0, edit 0. The README loop diagram still presents ``adaptive: refine or broaden'' as the live
+policy, and the FML-bench citation supporting adaptivity describes behaviour the current
+configuration does not exhibit. The literature justification for the sweep-only policy is sound and
+is stated in the code comment; the diagram is simply stale.
+
+\paragraph{3. No run exists yet under the current data contract.}
+This gap has narrowed but not closed. The \code{train-only-v3} contract is now committed and
+enforced on three sides: \file{run\_agent.py}:47 sets it, the proposer's \code{RULES} block was
+rewritten from ``the TEST scores you save may come from the SAME recipe refit on train +
+validation'' to ``TRAINING DATA IS THE \code{train} SPLIT ONLY,'' and the critic gained the
+\code{eval\_set} rung to enforce it. What remains is that \emph{every} run in \file{runs/} ---
+including \code{r79}, the source of \file{submission\_best.csv} --- still records
+\code{train-plus-valid-v2}, the contract the code's own comment calls non-compliant with benchmark
+rule 2.9.2. The viewer classifies these honestly as \code{legacy-contract}, so nothing is being
+concealed, but the submission has to be regenerated under v3 before the compliance claim holds
+end to end. This is the single highest-value outstanding item.
+
+\paragraph{4. The convergence sweep is set up but not run.} The \file{.gitignore} merge conflict
+noted in an earlier revision of this document has been resolved. The analysis code,
+\file{research/convergence\_sweep.py} (256 lines), is finished and well-constructed --- it replays
+every $(\varepsilon, N)$ cell offline against an uncensored \code{-{}-patience 999} curve so no
+grid cell costs a run, and it imports \code{agent.loop.converged} rather than keeping a second copy
+of the rule. But the three \file{runs/convergence\_sweep/curve\_*} inputs are committed while still
+incomplete: 3--4 ledger rows each against an intended 50-script curve, no \file{run\_meta.json},
+zero-byte logs. The study cannot be run until those three curves are regenerated to the cap.
+
+\paragraph{5. Minor.} \file{consultant.py} describes a ``28-paper catalogue''; \file{kb/papers.json}
+holds 33. \file{README.md} still documents \code{-{}-no-memory} as the way to disable cross-run
+memory, which now parses but is the default; and its loop diagram is the source of divergence~2
+above. The README team table is still a \code{TODO(team)} placeholder, and it is a required
+deliverable.
+
+\paragraph{Verified as accurate.} All 23 test modules pass after the contract and critic changes.
+\code{r79}'s headline numbers match its metadata exactly. Every figure in the
+\file{docs/BUGS.md} decorrelation table reproduces from \file{portfolio.jsonl} and
+\file{run\_meta.json} to the digit. \code{research.verify\_claims} checks 34 claims and reports one
+problem (\code{r30} unverifiable for lack of a submission block --- an absence, not a
+disagreement). The cost profile is as described: 11 LLM calls for 6 scripts at one slot, and $n$
+proposals plus one consultant call per turn in portfolio mode.
+
+% ================================================================== 11
+\section{Reproducing a run}
+
+{\footnotesize\begin{verbatim}
+  # data (194 MB, public)
+  mkdir -p data/raw && cd data/raw
+  curl -LO https://zenodo.org/records/10439422/files/KuaiRand-Pure.tar.gz
+  tar -xzf KuaiRand-Pure.tar.gz && cd ../..
+  python -c "import pipeline.data as d; \
+             d.build_cache('data/raw/KuaiRand-Pure/data','data/cache')"
+
+  export OPENAI_API_KEY=...           # and LLM_PROVIDER=openai, or ANTHROPIC_API_KEY
+
+  python -m pipeline.baseline_fm                          # the official baseline, for reference
+  python run_agent.py --run-dir runs/rN --iters 50 --timeout 900 --patience 3
+  python report_run.py runs/rN > RUN_REPORT.md
+  python -m pipeline.submit --check --in runs/rN/submission.csv --split test
+
+  python -m research.leakage_check                        # train-only vs train+valid, side by side
+  python -m research.verify_claims                        # re-derive the ablation tables
+\end{verbatim}}
+
+\noindent
+Cross-run memory is off by default; pass \code{-{}-memory} to opt in. \code{-{}-slots $n$} selects
+portfolio mode. \code{-{}-force-mode} pins the search mode for a diagnostic run and is not for
+scoring.
+
+\noindent
+Two offline modes exist. \code{-{}-dry-run} exercises the entire loop with a canned LLM and no
+network. \code{-{}-replay runs/rN/llm\_calls.jsonl} re-runs a previous run against its recorded
+responses: deterministic, no tokens, and it reproduces the original ledger to the last decimal.
+Replay tests the loop, the parsers, the ledger and the reporting --- \emph{not} prompts, since a
+changed prompt still receives the response recorded for the old one.
+\code{-{}-replay-strict} fails the moment a prompt diverges, so that limitation cannot pass
+unnoticed.
+
+\end{document}
