@@ -711,7 +711,7 @@ auxiliary targets and are asserted absent from the feature set by test;
 `video_features_statistic_pure.csv` is excluded entirely because its counts are aggregated over
 the whole log period, including the validation and test windows.
 
-## Three things we tested and rejected
+## Three things we tested, and what the results actually said
 
 An agent that only reports what worked is reporting a filtered view. Each of these cost a real
 measurement, and each changed what the agent does next. All three are reproducible from the run
@@ -748,45 +748,69 @@ standalone on a boosted tree, uniform day weights score 0.4597 (random is 0.4753
 for a 4-day half-life.
 
 That effect had been tried once, on a *side* component, where the blender damped it to +0.00002.
-Directing the agent at the main model's `sample_weight` instead produced r82's winning iteration,
-a recency-weighted pointwise LightGBM, and our best hidden-test score: **0.599904, +0.00530**.
+Directing the agent at the main model's `sample_weight` instead produced r90's winning iteration,
+a recency-weighted pointwise LightGBM, and the best hidden-test score we had at that point:
+**0.599904, +0.00530**.
 The lesson is about placement, not about the technique.
 
-### 3. A portfolio of parallel lineages, built and abandoned
+### 3. A portfolio of parallel lineages — abandoned, then reinstated when the measurement was fixed
 
 We built a portfolio search that advances *n* solution lineages per turn under one convergence
-counter, with an archive, a refill policy and a cross-lineage blend. It shipped behind a
-go/no-go gate: three slots are only worth their cost if they explore differently, measured as
-mean pairwise rank correlation between slots. Below 0.90 proceed; above 0.95 stop.
+counter, with an archive, a refill policy and a cross-lineage blend. It shipped behind a go/no-go
+gate: three slots are only worth their cost if they explore differently, measured as mean pairwise
+rank correlation between slots. Below 0.90 proceed; above 0.95 stop.
 
-Two three-slot runs answered it:
+**The first measurement said stop, and it was wrong.** Two runs read 0.94, 0.99, 0.99, 1.00 and we
+concluded we had three expensive copies of one agent. Two bugs produced that number:
 
-| turn | r82 | r83 |
-|---|---|---|
-| 1 | 0.9431 | 0.9142 |
-| 2 | — | 0.9952 |
-| 3 | — | 0.9946 |
-| 4 | — | 0.9955 |
+1. *The gate read the wrong array.* `retain_or_blend` overwrites the published scores with
+   whichever of {incumbent, blend, candidate} wins on validation. When a slot's candidate lost,
+   the array recorded as "that slot's prediction" was **the incumbent**. Slots that had each been
+   discarded were then compared against one another — the same array twice — and correlated at
+   exactly 1.0000 by construction. The portfolio blend was fed the incumbent as a candidate
+   member for the same reason, which is why it declined every turn with "no member improved
+   fold A".
+2. *Sibling disclosure never fired.* Each slot is told what its siblings are attempting so it does
+   not duplicate them. But `slot.last_hypothesis` was assigned **after** scoring, so a slot saw
+   what its siblings did *last* turn — and on turn 1 saw nothing at all. Every slot opened from an
+   identical prompt. The slots were not merely measured as clones; early in each run they were
+   being *made* into clones.
 
-Slots start moderately diverse and collapse by turn 2, in both runs independently. In r83's turn
-2 two slots given different hypotheses produced *byte-identical* predictions, because the best
-internal candidate in each script was the same recency-weighted boosted tree. The portfolio blend
-declined on all eight turns with "no member improved fold A" — the correct outcome for a pool of
-near-copies.
+The second bug is the causal one, and it was invisible behind the first.
 
-So we kept the parallel turns, which do buy wall-clock (r83 converged in 24.3 min against r82's
-34.1), and abandoned the archive, refill and blend. The same ceiling shows up everywhere else on
-this data: MMoE against plain DeepFM correlates at 0.9888, blend components at 0.94+. **The
-constraint on this benchmark is not search breadth.** Knowing that is worth more than the
-machinery we did not keep.
+**Corrected, the gate passes.** Same harness, same dataset, measured on each slot's own pre-blend
+model:
 
-r82's turns 2-4 are absent above because a bug made them meaningless, which is worth stating
-rather than hiding: the harness blender overwrites the published score array with whichever of
-{incumbent, blend, candidate} wins, and at incumbent-only the slot recorded the *incumbent* as
-its own prediction. The gate then correlated the incumbent with itself and reported a perfect
-1.0000 for three different architectures. Slots now keep what their own script produced, with
-regression tests in `tests/test_selection.py`. r83 ran with the fix, and all four of its readings
-are honest.
+| turn | r84 | r86 (2 slots) | r87 (3 slots) | r88 (4 slots) | r89 (5 slots) |
+|---|---|---|---|---|---|
+| 1 | 0.9236 | 0.8415 | 0.9140 | 0.9001 | 0.6171 |
+| 2 | 0.7079 | 0.7385 | 0.6345 | 0.8222 | 0.7760 |
+| 3 | 0.7119 | 0.9241 | 0.7636 | 0.1818 | 0.4783 |
+| 4 | 0.7212 | 0.2933 | 0.7405 | 0.7620 | 0.3431 |
+
+The lineages start similar and **diverge** as the run proceeds — the opposite of the collapse the
+broken measurement showed. The verdict reversed: the portfolio stays.
+
+**The slot ladder.** Every run converged under the organizers' rule with 0 manual interventions:
+
+| slots | run | validation | hidden test | delta | wall-clock | tokens |
+|---|---|---|---|---|---|---|
+| 1 | r85 | 0.604424 | 0.598788 | +0.00419 | 10.8 min | 128,159 |
+| 2 | r86 | 0.604452 | 0.599473 | +0.00487 | 15.4 min | 179,572 |
+| **3** | **r87** | **0.605713** | **0.600410** | **+0.00581** | 22.0 min | 246,618 |
+| 4 | r88 | 0.605090 | 0.600194 | +0.00559 | 27.4 min | 319,616 |
+| 5 | r89 | 0.605716 | 0.600256 | +0.00566 | 32.9 min | 429,394 |
+
+Three slots is the knee. Going from one to three buys +0.0016 of hidden-test delta for 2x the
+wall-clock; going from three to five buys nothing and costs 1.7x the tokens, which is a scored
+criterion. **r87 is the submitted run.**
+
+**What we would have lost.** Had we trusted the first measurement we would have deleted the
+archive, the refill policy and the blend, and reported "search breadth does not help on this
+benchmark" as a finding. It would have been a confident, well-evidenced, wrong conclusion drawn
+from an instrument nobody had checked. The lesson we actually take from this is about the
+instrument, not the portfolio: a measurement that decides whether to delete a subsystem deserves
+the same scrutiny as the subsystem.
 
 ## One thing we deliberately did not do
 

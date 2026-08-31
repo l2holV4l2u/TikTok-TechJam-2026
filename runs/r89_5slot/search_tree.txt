@@ -1,0 +1,20 @@
+#1 0.6015  Reproduce the official baseline stage by training a rank-16 categorica
+  #2 0.6037  Target prediction formation and fusion by comparing an expanded pairwi
+  #3 0.6040  Target prediction formation and temporal-drift handling by comparing r
+  #4 0.6041  Target prediction formation and drift-aware training by comparing rece
+  #5 0.6042  Target prediction formation and temporal-interest representation by co
+  #6 0.6042 [retired]  Target the logged-impression context and post-model fusion stages: com
+    #7 0.6043  Target leakage-free non-parametric personalization and score-fusion st
+    #9 0.6044  Target the ranking-loss and prediction-formation stages by comparing t
+    #10 0.6044  Target prediction formation under temporal drift by comparing DCN cros
+    #11 0.6050 [retired]  Target the loss and prediction-formation stages with pointwise-anchore
+      #12 0.6051  Target the personalization and prediction-formation stages with low-ra
+        #20 0.6057  Target prediction formation with a breadth comparison of stationary ca
+      #13 0.6054  Target train-only auxiliary-supervision and prediction formation by co
+      #14 0.6055 [retired]  Target the structured-loss stage by comparing setwise ListNet additive
+        #17 0.6057  I am testing prediction formation across explicit high-order xDeepFM i
+        #18 0.6057  Target list-context prediction formation under activity drift by compa
+        #19 0.6057  Target drift-robust prediction formation by comparing a recency-weight
+        #21 0.6057  Target memory-based collaborative prediction and fusion by comparing i
+      #15 0.6055  Target temporal-drift and prediction-formation stages by comparing poo
+      #16 0.6055  Target prediction formation and loss isolation by training pointwise, 

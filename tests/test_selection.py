@@ -126,11 +126,11 @@ def test_a_slot_keeps_its_own_prediction_when_the_harness_blend_discards_it():
 
     ev = SavedScoresEvaluator.__new__(SavedScoresEvaluator)
     candidate = np.array([0.1, 0.9, 0.4, 0.7])
-    ev.raw_valid_scores, ev.raw_test_scores = candidate, candidate
+    ev.last_raw_scores = candidate
     incumbent = np.array([0.5, 0.5, 0.5, 0.5])
     ev.last_scores, ev.last_test_scores = incumbent, incumbent  # what alpha 0.0 publishes
 
-    kept = (ev.raw_valid_scores if ev.raw_valid_scores is not None else ev.last_scores)
+    kept = (ev.last_raw_scores if ev.last_raw_scores is not None else ev.last_scores)
     assert np.array_equal(kept, candidate), "the slot must keep its own script's prediction"
     assert not np.array_equal(kept, incumbent)
 
@@ -140,7 +140,7 @@ def test_the_raw_scores_reset_between_iterations():
     from agent.loop import SavedScoresEvaluator
 
     ev = SavedScoresEvaluator()
-    assert ev.raw_valid_scores is None and ev.raw_test_scores is None
+    assert ev.last_raw_scores is None
 
 
 if __name__ == "__main__":

@@ -1,0 +1,16 @@
+#1 0.6035 [retired]  Reproduce the official baseline at the modeling stage using a 16-dimen
+  #2 0.6041  Target prediction formation and fusion by comparing expanded-field FM,
+  #3 0.6041  Target prediction formation under drift by comparing recency-weighted 
+  #4 0.6045 [retired]  Target prediction formation and temporal adaptation by comparing DCN c
+    #6 0.6046  Target sequence-context prediction and non-parametric conditioning: DI
+    #7 0.6046  Target the training-objective and prediction-formation stages by compa
+    #8 0.6047  Target prediction formation with a breadth comparison of field-aware f
+    #9 0.6048 [retired]  Target the supervision stage with leakage-free multi-task MMoE, PLE, a
+      #10 0.6048 [retired]  Target the prediction-formation and temporal-adaptation stages with co
+        #14 0.6048  Target drift-robust prediction formation with three new estimators—a d
+        #15 0.6048  Target the training-objective stage with conditional-utility learning:
+        #16 0.6048  Target safe logged-slate feature construction and prediction formation
+        #17 0.6051  Target metric-specific post-model reranking with diversity-aware slate
+      #11 0.6048  Target low-correlation prediction formation and logged-slate context b
+      #12 0.6048  Target prediction formation with three low-correlation models over lea
+      #13 0.6048  Target personalized residual-ranking formation with three structurally

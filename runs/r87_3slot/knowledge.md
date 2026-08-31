@@ -1,0 +1,9 @@
+# What the agent established
+
+- (active) A k=16 Factorization Machine trained with Adam at lr=0.001 on user_id, video_id, author_id, tab, and duration_bucket interactions reproduces the official validation baseline within seed noise (0.6023 versus 0.6016). [iters 1]
+- (active) The field-aware/nonlinear-fusion and additive-wide/recency-weighted pointwise candidates both scored 0.6042, measurably above the 0.6016 official baseline but only 0.0019 above the stored FM, so they do not measurably improve on that FM. [iters 2]
+- (active) The multi-task candidate scored 0.6052, measurably above the official baseline and stored FM; later history/drift, interaction-fusion, alternative prediction, temporal-EB/generative, field-weighted FM/NFM, and tree-family candidates at 0.6052-0.6057 produced no measurable gain over it. [iters 3,4,5]
+- (active) The retired prediction/temporal-drift candidate scored 0.6049, measurably above the stored FM by 0.0026 but indistinguishable from the 0.6052 multi-task candidate and subsequent 0.6052-0.6057 candidates. [iters 3,4,5]
+- (active) The retired pairwise-loss/prediction candidate scored 0.6043, which is not measurably different from the prior 0.6042 candidates or the stored FM under the greater-than-0.002 gain threshold. [iters 3]
+- (active) The best numerical score is 0.6057, attained this turn by all three tested lineages, but its 0.0002 edge over the prior 0.6055 best and 0.0005 edge over the 0.6052 multi-task candidate are inside seed noise and provide no evidence of improvement. [iters 3,4,5]
+- (active) Earlier accepted slot 0 and slot 1 models had within-user rank correlation 0.914; the latest three candidates are less redundant, with mean correlation 0.741 and pairwise correlations 0.690, 0.789, and 0.743, though none is strongly separated from the others. [iters 2,3,4,5]

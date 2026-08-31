@@ -206,6 +206,36 @@ selector. Shrinking the window trades bias it does not have for variance it cann
 
 Recorded so the axis is not re-proposed; `_SWEEP_INSTRUCTION` now marks it REFUTED.
 
+## RETRACTED: "the portfolio diversity gate says no"
+
+Everything below this heading, up to the next `##`, was written from a broken measurement and
+its conclusion is wrong. It is kept rather than deleted because the retraction is the useful
+part. The corrected result is in DEVPOST.md, "A portfolio of parallel lineages -- abandoned,
+then reinstated when the measurement was fixed".
+
+What the section below concluded: mean slot correlation > 0.95, so the lineages are copies of
+one another and Phases 3-5 (archive, refill, portfolio blend) should be deleted.
+
+What is actually true: measured on each slot's own pre-blend model, correlation runs 0.18-0.92
+and *falls* across a run (r87: 0.914 -> 0.635 -> 0.764 -> 0.741). The lineages diverge. The
+portfolio stays, and the 3-slot run r87 holds the best hidden-test score on record, +0.00581.
+
+Two bugs produced the wrong number, and the section below only found the first:
+
+1. The gate read post-blend arrays. When `retain_or_blend` discarded a slot's candidate it
+   republished the incumbent, so two discarded slots held the identical array and correlated
+   at 1.0000 by construction. Diagnosed correctly below.
+2. **Not found below, and the causal one:** `slot.last_hypothesis` was assigned after scoring,
+   so `_sibling_note` showed each slot what its siblings did LAST turn, and on turn 1 showed
+   nothing. Every slot opened from an identical prompt. The slots were not only mismeasured as
+   clones, they were being made into clones. Fixed on the `prem` branch by recording the
+   hypothesis at propose time.
+
+The specific error in reasoning: fix (1) was applied, the correlation stayed high, and that was
+read as confirmation rather than as a second defect. One fix landing without moving the number
+is weak evidence that the number is real -- it is equally consistent with a second bug behind
+the first, which is what it was.
+
 ## The portfolio diversity gate: answered, and the answer is no
 
 `docs/portfolio-plan.md` Phase 2 is a go/no-go gate. Three slots are only worth their cost if

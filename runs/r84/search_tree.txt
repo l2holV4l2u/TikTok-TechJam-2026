@@ -1,0 +1,12 @@
+#2 0.6020  Reproduce the official baseline stage with a k=16 Factorization Machin
+  #3 0.6044  Target prediction formation and fusion by comparing expanded-field fac
+  #4 0.6044  Target the model-training and loss stages with three structurally diff
+  #5 0.6045 [retired]  Target model formation and temporal training jointly by comparing rece
+    #6 0.6045  Target the post-model reranking stage with three distinct leakage-free
+    #7 0.6048  Target the ranking-loss stage by comparing a neural BPR factorization 
+    #8 0.6049 [retired]  Target the user-history representation stage by comparing a DIN-style 
+      #9 0.6051  Target the supervision and prediction-formation stages by comparing di
+      #10 0.6052 [retired]  Target the latent collaborative and graph-based prediction stage by co
+        #13 0.6053  Target prediction formation with an expanded FM, an explicit-cross DCN
+        #14 0.6053  Target prediction formation with AutoInt self-attention and FiBiNET fi
+      #11 0.6052  Target the sequential representation and drift-weighted training stage

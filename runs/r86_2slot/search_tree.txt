@@ -1,0 +1,8 @@
+#2 0.6016  Reproduce the baseline FM at the modeling stage by strictly whitelisti
+  #3 0.6036  Target prediction formation and fusion by comparing expanded-field fac
+  #4 0.6038 [retired]  Target drift-aware training and prediction formation by comparing rece
+    #6 0.6039 [retired]  Target the prediction-formation and ranking-loss stages by comparing d
+      #7 0.6043  Target prediction formation with a breadth comparison between AutoInt 
+      #8 0.6044 [retired]  Target sequential prediction formation by comparing DIN target-attenti
+        #9 0.6044  Target prediction formation and drift-robust personalization by compar
+        #10 0.6045  Target the two-stage reranking and drift-adaptation stages with hierar
