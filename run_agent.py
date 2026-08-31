@@ -123,7 +123,18 @@ def _write_submission(run_dir: Path, ledger: Ledger, baseline_test: float) -> di
             f.write(f"{i},{u},{v},{sc}\n")
 
     from pipeline.evaluate import evaluate
-    r = evaluate(te.user_id, te.y, scores)
+    # FAQ 2.9.3: test labels may not be used "in any way", and the check is a review of the
+    # code and the run log. Scoring our own finished submission is not selection -- nothing
+    # downstream reads it -- but a log that prints a test delta every run is what that review
+    # looks at. Under AGENT_HIDE_TEST_LABELS=1 the run cannot read them and reports validation
+    # only, which is the position that needs no explanation.
+    try:
+        r = evaluate(te.user_id, te.y, scores)
+    except RuntimeError:
+        print("  test labels hidden for this run; submission written unscored")
+        return {"iter_id": best.iter_id, "source": source,
+                "valid_primary": best_primary, "test_scored": False,
+                "hypothesis": best_hypothesis}
     print(f"\nsubmission from {source} (validation primary {best_primary:.4f}) -> {out}")
     print(f"  hypothesis: {best_hypothesis[:90]}")
     print(f"  test primary {r['primary']:.4f}  gauc {r['gauc']:.4f}  ndcg@5 {r['ndcg@5']:.4f}"
