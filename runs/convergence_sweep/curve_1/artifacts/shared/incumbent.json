@@ -1,0 +1,6 @@
+{
+  "iter_id": 3,
+  "valid_primary": 0.6036088294548803,
+  "valid_scores": "incumbent_valid_scores.npy",
+  "test_scores": "incumbent_test_scores.npy"
+}
