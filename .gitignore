@@ -77,6 +77,11 @@ runs/*
 # and token-cost columns that this ladder exists to compare -- and inflate them unevenly, since
 # compute share rises with slot count.
 !runs/slot_ladder/
+# the KuaiRand-1K slot ladder, run sequentially with KUAIRAND_VARIANT=1k. 1K's validation
+# split is 20x Pure's, so these are compute-bound: r38_1k spent 91% of wall time in scripts.
+!runs/1k_s1/
+!runs/1k_s2/
+!runs/1k_s3/
 # the KuaiRand-1K bonus run behind RUN_REPORT_1K.md (logs only; its 532MB of scores,
 # submission CSV and cached artifacts stay out).
 !runs/r38_1k/
