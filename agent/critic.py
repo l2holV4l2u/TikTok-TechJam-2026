@@ -95,6 +95,30 @@ def review(code: str, score: float, incumbent: float, ceiling: float | None = No
                     f"the script reads `.aux` on the {split} split. Post-click signals for a "
                     "row being scored are outcomes of that row; using them as inputs is "
                     "leakage. Train-split aux as an auxiliary target is fine.")
+
+        # Validation labels reaching a FITTED quantity. The audit of 36 submitted scripts found
+        # two doing this through `valid_sets=[<validation>]` with early stopping: the weights
+        # came from train, but the round count was chosen by watching the same validation rows
+        # that were then scored and reported. Measured at +0.00041 on this data -- half a seed
+        # sigma, so it never trips the score-jump rung above and nothing else looked for it.
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            for kw in node.keywords:
+                if kw.arg not in {"valid_sets", "eval_set", "validation_data"}:
+                    continue
+                names = {n.id for n in ast.walk(kw.value) if isinstance(n, ast.Name)}
+                if any(split_vars.get(n) == "valid" for n in names):
+                    out.append(
+                        "the script passes the validation split as an evaluation set to a "
+                        "fitting call. Anything chosen by watching validation -- a round count "
+                        "via early stopping, a threshold, a blend weight -- and then scored on "
+                        "the same rows inflates the number the run selects on. Hold out the "
+                        "last days of TRAIN for that instead.")
+                    break
+            else:
+                continue
+            break
     return out
 
 
@@ -114,6 +138,15 @@ def demo() -> None:
     # an ordinary good iteration must pass silently, or the signal is worthless
     assert review(ok, 0.6049, 0.6020, 0.8645) == []
     assert review("", 0.6049, 0.6020, None) == []
+
+    # validation reaching a fitted quantity through early stopping
+    es = ("import lightgbm as lgb\nfrom pipeline.data import load\n"
+          "tr = load('train')\nva = load('valid')\n"
+          "m = lgb.train(p, d, valid_sets=[va], callbacks=[lgb.early_stopping(25)])\n")
+    assert review(es, 0.605, 0.602, 0.8645), "early stopping on validation must be flagged"
+    clean = ("import lightgbm as lgb\nfrom pipeline.data import load\n"
+             "tr = load('train')\nm = lgb.train(p, d, num_boost_round=200)\n")
+    assert review(clean, 0.605, 0.602, 0.8645) == [], "a train-only fit must stay clean"
     print("ok  critic.review")
 
 
