@@ -9,80 +9,11 @@ kuairand-starter-kit.zip
 # Earlier runs (r1-r26) used the prior-laden prompt and are excluded; the prompt itself is kept
 # in archive/ instead. Score blobs (*.npy, ~1.4MB each) are excluded everywhere.
 runs/*
-!runs/r27/
-!runs/r28/
-!runs/r29/
-!runs/r30/
-!runs/r33/
-!runs/r34/
-!runs/r35/
-!runs/r36/
-!runs/r37/
-!runs/r39/
-!runs/r40/
-!runs/r41/
-# the sol runs under the current contracts: the memory fix (r59), the train+valid
-# refit (r70, the submission) and the runs they are compared against.
-!runs/r57/
-!runs/r59/
-!runs/r60/
-!runs/r64/
-!runs/r66/
-!runs/r68/
-!runs/r69/
-!runs/r70/
-!runs/r71/
-# the sweep-only ladder and the measurements behind it. r79 is the submission; r77 and r78 are
-# the diagnostic runs (--patience 999) whose per-iteration valid/test scores showed that refine
-# and tune move validation without moving test. r75 and r80 were killed mid-run and are kept as
-# the audit trail says they were.
-!runs/r72/
-!runs/r73/
-!runs/r74/
-!runs/r75/
-!runs/r76/
-!runs/r77/
-!runs/r78/
-!runs/r79/
-!runs/r80/
-!runs/r81/
-# the portfolio runs. r82 is the first 3-slot run and r83 the one that lost three iterations
-# to the torch/LightGBM OpenMP crash; both measured slot correlation AFTER the harness had
-# blended each slot toward the shared incumbent, so both read ~1.0 and said nothing. r84 is
-# the first run to measure it on the slots' own pre-blend models (0.721). r85-r87 are the
-# slot-count ladder at 1, 2 and 3, and r87 holds the best hidden-test score on record.
-!runs/r82/
-!runs/r83/
-!runs/r84/
-!runs/r85_1slot/
-!runs/r86_2slot/
-!runs/r87_3slot/
-# globbed: later runs in this series carry a _Nslot suffix that is not known in advance.
-!runs/r88_4slot/
-!runs/r89_5slot/
-# the local pair of 3-slot runs behind the pre-blend correlation finding, renamed from
-# r82/r83 when the slot-ladder runs claimed those ids.
-!runs/r90/
-!runs/r91/
-!runs/r92/
-!runs/r94/
-!runs/r95/
 !runs/r96/
 # the epsilon/N convergence sweep: three --patience 999 curves run to the 50-script cap so
 # that no candidate N is censored by the stop rule. The logs and the agent's scripts are the
 # evidence; the numbers drawn from them live in reports/convergence_sweep/.
 !runs/convergence_sweep/
-# the slot-count ladder under the train-only contract, named s<slots>_r<repeat> so repeats of
-# the same slot count sort together. Run SEQUENTIALLY: slots execute concurrently inside a run
-# (loop.py:737) and nothing pins thread counts, so overlapping runs would inflate the wall-clock
-# and token-cost columns that this ladder exists to compare -- and inflate them unevenly, since
-# compute share rises with slot count.
-!runs/slot_ladder/
-# the KuaiRand-1K slot ladder, run sequentially with KUAIRAND_VARIANT=1k. 1K's validation
-# split is 20x Pure's, so these are compute-bound: r38_1k spent 91% of wall time in scripts.
-!runs/1k_s1/
-!runs/1k_s2/
-!runs/1k_s3/
 # the KuaiRand-1K bonus run behind RUN_REPORT_1K.md (logs only; its 532MB of scores,
 # submission CSV and cached artifacts stay out).
 !runs/r38_1k/
@@ -119,6 +50,14 @@ components.npz
 # execution, eps/N left at the run_agent.py defaults, s<slots>_r<repeat> naming -- is documented
 # in reports/slot_ladder/README.md, so the repo keeps the method without shipping the script.
 run_slot_ladder.sh
+
+# The pre-decontamination prompt and knowledge base, the v1 writeup, and the AliCCP pipeline
+# from the original problem statement. Kept locally as provenance; not shipped. NOTE: DEVPOST.md
+# cites archive/proposer_v1_human_priors.py and archive/papers_v1_human_priors.json as the
+# record of what was removed -- those citations do not resolve in a clone.
+archive/aliccp/
+
+scripts/
 
 __pycache__/
 *.pyc
