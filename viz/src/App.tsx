@@ -19,10 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Note } from "@/components/common";
-import RunSwitcher from "./components/RunSwitcher";
 import Verdict from "./components/Verdict";
-import AblationLadder from "./components/AblationLadder";
-import RunMap from "./components/RunMap";
 import Overview from "./components/Overview";
 import SearchTree from "./components/SearchTree";
 import TreeGraph from "./components/TreeGraph";
@@ -38,7 +35,7 @@ const VIEWS: { id: View; label: string; blurb: string }[] = [
     id: "evidence",
     label: "Evidence",
     blurb:
-      "The submitted result, what it cost, and which of the runs in this repo count toward it. Every figure is derived from the run records, not from the write-up.",
+      "The submitted result and what it cost. Every figure is derived from this run's records, not from the write-up.",
   },
   {
     id: "overview",
@@ -111,16 +108,11 @@ function ThemeToggle() {
   );
 }
 
-/** The run in the URL hash wins, so a judge can be handed a link to one specific run. */
-function hashRun(): string | null {
-  const h = decodeURIComponent(window.location.hash.replace(/^#\/?/, "")).trim();
-  return h || null;
-}
-
 export default function App() {
   const configured = (runConfig as { run: string }).run;
-  const [run, setRun] = useState<string>(() => hashRun() ?? configured);
+  // The site shows one run: whichever one submission_best.csv came out of.
   const [index, setIndex] = useState<RunIndex | null>(null);
+  const run = index?.submittedRun ?? configured;
   const [data, setData] = useState<RunData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<View>("evidence");
@@ -132,12 +124,6 @@ export default function App() {
       .then(setIndex)
       .catch(() => setIndex(null)); // the index is an extra; the single-run views work without it
   }, []);
-
-  useEffect(() => {
-    const onHash = () => setRun(hashRun() ?? configured);
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
-  }, [configured]);
 
   useEffect(() => {
     let live = true;
@@ -159,7 +145,7 @@ export default function App() {
   }, [run]);
 
   const counts = useMemo(() => {
-    const base = { evidence: index?.runs.length } as Record<View, number | undefined>;
+    const base = { evidence: undefined } as Record<View, number | undefined>;
     if (!data) return base;
     return {
       ...base,
@@ -177,13 +163,7 @@ export default function App() {
     setView("tree");
   };
 
-  /** Opening a run from the Evidence view switches the whole viewer to it. */
-  const goToRun = (next: string) => {
-    window.location.hash = `#/${next}`;
-    setRun(next);
-    setView("overview");
-  };
-
+  const summary = index?.runs.find((r) => r.run === run) ?? null;
   const current = VIEWS.find((v) => v.id === view)!;
   const iteration = selected !== null ? data?.byId.get(selected) : undefined;
   // Evidence reads the cross-run index, so it stays usable while one run fails to load.
@@ -195,14 +175,16 @@ export default function App() {
         <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-3 px-5 py-4 lg:flex-col lg:items-stretch lg:gap-3 lg:py-6">
           <div className="min-w-0 lg:w-full">
             <p className="text-muted-foreground text-[11px] font-semibold tracking-[0.08em] uppercase">
-              Run viewer
+              TikTok TechJam 2026
             </p>
-            <div className="mt-1.5 lg:w-full">
-              <RunSwitcher index={index} value={run} onChange={goToRun} />
-            </div>
+            <p className="mt-1.5 text-sm font-semibold">Final submission</p>
             <p className="text-muted-foreground mt-1 truncate text-xs">
-              {data?.meta?.dataset ?? "dataset unknown"}
-              {data?.meta?.model ? ` · ${data.meta.model}` : ""}
+              {[summary?.dataset ?? data?.meta?.dataset, summary?.model]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+            <p className="text-muted-foreground/70 mt-1 truncate font-mono text-[11px]">
+              runs/{run}
             </p>
           </div>
 
@@ -236,8 +218,9 @@ export default function App() {
         <div className="px-5 pb-4 lg:pb-6">
           <Separator className="mb-3" />
           <p className="text-muted-foreground text-[11px] leading-relaxed">
-            Every view below the first reads one run at a time. Pick it above - the choice lives in
-            the URL, so a link opens on the same run.
+            Every view reads the submitted run - the one whose predictions are
+            <code> submission_best.csv</code>. It follows that file, so shipping a new
+            submission moves the whole site with it.
           </p>
         </div>
       </aside>
@@ -254,11 +237,7 @@ export default function App() {
 
           {view === "evidence" &&
             (index ? (
-              <>
-                <Verdict index={index} onOpenRun={goToRun} />
-                <AblationLadder index={index} onOpenRun={goToRun} />
-                <RunMap index={index} activeRun={run} onOpenRun={goToRun} />
-              </>
+              <Verdict index={index} onReadHypotheses={() => setView("tree")} />
             ) : (
               <Note tone="critical">
                 The cross-run index could not be loaded. It is served by the dev server at{" "}
@@ -288,20 +267,9 @@ export default function App() {
 
           {data && (
             <>
-              {data.warnings.length > 0 && view === "overview" && (
-                <Note>
-                  <strong className="text-foreground mb-1 block text-xs font-semibold">
-                    Notes on this run's files
-                  </strong>
-                  <ul className="list-disc space-y-0.5 pl-4">
-                    {data.warnings.map((w) => (
-                      <li key={w}>{w}</li>
-                    ))}
-                  </ul>
-                </Note>
+              {view === "overview" && (
+                <Overview data={data} summary={summary} onSelectIteration={goToIteration} />
               )}
-
-              {view === "overview" && <Overview data={data} onSelectIteration={goToIteration} />}
 
               {view === "tree" && (
                 <>

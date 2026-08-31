@@ -1,16 +1,20 @@
 import type { RunData } from "../lib/types";
+import type { RunSummary } from "../lib/runIndex";
 import { bestIteration, primaryOf } from "../lib/derive";
 import { duration, int, score, signed, truncate } from "../lib/format";
-import { Empty, IterLink, KeyValue, Note, Panel, Row, Stat, StatGrid } from "@/components/common";
+import { Empty, IterLink, KeyValue, Panel, Row, Stat, StatGrid } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import ProgressChart from "./ProgressChart";
 
 export default function Overview({
   data,
+  summary,
   onSelectIteration,
 }: {
   data: RunData;
+  /** The cross-run index row, which knows the predictions file even without run_meta.json. */
+  summary?: RunSummary | null;
   onSelectIteration: (id: number) => void;
 }) {
   const { meta, iterations } = data;
@@ -29,6 +33,12 @@ export default function Overview({
 
   const best = bestIteration(iterations);
   const submission = meta?.submission;
+  // test_scored is written explicitly; older runs predate it, so fall back to "has a number".
+  const testScored = submission?.test_scored ?? submission?.test_primary !== undefined;
+  const validDelta =
+    submission?.valid_primary !== undefined && meta?.baseline_target !== undefined
+      ? submission.valid_primary - meta.baseline_target
+      : undefined;
   const submittedIter = submission ? data.byId.get(submission.iter_id) : undefined;
 
   const tokensTotal = meta?.tokens_total ?? derived.tokensIn + derived.tokensOut;
@@ -37,13 +47,6 @@ export default function Overview({
 
   return (
     <div className="flex flex-col gap-4">
-      {!meta && (
-        <Note tone="warning">
-          This run has no <code>run_meta.json</code>. The figures below are recomputed from{" "}
-          <code>ledger.jsonl</code>, so wall-clock time and the submitted iteration are unknown.
-        </Note>
-      )}
-
       <Panel title="Run">
         <KeyValue>
           <Row k="dataset">{meta?.dataset ?? "unknown"}</Row>
@@ -53,11 +56,6 @@ export default function Overview({
               {meta?.provider ? ` (${meta.provider})` : ""}
             </span>
           </Row>
-          {meta?.data_contract && (
-            <Row k="data contract">
-              <span className="font-mono">{meta.data_contract}</span>
-            </Row>
-          )}
           <Row k="stopped">
             {meta?.stop_reason ?? "unknown"}
             {meta?.iterations !== undefined && meta?.iteration_cap !== undefined
@@ -159,15 +157,32 @@ export default function Overview({
                 note="chosen on validation only"
               />
               <Stat label="Validation primary" value={score(submission.valid_primary)} />
-              <Stat label="Test primary" value={score(submission.test_primary)} />
-              <Stat
-                label="Delta vs baseline"
-                value={signed(submission.test_delta)}
-                tone={(submission.test_delta ?? 0) > 0 ? "good" : "bad"}
-                note="on the hidden test split"
-              />
-              <Stat label="Test GAUC" value={score(submission.test_gauc)} />
-              <Stat label="Test nDCG@5" value={score(submission["test_ndcg@5"])} />
+              {validDelta !== undefined && (
+                <Stat
+                  label="Delta vs baseline"
+                  value={signed(validDelta)}
+                  tone={validDelta > 0 ? "good" : "bad"}
+                  note="on validation"
+                />
+              )}
+              {/* The test columns exist only once a run has actually been scored on test.
+                  Rendering them as "--" reads as a missing result rather than a compliant one. */}
+              {testScored && (
+                <>
+                  <Stat label="Test primary" value={score(submission.test_primary)} />
+                  <Stat
+                    label="Test delta"
+                    value={signed(submission.test_delta)}
+                    tone={(submission.test_delta ?? 0) > 0 ? "good" : "bad"}
+                    note="on the hidden test split"
+                  />
+                  <Stat label="Test GAUC" value={score(submission.test_gauc)} />
+                  <Stat label="Test nDCG@5" value={score(submission["test_ndcg@5"])} />
+                </>
+              )}
+              {submission.file && (
+                <Stat label="Predictions" value={submission.file} note="written by the harness" />
+              )}
             </StatGrid>
             {submission.hypothesis && (
               <p className="max-w-[78ch] text-[15px] leading-relaxed">
@@ -189,13 +204,30 @@ export default function Overview({
           </div>
         ) : (
           <Empty>
-            This run recorded no submission.
-            {best && (
+            {summary?.submissionFile ? (
               <>
-                {" "}
-                Its best validation iteration was{" "}
-                <IterLink id={best.iter_id} onClick={onSelectIteration} /> ·{" "}
-                {score(primaryOf(best))}
+                This run was halted before it wrote <code>run_meta.json</code>, so the iteration
+                behind <code className="font-mono">{summary.submissionFile}</code> is not recorded.
+                {best && (
+                  <>
+                    {" "}
+                    Its best validation iteration was{" "}
+                    <IterLink id={best.iter_id} onClick={onSelectIteration} /> at{" "}
+                    {score(primaryOf(best))}.
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                This run produced no predictions file.
+                {best && (
+                  <>
+                    {" "}
+                    Its best validation iteration was{" "}
+                    <IterLink id={best.iter_id} onClick={onSelectIteration} /> at{" "}
+                    {score(primaryOf(best))}.
+                  </>
+                )}
               </>
             )}
           </Empty>

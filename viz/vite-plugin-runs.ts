@@ -45,10 +45,13 @@ export function runIndex(fresh = false): RunIndex {
   return indexCache;
 }
 
+/** The run the site shows: whichever one submission_best.csv came out of, config as fallback. */
 export function activeRun(): string {
+  const submitted = runIndex().submittedRun;
+  if (submitted) return submitted;
   const raw = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
   const run = String(raw.run || "").trim();
-  if (!run) throw new Error("viz/run.config.json: \"run\" is empty");
+  if (!run) throw new Error("viz/run.config.json: \"run\" is empty and no run matches submission_best.csv");
   return run;
 }
 

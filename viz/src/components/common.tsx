@@ -14,6 +14,31 @@ const STATUS_VARIANT = {
   retired: "muted",
 } as const;
 
+// The harness's own vocabulary ("kept" beat nothing, "ok" beat the parent) reads as jargon out
+// of context, so the badge shows a plain-English label and keeps the raw status as a tooltip.
+// Shared with TreeGraph and ProgressChart, which draw their own marks but describe the same
+// raw harness vocabulary -- one map so a wording fix does not need making three times.
+export const ITER_STATUS_LABEL: Record<string, string> = {
+  ok: "improved",
+  kept: "no improvement",
+  reverted: "baseline mismatch",
+  failed: "script error",
+  infra: "api outage (never ran)",
+  rejected: "flagged, not accepted",
+  blacklisted: "abandoned",
+  unknown: "unknown",
+};
+const STATUS_LABEL = ITER_STATUS_LABEL;
+const STATUS_TITLE: Record<string, string> = {
+  ok: 'raw status "ok" - beat its parent by more than the noise threshold',
+  kept: 'raw status "kept" - ran fine, but not enough of an improvement to keep searching from',
+  reverted: 'raw status "reverted" - did not reproduce the official baseline within tolerance',
+  failed: 'raw status "failed" - the agent\'s own code errored',
+  rejected:
+    'raw status "rejected" - the harness\'s integrity check did not accept this score as-is',
+  blacklisted: 'raw status "blacklisted" - failed repeatedly; the harness gave up on this branch',
+};
+
 /** One iteration or belief status, coloured by what it means for the run. */
 export function StatusBadge({ status, infra }: { status?: string; infra?: boolean }) {
   if (infra) {
@@ -27,9 +52,9 @@ export function StatusBadge({ status, infra }: { status?: string; infra?: boolea
   const s = (status ?? "unknown").toLowerCase();
   const variant = STATUS_VARIANT[s as keyof typeof STATUS_VARIANT] ?? "muted";
   return (
-    <Badge variant={variant}>
+    <Badge variant={variant} title={STATUS_TITLE[s]}>
       <Dot />
-      {s}
+      {STATUS_LABEL[s] ?? s}
     </Badge>
   );
 }
@@ -87,7 +112,9 @@ export function StatGrid({ children, className }: { children: ReactNode; classNa
   return (
     <div
       className={cn(
-        "grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-x-6 gap-y-5",
+        // auto-fit collapses empty tracks so real stats stretch to fill the row; auto-fill
+        // would leave fixed-width dead columns and wrap notes that would otherwise fit.
+        "grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-x-6 gap-y-5",
         className,
       )}
     >
