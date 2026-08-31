@@ -1,5 +1,6 @@
 import type { RunData } from "../lib/types";
-import { Card, Empty, StatusPill } from "./ui";
+import { Panel, Empty, Pre, StatusBadge, IterLink } from "@/components/common";
+import { cn } from "@/lib/utils";
 
 export default function Knowledge({
   data,
@@ -14,28 +15,33 @@ export default function Knowledge({
 
     return (
       <>
-        <div className="filters">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           {[...byStatus].map(([s, n]) => (
-            <span className={`pill ${s}`} key={s}>
-              <span className="dot" />
-              {n} {s}
+            <span key={s} className="flex items-center gap-1.5 text-sm">
+              <StatusBadge status={s} />
+              <span className="text-muted-foreground">{n}</span>
             </span>
           ))}
         </div>
-        {data.beliefs.map((b, i) => (
-          <div className={`belief ${b.status ?? "active"}`} key={i}>
-            <div className="chips">
-              <StatusPill status={b.status ?? "active"} />
-              {b.evidence?.length ? <span className="label">from</span> : null}
-              {b.evidence?.map((e) => (
-                <button type="button" className="chip" key={e} onClick={() => onSelectIteration(e)}>
-                  #{e}
-                </button>
-              ))}
-            </div>
-            <p>{b.text}</p>
-          </div>
-        ))}
+        <div className="flex flex-col gap-2">
+          {data.beliefs.map((b, i) => {
+            const retired = (b.status ?? "active") === "retired";
+            return (
+              <div key={i} className="bg-card rounded-xl border px-3.5 py-3">
+                <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                  <StatusBadge status={b.status ?? "active"} />
+                  {b.evidence?.length ? <span className="text-muted-foreground text-xs">from</span> : null}
+                  {b.evidence?.map((e) => (
+                    <IterLink key={e} id={e} onClick={onSelectIteration} />
+                  ))}
+                </div>
+                <p className={cn("max-w-[90ch] text-sm leading-relaxed", retired && "text-muted-foreground")}>
+                  {b.text}
+                </p>
+              </div>
+            );
+          })}
+        </div>
       </>
     );
   }
@@ -43,15 +49,13 @@ export default function Knowledge({
   // r27-r30 predate knowledge.json and kept free-text reflections instead.
   if (data.reflections) {
     return (
-      <Card title="reflections.md">
-        <p className="secondary" style={{ marginTop: 0 }}>
+      <Panel title="reflections.md">
+        <p className="text-ink-2 mt-0 mb-3 text-sm">
           This run predates the structured belief set; it recorded free-text reflections, one block
           per iteration.
         </p>
-        <pre className="text" style={{ whiteSpace: "pre-wrap" }}>
-          {data.reflections.trim()}
-        </pre>
-      </Card>
+        <Pre wrap>{data.reflections.trim()}</Pre>
+      </Panel>
     );
   }
 

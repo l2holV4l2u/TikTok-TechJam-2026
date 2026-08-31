@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
+import { buildRunIndex, type RunIndex } from "./run-index";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 /** Repo root: viz/ sits directly inside it, and runs/ is its sibling. */
@@ -35,6 +36,14 @@ const MIME: Record<string, string> = {
   ".md": "text/plain; charset=utf-8",
   ".py": "text/plain; charset=utf-8",
 };
+
+/** Hashing every run's submission.csv is ~120MB of IO, so the index is built once per server. */
+let indexCache: RunIndex | null = null;
+
+export function runIndex(fresh = false): RunIndex {
+  if (fresh || !indexCache) indexCache = buildRunIndex(RUNS_DIR, REPO_ROOT);
+  return indexCache;
+}
 
 export function activeRun(): string {
   const raw = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
@@ -91,6 +100,14 @@ export function runsPlugin(): Plugin {
 
         const rel = decodeURIComponent(url.slice("/rundata/".length));
 
+        // /rundata/_index.json -- every run folder, summarised and classified.
+        if (rel === "_index.json") {
+          res.setHeader("Content-Type", MIME[".json"]);
+          res.setHeader("Cache-Control", "no-store");
+          res.end(JSON.stringify(runIndex((req.url || "").includes("fresh=1"))));
+          return;
+        }
+
         // /rundata/<run>/_manifest.json -- what this run folder actually contains.
         if (rel.endsWith("/_manifest.json")) {
           const run = rel.slice(0, -"/_manifest.json".length);
@@ -133,6 +150,12 @@ export function runsPlugin(): Plugin {
       fs.writeFileSync(
         path.join(outDir, "rundata", run, "_manifest.json"),
         JSON.stringify(buildManifest(run)),
+      );
+      // The index is small and covers every run, so the Evidence view still works offline
+      // even though only the active run's detail files are copied.
+      fs.writeFileSync(
+        path.join(outDir, "rundata", "_index.json"),
+        JSON.stringify(runIndex(true)),
       );
     },
   };

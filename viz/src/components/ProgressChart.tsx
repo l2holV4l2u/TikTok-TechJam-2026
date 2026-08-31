@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { Iteration, RunData } from "../lib/types";
 import { primaryOf } from "../lib/derive";
 import { score, truncate } from "../lib/format";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 /* Geometry in viewBox units; CSS scales the svg to the card width. */
 const W = 760;
@@ -32,40 +34,37 @@ const STATE_LABEL: Record<MarkState, string> = {
 };
 
 const STATE_COLOR: Record<MarkState, string> = {
-  kept: "var(--status-good)",
-  ok: "var(--series-1)",
-  reverted: "var(--status-serious)",
-  failed: "var(--status-critical)",
-  infra: "var(--status-warning)",
+  kept: "var(--good)",
+  ok: "var(--accent-blue)",
+  reverted: "var(--serious)",
+  failed: "var(--critical)",
+  infra: "var(--warning)",
 };
 
 /** State also carries a shape, so identity never rests on hue alone. */
 function Marker({ state, cx, cy, selected }: { state: MarkState; cx: number; cy: number; selected: boolean }) {
   const color = STATE_COLOR[state];
-  const cls = `marker${selected ? " selected" : ""}`;
-  if (state === "failed") {
-    return (
-      <g className={cls} stroke={color} strokeWidth={2.4} fill="none">
-        <line x1={cx - 5} y1={cy - 5} x2={cx + 5} y2={cy + 5} />
-        <line x1={cx - 5} y1={cy + 5} x2={cx + 5} y2={cy - 5} />
-      </g>
-    );
-  }
-  if (state === "infra") {
-    return (
-      <path
-        className={cls}
-        d={`M${cx},${cy - 6} L${cx + 6},${cy} L${cx},${cy + 6} L${cx - 6},${cy} Z`}
-        fill="var(--surface-1)"
-        stroke={color}
-        strokeWidth={2.4}
-      />
-    );
-  }
-  if (state === "reverted") {
-    return <circle className={cls} cx={cx} cy={cy} r={5} fill="var(--surface-1)" stroke={color} strokeWidth={2.4} />;
-  }
-  return <circle className={cls} cx={cx} cy={cy} r={5} fill={color} />;
+  return (
+    <g>
+      {selected && <circle cx={cx} cy={cy} r={9} fill="none" stroke="var(--primary)" strokeWidth={2} />}
+      {state === "failed" && (
+        <g stroke={color} strokeWidth={2.4} fill="none">
+          <line x1={cx - 5} y1={cy - 5} x2={cx + 5} y2={cy + 5} />
+          <line x1={cx - 5} y1={cy + 5} x2={cx + 5} y2={cy - 5} />
+        </g>
+      )}
+      {state === "infra" && (
+        <path
+          d={`M${cx},${cy - 6} L${cx + 6},${cy} L${cx},${cy + 6} L${cx - 6},${cy} Z`}
+          fill="var(--surface-1)"
+          stroke={color}
+          strokeWidth={2.4}
+        />
+      )}
+      {state === "reverted" && <circle cx={cx} cy={cy} r={5} fill="var(--surface-1)" stroke={color} strokeWidth={2.4} />}
+      {(state === "kept" || state === "ok") && <circle cx={cx} cy={cy} r={5} fill={color} />}
+    </g>
+  );
 }
 
 export default function ProgressChart({
@@ -89,7 +88,9 @@ export default function ProgressChart({
   const scored = iters.map(primaryOf).filter((v): v is number => v !== undefined);
   if (!scored.length) {
     return (
-      <p className="muted">No iteration in this run recorded a validation score, so there is nothing to plot.</p>
+      <p className="text-muted-foreground text-sm">
+        No iteration in this run recorded a validation score, so there is nothing to plot.
+      </p>
     );
   }
 
@@ -120,24 +121,24 @@ export default function ProgressChart({
   const states = [...new Set(iters.map(stateOf))];
 
   return (
-    <>
-      <div className="chart-head">
-        <h3>Validation primary by iteration</h3>
-        <button type="button" className="toggle-table" onClick={() => setShowTable((s) => !s)}>
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center gap-3">
+        <h3 className="text-sm font-semibold">Validation primary by iteration</h3>
+        <Button variant="outline" size="xs" className="ml-auto" onClick={() => setShowTable((s) => !s)}>
           {showTable ? "Hide table" : "Show table"}
-        </button>
+        </Button>
       </div>
 
-      <div className="chart-wrap chart">
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Validation primary score by iteration">
-          <g className="grid">
+      <div className="relative">
+        <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Validation primary score by iteration">
+          <g>
             {ticks.map((t) => (
-              <line key={t} x1={PAD.left} x2={PAD.left + PLOT_W} y1={yOf(t)} y2={yOf(t)} />
+              <line key={t} className="stroke-line-strong" x1={PAD.left} x2={PAD.left + PLOT_W} y1={yOf(t)} y2={yOf(t)} />
             ))}
           </g>
 
           {ticks.map((t) => (
-            <text key={t} className="value-label" x={PAD.left - 8} y={yOf(t) + 3.5} textAnchor="end">
+            <text key={t} className="fill-muted-foreground font-mono text-[11px]" x={PAD.left - 8} y={yOf(t) + 3.5} textAnchor="end">
               {t.toFixed(4)}
             </text>
           ))}
@@ -145,47 +146,60 @@ export default function ProgressChart({
           {/* Reference lines: the run's own targets, never a hardcoded number. */}
           {target !== undefined && (
             <g>
-              <line className="ref-line" stroke="var(--text-muted)" x1={PAD.left} x2={PAD.left + PLOT_W} y1={yOf(target)} y2={yOf(target)} />
-              <text x={PAD.left + PLOT_W + 8} y={yOf(target) + 3.5}>
+              <line
+                className="stroke-axis [stroke-dasharray:5_4]"
+                x1={PAD.left}
+                x2={PAD.left + PLOT_W}
+                y1={yOf(target)}
+                y2={yOf(target)}
+              />
+              <text className="fill-muted-foreground font-mono text-[11px]" x={PAD.left + PLOT_W + 8} y={yOf(target) + 3.5}>
                 baseline {target.toFixed(4)}
               </text>
             </g>
           )}
           {reproduced !== undefined && (
             <g>
-              <line className="ref-line" stroke="var(--series-2)" x1={PAD.left} x2={PAD.left + PLOT_W} y1={yOf(reproduced)} y2={yOf(reproduced)} />
-              <text x={PAD.left + PLOT_W + 8} y={yOf(reproduced) + 3.5} fill="var(--series-2)">
+              <line
+                className="stroke-chart-3 [stroke-dasharray:5_4]"
+                x1={PAD.left}
+                x2={PAD.left + PLOT_W}
+                y1={yOf(reproduced)}
+                y2={yOf(reproduced)}
+              />
+              <text className="fill-chart-3 font-mono text-[11px] font-medium" x={PAD.left + PLOT_W + 8} y={yOf(reproduced) + 3.5}>
                 reproduced {reproduced.toFixed(4)}
               </text>
             </g>
           )}
 
-          <g className="axis">
-            <line x1={PAD.left} x2={PAD.left + PLOT_W} y1={PAD.top + PLOT_H} y2={PAD.top + PLOT_H} />
+          <g>
+            <line className="stroke-axis" x1={PAD.left} x2={PAD.left + PLOT_W} y1={PAD.top + PLOT_H} y2={PAD.top + PLOT_H} />
           </g>
 
-          <path className="series-line" d={path} />
+          <path className="fill-none stroke-chart-1 stroke-2 [stroke-linejoin:round]" d={path} />
 
           {hovered && (
-            <line className="crosshair" x1={hovered.x} x2={hovered.x} y1={PAD.top} y2={PAD.top + PLOT_H} />
+            <line
+              className="stroke-axis opacity-70 [stroke-dasharray:3_3]"
+              x1={hovered.x}
+              x2={hovered.x}
+              y1={PAD.top}
+              y2={PAD.top + PLOT_H}
+            />
           )}
 
           {points.map((p) => (
             <g key={p.it.iter_id}>
-              <Marker
-                state={stateOf(p.it)}
-                cx={p.x}
-                cy={p.y ?? FAIL_Y}
-                selected={selected === p.it.iter_id}
-              />
-              <text x={p.x} y={PAD.top + PLOT_H + 16} textAnchor="middle">
+              <Marker state={stateOf(p.it)} cx={p.x} cy={p.y ?? FAIL_Y} selected={selected === p.it.iter_id} />
+              <text className="fill-muted-foreground font-mono text-[11px]" x={p.x} y={PAD.top + PLOT_H + 16} textAnchor="middle">
                 #{p.it.iter_id}
               </text>
             </g>
           ))}
 
           {points.some((p) => p.y === null) && (
-            <text x={PAD.left - 8} y={FAIL_Y + 3.5} textAnchor="end">
+            <text className="fill-muted-foreground font-mono text-[11px]" x={PAD.left - 8} y={FAIL_Y + 3.5} textAnchor="end">
               no score
             </text>
           )}
@@ -194,7 +208,7 @@ export default function ProgressChart({
           {points.map((p, i) => (
             <rect
               key={p.it.iter_id}
-              className="hit"
+              className="cursor-pointer fill-transparent"
               x={p.x - PLOT_W / (2 * Math.max(iters.length - 1, 1))}
               y={PAD.top}
               width={PLOT_W / Math.max(iters.length - 1, 1)}
@@ -208,68 +222,72 @@ export default function ProgressChart({
 
         {hovered && (
           <div
-            className="tooltip"
+            className="bg-popover text-popover-foreground pointer-events-none absolute z-50 min-w-[170px] max-w-[290px] rounded-lg border p-2.5 text-xs shadow-md"
             style={{
               left: `${((hovered.x + 12) / W) * 100}%`,
               top: `${((hovered.y ?? FAIL_Y) / H) * 100}%`,
               transform: hovered.x > W * 0.6 ? "translate(-108%, -50%)" : "translate(0, -50%)",
             }}
           >
-            <div className="t-title">
-              <span className="mono">#{hovered.it.iter_id}</span>
-              <span className="muted">{STATE_LABEL[stateOf(hovered.it)]}</span>
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <span className="font-mono">#{hovered.it.iter_id}</span>
+              <span className="text-muted-foreground">{STATE_LABEL[stateOf(hovered.it)]}</span>
             </div>
-            <dl>
-              <dt>primary</dt>
-              <dd>{score(hovered.value)}</dd>
-              <dt>GAUC</dt>
-              <dd>{score(hovered.it.metrics?.gauc)}</dd>
-              <dt>nDCG@5</dt>
-              <dd>{score(hovered.it.metrics?.["ndcg@5"])}</dd>
+            <dl className="tnum grid grid-cols-[max-content_1fr] gap-x-2 gap-y-0.5">
+              <dt className="text-muted-foreground">primary</dt>
+              <dd className="text-right font-mono">{score(hovered.value)}</dd>
+              <dt className="text-muted-foreground">GAUC</dt>
+              <dd className="text-right font-mono">{score(hovered.it.metrics?.gauc)}</dd>
+              <dt className="text-muted-foreground">nDCG@5</dt>
+              <dd className="text-right font-mono">{score(hovered.it.metrics?.["ndcg@5"])}</dd>
             </dl>
-            {hovered.it.hypothesis && <p className="t-hyp">{truncate(hovered.it.hypothesis, 130)}</p>}
+            {hovered.it.hypothesis && (
+              <p className="text-ink-2 mt-1.5 leading-relaxed">{truncate(hovered.it.hypothesis, 130)}</p>
+            )}
           </div>
         )}
       </div>
 
-      <div className="legend">
+      <div className="text-ink-2 mt-3 flex flex-wrap gap-4 text-xs">
         {states.map((s) => (
-          <span className="item" key={s}>
+          <span className="inline-flex items-center gap-1.5" key={s}>
             <svg width={14} height={14} viewBox="0 0 14 14">
               <Marker state={s} cx={7} cy={7} selected={false} />
             </svg>
             {STATE_LABEL[s]}
           </span>
         ))}
-        <span className="item muted">click a point to open that iteration</span>
+        <span className="text-muted-foreground inline-flex items-center gap-1.5">click a point to open that iteration</span>
       </div>
 
       {showTable && (
-        <table className="data">
-          <thead>
-            <tr>
-              <th>iter</th>
-              <th>status</th>
-              <th>primary</th>
-              <th>GAUC</th>
-              <th>nDCG@5</th>
-              <th>script s</th>
-            </tr>
-          </thead>
-          <tbody>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>iter</TableHead>
+              <TableHead>status</TableHead>
+              <TableHead className="text-right">primary</TableHead>
+              <TableHead className="text-right">GAUC</TableHead>
+              <TableHead className="text-right">nDCG@5</TableHead>
+              <TableHead className="text-right">script s</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {iters.map((it) => (
-              <tr key={it.iter_id}>
-                <td>#{it.iter_id}</td>
-                <td style={{ textAlign: "left" }}>{STATE_LABEL[stateOf(it)]}</td>
-                <td>{score(primaryOf(it))}</td>
-                <td>{score(it.metrics?.gauc)}</td>
-                <td>{score(it.metrics?.["ndcg@5"])}</td>
-                <td>{it.gpu_seconds !== undefined ? it.gpu_seconds.toFixed(1) : "--"}</td>
-              </tr>
+              <TableRow key={it.iter_id}>
+                <TableCell className="font-mono">#{it.iter_id}</TableCell>
+                <TableCell>{STATE_LABEL[stateOf(it)]}</TableCell>
+                <TableCell className="text-right font-mono">{score(primaryOf(it))}</TableCell>
+                <TableCell className="text-right font-mono">{score(it.metrics?.gauc)}</TableCell>
+                <TableCell className="text-right font-mono">{score(it.metrics?.["ndcg@5"])}</TableCell>
+                <TableCell className="text-right font-mono">
+                  {it.gpu_seconds !== undefined ? it.gpu_seconds.toFixed(1) : "--"}
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       )}
-    </>
+    </div>
   );
 }

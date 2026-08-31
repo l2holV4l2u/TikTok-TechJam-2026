@@ -1,7 +1,12 @@
 import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 import type { LlmCall, RunData } from "../lib/types";
 import { int, timestamp, truncate } from "../lib/format";
-import { Card, Empty, Tile } from "./ui";
+import { Panel, Empty, StatGrid, Stat, Pre, IterLink } from "@/components/common";
+import { Badge } from "@/components/ui/badge";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 
 const ROLES: { id: LlmCall["role"] | "all"; label: string }[] = [
   { id: "all", label: "all" },
@@ -10,6 +15,56 @@ const ROLES: { id: LlmCall["role"] | "all"; label: string }[] = [
   { id: "reflection", label: "reflection" },
   { id: "other", label: "other" },
 ];
+
+function CallRow({
+  call,
+  onSelectIteration,
+}: {
+  call: LlmCall;
+  onSelectIteration: (id: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="py-2">
+      {/* IterLink is a sibling of the trigger, not a child: a button cannot nest in a button. */}
+      <div className="flex items-center gap-2">
+        <CollapsibleTrigger className="focus-visible:ring-ring flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md text-left outline-none focus-visible:ring-2">
+          <ChevronRight
+            className={cn("text-muted-foreground size-3.5 shrink-0 transition-transform", open && "rotate-90")}
+          />
+          <Badge variant="muted">{call.role}</Badge>
+          <span className="text-ink-2 min-w-0 flex-1 truncate text-xs">{truncate(call.response, 200)}</span>
+          <span className="tnum text-muted-foreground font-mono text-[11px]">
+            {int(call.tokens_in)} → {int(call.tokens_out)}
+          </span>
+        </CollapsibleTrigger>
+        {call.iterId !== undefined && <IterLink id={call.iterId} onClick={onSelectIteration} />}
+      </div>
+      <CollapsibleContent className="mt-2 flex flex-col gap-3 pl-5.5">
+        <div className="text-muted-foreground text-xs">
+          {timestamp(call.ts)} · {call.model}
+        </div>
+        <div>
+          <h4 className="text-muted-foreground mb-1 text-[11px] font-semibold tracking-[0.06em] uppercase">
+            prompt
+          </h4>
+          <Pre wrap className="max-h-[460px] overflow-auto">
+            {call.prompt}
+          </Pre>
+        </div>
+        <div>
+          <h4 className="text-muted-foreground mb-1 text-[11px] font-semibold tracking-[0.06em] uppercase">
+            response
+          </h4>
+          <Pre wrap className="max-h-[460px] overflow-auto">
+            {call.response}
+          </Pre>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
 
 export default function LlmCalls({
   data,
@@ -29,63 +84,38 @@ export default function LlmCalls({
 
   return (
     <>
-      <div className="tiles" style={{ marginBottom: 16 }}>
-        <Tile label="Calls" value={data.llmCalls.length} />
-        <Tile label="Tokens in" value={int(tokensIn)} />
-        <Tile label="Tokens out" value={int(tokensOut)} />
-        <Tile label="Model" value={<span style={{ fontSize: 15 }}>{data.llmCalls[0].model ?? "--"}</span>} />
-      </div>
+      <StatGrid className="mb-4">
+        <Stat label="Calls" value={data.llmCalls.length} />
+        <Stat label="Tokens in" value={int(tokensIn)} />
+        <Stat label="Tokens out" value={int(tokensOut)} />
+        <Stat label="Model" value={data.llmCalls[0].model ?? "--"} />
+      </StatGrid>
 
-      <div className="filters">
-        {ROLES.filter((r) => r.id === "all" || present.has(r.id as LlmCall["role"])).map((r) => (
-          <button key={r.id} type="button" aria-pressed={role === r.id} onClick={() => setRole(r.id)}>
-            {r.label}
-            {r.id !== "all" && ` (${data.llmCalls.filter((c) => c.role === r.id).length})`}
-          </button>
-        ))}
-        <span className="muted" style={{ fontSize: 12 }}>
-          Iteration attribution is inferred from call order — the file records no iteration id.
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <ToggleGroup
+          type="single"
+          value={role}
+          onValueChange={(v) => v && setRole(v as LlmCall["role"] | "all")}
+        >
+          {ROLES.filter((r) => r.id === "all" || present.has(r.id as LlmCall["role"])).map((r) => (
+            <ToggleGroupItem key={r.id} value={r.id}>
+              {r.label}
+              {r.id !== "all" && ` (${data.llmCalls.filter((c) => c.role === r.id).length})`}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+        <span className="text-muted-foreground text-xs">
+          Iteration attribution is inferred from call order - the file records no iteration id.
         </span>
       </div>
 
-      <Card>
-        {shown.map((call) => (
-          <details className="call" key={call.index}>
-            <summary>
-              <span className="pill">{call.role}</span>
-              {call.iterId !== undefined && (
-                <button
-                  type="button"
-                  className="chip"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onSelectIteration(call.iterId!);
-                  }}
-                >
-                  #{call.iterId}
-                </button>
-              )}
-              <span className="preview">{truncate(call.response, 200)}</span>
-              <span className="tokens">
-                {int(call.tokens_in)} → {int(call.tokens_out)}
-              </span>
-            </summary>
-            <div className="body">
-              <div className="muted" style={{ fontSize: 12 }}>
-                {timestamp(call.ts)} · {call.model}
-              </div>
-              <div>
-                <h4>prompt</h4>
-                <pre className="text">{call.prompt}</pre>
-              </div>
-              <div>
-                <h4>response</h4>
-                <pre className="text">{call.response}</pre>
-              </div>
-            </div>
-          </details>
-        ))}
-      </Card>
+      <Panel>
+        <div className="divide-y">
+          {shown.map((call) => (
+            <CallRow key={call.index} call={call} onSelectIteration={onSelectIteration} />
+          ))}
+        </div>
+      </Panel>
     </>
   );
 }

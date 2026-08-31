@@ -1,7 +1,8 @@
 import type { Iteration, RunData } from "../lib/types";
 import { primaryOf } from "../lib/derive";
 import { score, truncate } from "../lib/format";
-import { Card, Empty } from "./ui";
+import { Panel, Empty, Pre } from "@/components/common";
+import { cn } from "@/lib/utils";
 
 /** Depth-first, so children sit directly under the parent they were proposed from. */
 function flatten(data: RunData): Iteration[] {
@@ -21,6 +22,16 @@ function flatten(data: RunData): Iteration[] {
   return out;
 }
 
+/** Left status stripe colour, keyed by infra first and then iteration status. */
+const STRIPE: Record<string, string> = {
+  kept: "border-l-good",
+  ok: "border-l-primary",
+  reverted: "border-l-serious",
+  failed: "border-l-critical",
+  infra: "border-l-warning",
+  unknown: "border-l-axis",
+};
+
 export default function SearchTree({
   data,
   selected,
@@ -34,42 +45,51 @@ export default function SearchTree({
 
   return (
     <div>
-      <Card title={`Iterations (${nodes.length})`}>
+      <Panel title={`Iterations (${nodes.length})`}>
         {nodes.length === 0 ? (
           <Empty>This run has no ledger rows.</Empty>
         ) : (
-          <div className="tree">
-            {nodes.map((it) => (
-              <button
-                key={it.iter_id}
-                type="button"
-                className={`tree-node ${it.infra ? "infra" : (it.status ?? "ok")}`}
-                aria-current={selected === it.iter_id}
-                style={{ marginLeft: Math.min(it.depth, 6) * 14 }}
-                onClick={() => onSelect(it.iter_id)}
-              >
-                <span className="top">
-                  <span className="id">#{it.iter_id}</span>
-                  <span className="muted phase" style={{ fontSize: 11.5 }}>
-                    {it.phase}
-                  </span>
-                  <span className="score">{score(primaryOf(it))}</span>
-                </span>
-                <span className="hyp">
-                  {it.status === "failed" && it.error
-                    ? truncate(it.error, 120)
-                    : truncate(it.hypothesis ?? "no hypothesis recorded", 140)}
-                </span>
-              </button>
-            ))}
+          <div className="flex max-h-[calc(100vh-260px)] min-w-0 flex-col gap-1.5 overflow-y-auto">
+            {nodes.map((it) => {
+              const key = it.infra ? "infra" : (it.status ?? "ok");
+              const stripe = STRIPE[key] ?? STRIPE.unknown;
+              const isSelected = selected === it.iter_id;
+              return (
+                <button
+                  key={it.iter_id}
+                  type="button"
+                  aria-current={isSelected}
+                  style={{ marginLeft: Math.min(it.depth, 6) * 14 }}
+                  onClick={() => onSelect(it.iter_id)}
+                  className={cn(
+                    "bg-card w-full min-w-0 cursor-pointer rounded-lg border border-l-[3px] px-2.5 py-2 text-left transition-colors hover:bg-secondary",
+                    stripe,
+                    isSelected && "ring-primary bg-secondary ring-1",
+                  )}
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="text-ink-2 font-mono text-xs font-semibold">#{it.iter_id}</span>
+                    <span className="text-muted-foreground min-w-0 truncate text-xs">{it.phase}</span>
+                    <span className="tnum ml-auto shrink-0 font-mono text-[13px] font-semibold">
+                      {score(primaryOf(it))}
+                    </span>
+                  </div>
+                  <div className="text-ink-2 mt-0.5 line-clamp-2 text-xs">
+                    {it.status === "failed" && it.error
+                      ? truncate(it.error, 120)
+                      : truncate(it.hypothesis ?? "no hypothesis recorded", 140)}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
-      </Card>
+      </Panel>
 
       {data.searchTree && (
-        <Card title="search_tree.txt">
-          <pre className="text">{data.searchTree.trimEnd()}</pre>
-        </Card>
+        <Panel title="search_tree.txt" className="mt-4">
+          <Pre>{data.searchTree.trimEnd()}</Pre>
+        </Panel>
       )}
     </div>
   );
