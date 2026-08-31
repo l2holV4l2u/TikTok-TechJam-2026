@@ -1,0 +1,20 @@
+#1 0.6010  Reproduce the official baseline stage with a pointwise logistic Factor
+  #2 0.6019  Target the training objective and prediction family: compare recency-w
+    #3 0.6029  Target the prediction-family stage by comparing nonlinear NFM interact
+      #4 0.6042  Target the prediction-formation and temporal-interest stages by compar
+        #5 0.6047  Target prediction formation under temporal drift by comparing AutoInt 
+          #6 0.6047  Target prediction formation and drift-aware training by comparing fiel
+            #7 0.6048 [retired]  Target prediction formation and ranking-objective robustness under dri
+              #8 0.6048  Target prediction formation and drift robustness by comparing recency-
+                #9 0.6048  Target prediction formation under drift by comparing hierarchical pers
+                  #10 0.6048  Target prediction formation and drift robustness by comparing local-li
+                    #11 0.6048  Target the training-objective and drift-modeling stages by comparing a
+              #13 0.6048  Target prediction formation and aggregation under drift by comparing a
+                #14 0.6050  Target prediction formation under temporal drift by comparing a regula
+                  #15 0.6050  Target prediction formation under temporal drift by comparing collabor
+                    #16 0.6050  Target drift-robust prediction formation by comparing a recency-weight
+                      #17 0.6051  Target causal context-feature construction and prediction formation: s
+                        #18 0.6051  Target drift-robust prediction formation by comparing a nonlinear addi
+                          #19 0.6051  Target prediction formation under drift by comparing regularized discr
+                            #20 0.6051  Target slate-relative feature formation and training objective: within
+                              #21 0.6051  Target multi-task supervision and prediction formation under drift: jo

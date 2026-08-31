@@ -89,6 +89,14 @@ research/*.csv
 # produced it are excluded above -- shipping its scores would contradict that
 submission_fallback_r26.csv
 
+# The rules above are written as runs/*/... and so miss runs nested one level deeper, such as
+# runs/convergence_sweep/curve_1/. These repeat them at any depth so a nested run cannot smuggle
+# in a 4.9MB submission CSV or a cache of model weights.
+runs/**/artifacts/
+runs/**/submission.csv
+runs/**/scripts/**
+!runs/**/scripts/*.py
+
 blend/artifacts/
 checkpoints/
 components.npz

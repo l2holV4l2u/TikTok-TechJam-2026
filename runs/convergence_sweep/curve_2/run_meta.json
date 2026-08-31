@@ -1,0 +1,24 @@
+{
+  "model": "gpt-5.6-sol",
+  "dataset": "KuaiRand-Pure",
+  "api_surface": [
+    "pipeline.history.historical_features",
+    "s.X",
+    "s.aux",
+    "s.date",
+    "s.num[duration_ms]",
+    "s.num[user_fans_user_num]",
+    "s.num[user_follow_user_num]",
+    "s.num[user_friend_user_num]",
+    "s.num[user_register_days]",
+    "s.time_ms",
+    "s.user_id",
+    "s.video_id",
+    "s.y"
+  ],
+  "data_contract": "train-only-v3",
+  "stop_reason": "crashed: KeyboardInterrupt: ",
+  "crashed": true,
+  "iterations": 26,
+  "wall_clock_s": 3782.958737417008
+}
