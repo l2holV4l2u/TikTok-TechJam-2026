@@ -25,8 +25,20 @@ MAX_HISTORY = 8
 MAX_FEEDBACK_CHARS = 1200
 MAX_KB = 3
 MAX_ATTEMPTS = 2
-MAX_CODE_CHARS = 14000     # a parent script is sent in full; truncating it produces bad edits
+# A parent script is sent in full; truncating it hands the model a file that stops mid-function
+# and asks it to edit that. At 14000 this fired on 52% of the 272 scripts this project has run
+# (median 14368, max 22589), silently, for the whole project. 60000 clears the largest by 2.6x
+# and costs ~15k tokens of a prompt that is nowhere near its context limit.
+MAX_CODE_CHARS = 60000
 MAX_EDA_CHARS = 4000
+
+def _clip(code: str, limit: int = MAX_CODE_CHARS) -> str:
+    """Whole lines only, and say so, so a clipped parent is never mistaken for a complete file."""
+    if code is None or len(code) <= limit:
+        return code or ""
+    kept = code[:limit].rsplit(chr(10), 1)[0]
+    return kept + chr(10) + "# ... TRUNCATED BY THE HARNESS: this file is incomplete ..."
+
 
 # ---------------------------------------------------------------- task specification only
 
@@ -138,6 +150,12 @@ ENVIRONMENT:
   - HARD LIMIT: {timeout:.0f} seconds per script, killed at the limit and scored as a failure.
     {train_rows_m:.2f}M rows: vectorize in numpy/torch. A Python loop over rows, users or pairs
     will time out.
+    THAT LIMIT IS NOT THE TARGET, AND SO FAR NOTHING HAS COME NEAR IT. Across this harness's
+    runs the median script finishes in about 80 seconds and the slowest yet took 350, against
+    the {timeout:.0f}s allowed -- and a whole run has used 9% of its 6-hour ceiling. You are
+    being far more cautious with compute than you need to be. A bigger model, more boosting
+    rounds, more epochs, a wider sweep or an extra family inside the same script costs nothing
+    you are short of. Spend it.
 
 WHAT ONE ITERATION IS: one script, executed once, reporting one METRICS line. Within that
 script you may do as much as fits the time budget -- one iteration is one script, not one model.
@@ -533,17 +551,17 @@ class LLMProposer:
                 blocks.append(_DRAFT)
             elif context.get("mode") == "sweep":
                 blocks.append(_SWEEP_CODE.format(iid=parent.iter_id, score=parent.score,
-                                            code=parent.code[:MAX_CODE_CHARS]))
+                                            code=_clip(parent.code)))
             elif context.get("mode") == "tune":
                 blocks.append(_TUNE_CODE.format(iid=parent.iter_id, score=parent.score,
-                                                code=parent.code[:MAX_CODE_CHARS]))
+                                                code=_clip(parent.code)))
             elif context.get("mode") == "broaden":
                 blocks.append(_BROADEN_CODE.format(iid=parent.iter_id, score=parent.score,
-                                                   code=parent.code[:MAX_CODE_CHARS]))
+                                                   code=_clip(parent.code)))
             else:
                 blocks.append(_EDIT_PARENT.format(iid=parent.iter_id, score=parent.score,
                                                   hyp=parent.hypothesis,
-                                                  code=parent.code[:MAX_CODE_CHARS]))
+                                                  code=_clip(parent.code)))
 
             diagnosis = context.get("diagnosis")
             if diagnosis:
@@ -604,7 +622,7 @@ class LLMProposer:
             last_code = next((e.diff for e in reversed(history)
                               if e.status in ("failed", "blacklisted") and e.diff), "")
             if last_code and parent is None:
-                fb += f"\n\nThe script that failed:\n```python\n{last_code[:MAX_CODE_CHARS]}\n```"
+                fb += f"\n\nThe script that failed:\n```python\n{_clip(last_code)}\n```"
             blocks.append(fb)
 
         if note:

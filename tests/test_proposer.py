@@ -172,10 +172,26 @@ def test_prompt_size_bounded_as_history_grows():
 
 
 def test_parent_code_is_truncated_not_unbounded():
+    """Bounded, and the bound tracks MAX_CODE_CHARS rather than a number frozen years ago.
+
+    The limit was 14000 while the median script was 14368 and 52% of them ran over, so half of
+    every parent handed back for editing stopped mid-function. The guard that matters is that a
+    100k-char parent cannot blow the prompt open, not that the prompt stays under any particular
+    size.
+    """
+    from agent.proposer import MAX_CODE_CHARS, _clip
+
     p, prompts = _capture()
     huge = Node(1, None, "h", "x" * 100_000, 0.6)
     p.propose(phase="improve", parent=huge)
-    assert len(prompts[0]) < 40_000, len(prompts[0])
+    assert len(prompts[0]) < MAX_CODE_CHARS + 25_000, len(prompts[0])
+    assert "TRUNCATED BY THE HARNESS" in prompts[0], "a clipped parent must say it is incomplete"
+    # and a script of the size this project actually produces must arrive whole
+    real = Node(2, None, "h", ("y = 1" + chr(10)) * 4_000, 0.6)   # ~24k chars
+    p2, prompts2 = _capture()
+    p2.propose(phase="improve", parent=real)
+    assert "TRUNCATED" not in prompts2[0], "a 24k-char script must not be clipped"
+    assert _clip(real.code) == real.code
 
 
 def test_blacklisted_hypothesis_never_returned():

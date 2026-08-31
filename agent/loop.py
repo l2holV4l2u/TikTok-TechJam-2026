@@ -486,7 +486,7 @@ def converged(best_curve: list[float], patience: int, epsilon: float) -> bool:
 
 def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
              workdir, primary: str = "primary", epsilon: float = 0.002,
-             patience: int = 3, max_iters: int = 50, timeout: float = 300,
+             patience: int = 3, min_iters: int = 0, max_iters: int = 50, timeout: float = 300,
              wall_clock_limit_s: float = SIX_HOURS,
              tree: Tree | None = None, recovery: Recovery | None = None,
              knowledge: Knowledge | None = None, revise_fn=None,
@@ -547,7 +547,12 @@ def run_loop(proposer: Proposer, evaluator: Evaluator, ledger: Ledger, *,
             # of 50 still setting a record every step. Both stop points are recorded.
             if stale >= patience and out.strict_converged_iter is None:
                 out.strict_converged_iter = i
-            if converged(best_curve, patience, epsilon):
+            # FAQ 2.9.1 lets a team declare its own epsilon, N and an optional minimum-iteration
+            # floor, fixed before the run and recorded in the log. r95 is why there is a floor:
+            # it went flat for four turns around 0.6053 and then gained +0.00023 and +0.00025 on
+            # turns 9 and 10, in directions no shorter run ever reached. The default rule would
+            # have stopped it at turn 3.
+            if converged(best_curve, patience, epsilon) and i >= min_iters:
                 return finish("converged")
 
         # live budget state: how close the convergence rule is to ending the run

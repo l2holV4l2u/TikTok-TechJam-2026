@@ -156,11 +156,17 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-dir", default="runs/latest")
     ap.add_argument("--iters", type=int, default=50, help="organizer hard cap is 50")
-    ap.add_argument("--timeout", type=float, default=900.0,
+    # 50 scripts at 3 slots is ~17 waves inside the 6h ceiling, so a wave can afford ~1200s.
+    # Nothing has come near even 900 (median 80s, max 350), so this is headroom, not a target.
+    ap.add_argument("--timeout", type=float, default=1200.0,
                     help="per-script timeout; one iteration is one script and may search internally, so this is generous — the 6h ceiling binds first")
     ap.add_argument("--wall-clock-s", type=float, default=6 * 3600.0,
                     help="organizer backstop is 6 hours")
     ap.add_argument("--patience", type=int, default=3, help="N in the convergence rule")
+    # FAQ 2.9.1: a team may declare its own N, epsilon and a minimum-iteration floor, provided
+    # they are fixed before the run and recorded in the run log. run_meta.json records all three.
+    ap.add_argument("--min-iters", type=int, default=0,
+                    help="declared minimum-iteration floor; convergence cannot stop the run below it")
     ap.add_argument("--epsilon", type=float, default=0.002, help="organizer-fixed eps")
     ap.add_argument("--max-retries", type=int, default=2)
     # Must stay below --patience. Both counters test the same epsilon against the same
@@ -301,7 +307,7 @@ def main() -> None:
             workdir=run_dir / "scripts",
             primary="primary",
             epsilon=args.epsilon,
-            patience=args.patience,
+            patience=args.patience, min_iters=args.min_iters,
             max_iters=args.iters,
             force_mode=args.force_mode,
             timeout=args.timeout,
@@ -372,6 +378,7 @@ def main() -> None:
         # indistinguishable from a default run that simply never converged.
         "epsilon": args.epsilon,
         "patience": args.patience,
+        "min_iters": args.min_iters,
         "iterations": len(entries),
         "iteration_cap": args.iters,
         # A turn is one hypothesis-to-score cycle -- Figure 1's iteration, and what the
