@@ -1,5 +1,0 @@
-#2 0.6001  Fix the previous run by training a true Factorization Machine on the c
-  #3 0.6008  Target the feature-statistics stage by adding an author-level Laplace-
-    #4 0.6008  Target the training-objective stage by replacing pointwise BCE with an
-    #5 0.6010  Train a LambdaMART (LightGBM lambdarank) ranking model on engineered n
-      #8 0.6010  Target the feature-statistics stage by adding train-only user×author a

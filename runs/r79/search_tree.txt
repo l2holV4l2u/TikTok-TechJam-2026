@@ -1,5 +1,0 @@
-#1 0.6022  Reproduce the official baseline end-to-end using a k=16 Factorization 
-  #2 0.6040  Target model-family breadth and score aggregation by comparing expande
-    #3 0.6043  Target prediction formation with three structurally distinct families—
-      #4 0.6053  Target prediction formation and training objective breadth by comparin
-        #5 0.6053  Target prediction formation with a breadth sweep over AutoInt attentio

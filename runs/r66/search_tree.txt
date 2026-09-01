@@ -1,5 +1,0 @@
-#1 0.6018  Reproduce the official baseline stage by training a k=16 categorical F
-  #2 0.6021  Add a dense side-information head to the existing FM, using standardiz
-    #3 0.6029  Target the model/loss stage with a query-grouped LightGBM LambdaRank m
-      #4 0.6033  Target feature engineering and score post-processing: feed-order, same
-        #5 0.6034  Target behavior-history feature construction by learning smoothed user

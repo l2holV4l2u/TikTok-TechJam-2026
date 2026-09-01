@@ -1,5 +1,0 @@
-#1 0.6026  Reproduce the official baseline stage by training a k=16 categorical F
-  #2 0.6038  Model-formation and drift-weighting stage: compare recency-weighted De
-    #3 0.6041  Model-formation and drift-weighted training stage: compare field-weigh
-      #5 0.6045  Model-formation and rank-aggregation stage: after fixing the xDeepFM C
-        #6 0.6045  Training-stage drift weighting and model-formation breadth: compare ha

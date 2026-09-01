@@ -1,7 +1,0 @@
-#1 0.6020  Reproduce the official baseline stage by training a k=16 pointwise Fac
-  #2 0.6032  Target the feature-interaction representation stage by replacing the f
-    #3 0.6034  Target the tabular feature/statistics stage by training pointwise Ligh
-      #4 0.6040  Target the memorization and score-aggregation stages by learning a spa
-        #5 0.6048  Target the impression-context feature stage by adding vectorized chron
-          #7 0.6057  Target the feature-interaction representation stage with a low-rank DC
-            #8 0.6057  Target the personalized feature-statistics stage with hierarchical Bay
