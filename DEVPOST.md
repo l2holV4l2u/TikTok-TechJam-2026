@@ -281,21 +281,25 @@ to say `Fit on "train" only`. The rules say no such thing -- they say teams deve
 train + validation and the single hard rule is no external data. Validation is the week
 immediately before the test period, so that self-imposed restriction threw away the data
 closest to what is scored. Under `train-plus-valid-v2` the reported validation score still
-comes from a train-only fit, so selection stays honest, and only the saved test scores may
-come from the same recipe refit on both splits. Early runs could not do this, so their
-test numbers measure a harness version rather than a model, and we do not compare across the
-two contracts.
+comes from a train-only fit, and so do the saved test scores. FAQ 2.9.2 states that training
+data is the train split only, so no model whose predictions we save is fitted on validation --
+not by refit, not by early stopping, not by feature statistics, and not by any quantity chosen
+by watching validation. `agent/critic.py` rejects an iteration that breaks this. Earlier runs of
+this project did refit on train+validation before scoring test; measured on the same harness
+that reading was worth **0.00229** of hidden-test delta, and giving it up is the difference
+between the number reported here and the one we could have claimed.
 
 Resources for the submitted run (`r96`): **14 iterations of 50**, **53.0 minutes** of agent
-wall-clock, **96,359 tokens**, CPU only, **0 failures**, **0 manual
-interventions**, and **80 candidate solutions compared inside those 6 iterations**.
+wall-clock, **260,967 tokens**, CPU only, **0 failures**, **0 manual interventions**, and
+**316 candidate solutions compared inside those 14 scripts**.
 
-A later run did lose 6 iterations to an expired API key. That is an outage rather than the agent
-failing an experiment, and `report_run.py` now separates the two rather than reporting "6
-failures" against the agent.
+Robustness is visible in the same log: one iteration crashed on a LightGBM feature-name
+rejection, the agent read the traceback and recovered on the retry. An outage -- an expired API
+key -- is recorded separately from an experiment that failed, because they are different events
+and `report_run.py` should not report an outage as the agent failing.
 
-The agent did all of it: it wrote its own EDA script, reproduced the official baseline to 0.6015
-on the first attempt, proposed and coded further experiments, and emitted the test
+The agent did all of it: it wrote its own EDA script, reproduced the official baseline to 0.60201
+on the first attempt, proposed and coded every further experiment, and emitted the test
 predictions that became the submission.
 
 ### The result that matters most
@@ -390,8 +394,9 @@ Both mechanisms were auditable in those runs' logs, where the search mode goes
 `refine → broaden → broaden` across the three improve iterations while the belief set carries
 1 → 2 → 3 claims into successive prompts, so each proposal is conditioned on a revised reading
 of everything before it rather than on a raw score history. The submitted run traces
-0.6022 → 0.6040 → 0.6043 → 0.6053 → 0.6053 across its scored iterations: four consecutive
-breadth sweeps over model families, no refinement at all.
+0.60201 → 0.60504 → 0.60558 → 0.60563 → 0.60576 across its scored turns: breadth sweeps over
+model families throughout, no refinement at all, and 70% of the total gain arriving in the
+first improve turn.
 
 That last point is a measured decision, not a style. Two diagnostic runs with the convergence
 stop disabled scored every iteration on *both* splits, and family sweeps moved the hidden test
@@ -774,6 +779,38 @@ benchmark" as a finding. It would have been a confident, well-evidenced, wrong c
 from an instrument nobody had checked. The lesson we actually take from this is about the
 instrument, not the portfolio: a measurement that decides whether to delete a subsystem deserves
 the same scrutiny as the subsystem.
+
+## Reading the rules cost us 0.00229, and we paid it
+
+Three of the organizers' FAQ clarifications land directly on decisions we had already made the
+other way. Each one is recorded here with what it cost, because the alternative -- quietly
+keeping the higher number -- is the failure mode this whole project is supposed to guard against.
+
+**2.9.2, training data.** We had been refitting the final model on train+validation before
+predicting test, on the reading that "the agent develops on train + validation" made validation
+available for fitting. The FAQ settles it: training data is the train split only. We measured
+the cost on the same harness by running both contracts -- **+0.00509 with the refit, +0.00280
+without** -- so the permissive reading was worth **0.00229** of hidden-test delta, roughly half
+of everything the project had gained. We removed it, and `agent/critic.py` now rejects any
+iteration that fits on validation, including through early stopping.
+
+**2.9.3, what is judged.** "You must not use test labels in any way -- including model selection,
+early stopping, threshold tuning, or feature statistics", enforced by reviewing the code and the
+run logs. Our harness had been scoring its own submission at the end of every run and printing
+the delta. Nothing downstream read it, but a run log that prints a test score every time is
+exactly what that review looks at. Test labels are now hidden by default in `pipeline/data.py`:
+a normal test load does not even open `test/y.npy`, and the submitted run reports its own
+hidden-test row as **unscored**. The number in this write-up was produced afterwards, outside the
+run, by scoring the submitted file once.
+
+**2.9.1, the stopping rule.** A team may declare its own epsilon and N. We declare the
+organizers' defaults, eps = 0.002 and N = 3 with no minimum-iteration floor, recorded in
+`run_meta.json` before the run. We had experimented with a floor that kept searching past the
+stop point; it bought **+0.00047 of validation and nothing on test**, which is the clearest
+evidence we have that search past convergence fits the split rather than the task.
+
+The pattern in all three: we had taken the more permissive reading, it was worth real score, and
+the measurement of what it was worth is the interesting result -- not the score.
 
 ## One thing we deliberately did not do
 
