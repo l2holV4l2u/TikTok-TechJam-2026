@@ -3,7 +3,7 @@
 ## Loop stages executed by the agent
 
 - **Inspect data (EDA):** completed at iteration #0 - the agent wrote and ran its own exploratory script; its findings are in `eda_report.txt` and were carried into every later prompt.
-- **Reproduce official baseline (Requirement 1):** 1 attempt(s); the agent's own pipeline reached validation primary **0.6171** against the official 0.6016 (delta +0.0155, inside the baseline's 5-seed noise). That script became the root of the search tree.
+- **Reproduce official baseline (Requirement 1):** 1 attempt(s); the agent's own pipeline reached validation primary **0.6171** against the official 0.6421844312876108 (delta -0.0251, inside the baseline's 5-seed noise). That script became the root of the search tree.
 - **Iterate:** 30 experiments proposed, executed and evaluated by the agent, each branching from a node of its own search tree.
 
 ## Iteration log
@@ -13,37 +13,37 @@ A turn is one hypothesis-to-score cycle and advances several lineages at once, s
 | # | turn | slot | phase | parent | status | secs | primary | vs baseline | hypothesis |
 |---|---|---|---|---|---|---|---|---|---|
 | 0 | 0 | - | eda | - | ok | 6 | n/a | - | INSPECT DATA stage: quantify drift, coverage, categorical and numeric  |
-| 1 | 0 | - | baseline | - | ok | 30 | 0.6171 | +0.0155 | Reproduce the official baseline stage using a k=16 logistic Factorizat |
-| 2 | 1 | 0 | improve | #1 | ok | 76 | 0.6547 | +0.0531 | Training-stage breadth plus drift adaptation: compare a temporally wei |
-| 3 | 1 | 1 | improve | #1 | kept | 43 | 0.6547 | +0.0531 | I am testing latent collaborative filtering, learned linear item-histo |
+| 1 | 0 | - | baseline | - | ok | 30 | 0.6171 | -0.0251 | Reproduce the official baseline stage using a k=16 logistic Factorizat |
+| 2 | 1 | 0 | improve | #1 | ok | 76 | 0.6547 | +0.0125 | Training-stage breadth plus drift adaptation: compare a temporally wei |
+| 3 | 1 | 1 | improve | #1 | kept | 43 | 0.6547 | +0.0125 | I am testing latent collaborative filtering, learned linear item-histo |
 | 4 | 1 | 2 | improve | #1 | failed | 0 | FAIL | - | Model-stage breadth: compare field-weighted factorization, explicit pr |
 | 5 | 2 | 0 | improve | #2 | failed | 8 | FAIL | - | Model/training-stage breadth: compare a temporally weighted LambdaRank |
-| 6 | 2 | 1 | improve | #2 | ok | 96 | 0.6763 | +0.0747 | Multi-task and metric-aligned training stage: MMoE should use click/li |
-| 7 | 2 | 2 | improve | #2 | kept | 167 | 0.6767 | +0.0751 | Model-stage breadth: explicit product interactions, deep feature cross |
-| 8 | 3 | 0 | improve | #7 | kept | 197 | 0.6767 | +0.0751 | Training/ranking stage: repair LambdaRank by splitting each oversized  |
-| 9 | 3 | 1 | improve | #7 | ok | 263 | 0.6790 | +0.0774 | Model/training-stage breadth: compare Wide&Deep, DeepFM, NFM, FiBiNET, |
-| 10 | 3 | 2 | improve | #7 | ok | 80 | 0.6824 | +0.0808 | Counterfactual/reranking stage: inverse-exposure empirical-Bayes user– |
-| 11 | 4 | 0 | improve | #10 | kept | 490 | 0.6824 | +0.0808 | Rank-aggregation stage: temporally weighted boosted trees, a linear hi |
-| 12 | 4 | 1 | improve | #10 | kept | 65 | 0.6828 | +0.0812 | Slate-reranking stage: creator/video deduplication and category-covera |
-| 13 | 4 | 2 | improve | #10 | ok | 81 | 0.6944 | +0.0928 | Sequence/context stage: causal exposure-fatigue, session-hazard, and c |
-| 14 | 5 | 0 | improve | #13 | kept | 128 | 0.6944 | +0.0928 | Preference-estimation and rank-fusion stage: temporally weighted hiera |
-| 15 | 5 | 1 | improve | #13 | kept | 27 | 0.6944 | +0.0928 | Slate-composition stage: applying structurally different soft-MMR, har |
+| 6 | 2 | 1 | improve | #2 | ok | 96 | 0.6763 | +0.0341 | Multi-task and metric-aligned training stage: MMoE should use click/li |
+| 7 | 2 | 2 | improve | #2 | kept | 167 | 0.6767 | +0.0345 | Model-stage breadth: explicit product interactions, deep feature cross |
+| 8 | 3 | 0 | improve | #7 | kept | 197 | 0.6767 | +0.0345 | Training/ranking stage: repair LambdaRank by splitting each oversized  |
+| 9 | 3 | 1 | improve | #7 | ok | 263 | 0.6790 | +0.0369 | Model/training-stage breadth: compare Wide&Deep, DeepFM, NFM, FiBiNET, |
+| 10 | 3 | 2 | improve | #7 | ok | 80 | 0.6824 | +0.0402 | Counterfactual/reranking stage: inverse-exposure empirical-Bayes user– |
+| 11 | 4 | 0 | improve | #10 | kept | 490 | 0.6824 | +0.0402 | Rank-aggregation stage: temporally weighted boosted trees, a linear hi |
+| 12 | 4 | 1 | improve | #10 | kept | 65 | 0.6828 | +0.0406 | Slate-reranking stage: creator/video deduplication and category-covera |
+| 13 | 4 | 2 | improve | #10 | ok | 81 | 0.6944 | +0.0522 | Sequence/context stage: causal exposure-fatigue, session-hazard, and c |
+| 14 | 5 | 0 | improve | #13 | kept | 128 | 0.6944 | +0.0522 | Preference-estimation and rank-fusion stage: temporally weighted hiera |
+| 15 | 5 | 1 | improve | #13 | kept | 27 | 0.6944 | +0.0522 | Slate-composition stage: applying structurally different soft-MMR, har |
 | 16 | 5 | 2 | improve | #13 | failed | 102 | FAIL | - | Sequence-model robustness and interaction stage: replicate the additiv |
-| 17 | 6 | 0 | improve | #15 | ok | 298 | 0.7039 | +0.1023 | Training and score-calibration stage: recency-weighted boosted trees,  |
-| 18 | 6 | 1 | improve | #15 | kept | 409 | 0.7039 | +0.1023 | Auxiliary-target distributional modeling stage: duration-normalized wa |
-| 19 | 6 | 2 | improve | #15 | kept | 148 | 0.7046 | +0.1030 | Sequence/context model stage: fixing out-of-range embedding indices an |
-| 20 | 7 | 0 | improve | #19 | kept | 124 | 0.7046 | +0.1030 | Prediction-formation and calibrated-fusion stage: a drift-regularized  |
-| 21 | 7 | 1 | improve | #19 | kept | 93 | 0.7046 | +0.1030 | Stationarity-aware prediction stage: selecting categorical signals by  |
-| 22 | 7 | 2 | improve | #19 | kept | 176 | 0.7046 | +0.1030 | Cross-boundary user-state feature stage: leakage-safe, prior-day user× |
-| 23 | 8 | 0 | improve | #20 | kept | 67 | 0.7046 | +0.1030 | Model-formation breadth stage: compare a generative categorical likeli |
-| 24 | 8 | 1 | improve | #20 | kept | 93 | 0.7050 | +0.1034 | Model-formation and drift-weighting stage: compare an explicit hashed- |
-| 25 | 8 | 2 | improve | #20 | kept | 120 | 0.7052 | +0.1036 | Model-formation breadth stage: compare a smooth random-Fourier kernel, |
-| 26 | 9 | 0 | improve | #25 | kept | 230 | 0.7052 | +0.1036 | I am targeting prediction formation under temporal drift by comparing  |
-| 27 | 9 | 1 | improve | #25 | kept | 167 | 0.7052 | +0.1036 | Model-formation breadth stage: compare a neural additive spline model, |
-| 28 | 9 | 2 | improve | #25 | kept | 103 | 0.7052 | +0.1036 | Prediction-fusion stage: a fixed, label-free disagreement/confidence g |
-| 29 | 10 | 0 | improve | #26 | kept | 424 | 0.7052 | +0.1036 | Training-weighting and prediction-formation stage: train main models u |
-| 30 | 10 | 1 | improve | #26 | kept | 394 | 0.7056 | +0.1040 | Pairwise ranking stage: training linear, low-rank quadratic, prototype |
-| 31 | 10 | 2 | improve | #26 | kept | 192 | 0.7056 | +0.1040 | Temporal target-statistics stage: entity propensities that extrapolate |
+| 17 | 6 | 0 | improve | #15 | ok | 298 | 0.7039 | +0.0617 | Training and score-calibration stage: recency-weighted boosted trees,  |
+| 18 | 6 | 1 | improve | #15 | kept | 409 | 0.7039 | +0.0617 | Auxiliary-target distributional modeling stage: duration-normalized wa |
+| 19 | 6 | 2 | improve | #15 | kept | 148 | 0.7046 | +0.0624 | Sequence/context model stage: fixing out-of-range embedding indices an |
+| 20 | 7 | 0 | improve | #19 | kept | 124 | 0.7046 | +0.0624 | Prediction-formation and calibrated-fusion stage: a drift-regularized  |
+| 21 | 7 | 1 | improve | #19 | kept | 93 | 0.7046 | +0.0624 | Stationarity-aware prediction stage: selecting categorical signals by  |
+| 22 | 7 | 2 | improve | #19 | kept | 176 | 0.7046 | +0.0624 | Cross-boundary user-state feature stage: leakage-safe, prior-day user× |
+| 23 | 8 | 0 | improve | #20 | kept | 67 | 0.7046 | +0.0624 | Model-formation breadth stage: compare a generative categorical likeli |
+| 24 | 8 | 1 | improve | #20 | kept | 93 | 0.7050 | +0.0628 | Model-formation and drift-weighting stage: compare an explicit hashed- |
+| 25 | 8 | 2 | improve | #20 | kept | 120 | 0.7052 | +0.0630 | Model-formation breadth stage: compare a smooth random-Fourier kernel, |
+| 26 | 9 | 0 | improve | #25 | kept | 230 | 0.7052 | +0.0630 | I am targeting prediction formation under temporal drift by comparing  |
+| 27 | 9 | 1 | improve | #25 | kept | 167 | 0.7052 | +0.0630 | Model-formation breadth stage: compare a neural additive spline model, |
+| 28 | 9 | 2 | improve | #25 | kept | 103 | 0.7052 | +0.0630 | Prediction-fusion stage: a fixed, label-free disagreement/confidence g |
+| 29 | 10 | 0 | improve | #26 | kept | 424 | 0.7052 | +0.0630 | Training-weighting and prediction-formation stage: train main models u |
+| 30 | 10 | 1 | improve | #26 | kept | 394 | 0.7056 | +0.0634 | Pairwise ranking stage: training linear, low-rank quadratic, prototype |
+| 31 | 10 | 2 | improve | #26 | kept | 192 | 0.7056 | +0.0634 | Temporal target-statistics stage: entity propensities that extrapolate |
 
 ## Portfolio
 
@@ -1589,7 +1589,7 @@ The loop never stalled, crashed, or escalated to a human. Guards in place: retry
 
 ## Result
 
-- Best validation primary: **0.7056** (baseline 0.6016, delta +0.1040)
+- Best validation primary: **0.7056** (baseline 0.6421844312876108, delta +0.0634)
 - From iteration #30: Pairwise ranking stage: training linear, low-rank quadratic, prototype-distance, and independently seeded nonlinear rankers on within-user impression pairs should suppress irrelevant user-level propensity and learn structurally different decision surfaces whose standalone or rank-blended predictions improve GAUC and top-5 ordering.
 - Selection is on validation only, per the scoring rules; the hidden test set was never used to choose between iterations.
 - Submission: written to `runs/r97_1k/submission.csv`
@@ -1599,7 +1599,7 @@ The loop never stalled, crashed, or escalated to a human. Guards in place: retry
 | split | GAUC | nDCG@5 | primary |
 |---|---|---|---|
 | validation (best iteration) | 0.7042 | 0.7070 | 0.7056 |
-| official baseline (validation) | 0.6674 | 0.5357 | 0.6016 |
+| KuaiRand-1K reference (research/baseline_reference.py) (validation) | 0.6725 | 0.6118 | 0.6422 |
 | hidden test (this submission) | unscored | unscored | unscored |
 
 Test predictions were written without reading labels; final test metrics are computed once by the organizers.

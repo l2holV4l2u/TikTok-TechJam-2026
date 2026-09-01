@@ -1,0 +1,9 @@
+{
+  "valid_primary": 0.6421844312876108,
+  "valid_gauc": 0.6725477244658368,
+  "valid_ndcg@5": 0.6118211381093849,
+  "test_primary": 0.6355029748281698,
+  "test_gauc": 0.6703756078035786,
+  "test_ndcg@5": 0.600630341852761,
+  "source": "KuaiRand-1K reference (research/baseline_reference.py)"
+}
