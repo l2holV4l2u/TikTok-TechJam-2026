@@ -14,14 +14,15 @@ The agent is the product; the recommender is the sandbox it works in.
 ### The loop
 
 ```
-                 ┌──────────────────────────────────────────────────────┐
-                 ▼                                                      │
- inspect data ─► reproduce baseline ─► select node ─► propose ─► execute ─► evaluate ─► revise
-   (agent's        (Requirement 1)     (adaptive:     (LLM edits  (sandbox,   (GAUC /   beliefs
-    own EDA)                            refine or      a script)   timeout)   nDCG@5)    (LLM)
-                                        broaden)                                           │
-                                            ▲                                              │
-                                            └────── belief set guides the next choice ──────┘
+                 ┌────────────────────────────────────────────────────────────┐
+                 ▼                                                            │
+ inspect data ─► reproduce baseline ─► select node ─► propose ─► execute ─► evaluate ─► synthesise
+   (agent's         (Requirement 1)      (sweep:      (one per    (N slots,   (recompute,   (one call
+    own EDA)                            least-        slot, told   concurrent,  blend,        per turn,
+                                        explored      what its     sandboxed)   critic)       across slots)
+                                        live node)    siblings                                    │
+                                            ▲         are doing)                                  │
+                                            └────── belief set guides the next choice ────────────┘
 ```
 
 Every iteration appends one immutable record: phase, parent node, hypothesis, full code,

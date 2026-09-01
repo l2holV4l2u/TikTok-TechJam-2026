@@ -686,9 +686,12 @@ Failures / integrity rejections & 0 / 0 \\
 Candidates compared         & \textbf{316} models inside those 14 scripts \\
 \bottomrule
 \end{tabular}
-\caption{The resource figures required by Deliverable~4. The 19 LLM calls decompose as
-1 EDA $+$ 1 baseline $+$ 12 improve proposals $+$ 5 consultant syntheses --- the model is called
-twice per turn plus once per slot, and never inside a training loop.}
+\caption{The resource figures required by Deliverable~4. The 19 LLM calls decompose, from
+\file{llm\_calls.jsonl}, as 1 EDA proposal $+$ 1 baseline proposal $+$ 1 belief revision $+$
+13 improve proposals $+$ 3 cross-slot consultant syntheses. Thirteen proposals for twelve
+improve scripts: one reply did not satisfy the response contract and was re-requested, which is
+the proposer's built-in retry rather than an intervention. The model is never called inside a
+training loop.}
 \label{tab:resources}
 \end{table}
 

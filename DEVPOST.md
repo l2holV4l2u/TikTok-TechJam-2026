@@ -14,14 +14,15 @@ The agent is the product; the recommender is the sandbox it works in.
 ### The loop
 
 ```
-                 ┌──────────────────────────────────────────────────────┐
-                 ▼                                                      │
- inspect data ─► reproduce baseline ─► select node ─► propose ─► execute ─► evaluate ─► revise
-   (agent's        (Requirement 1)     (adaptive:     (LLM edits  (sandbox,   (GAUC /   beliefs
-    own EDA)                            refine or      a script)   timeout)   nDCG@5)    (LLM)
-                                        broaden)                                           │
-                                            ▲                                              │
-                                            └────── belief set guides the next choice ──────┘
+                 ┌────────────────────────────────────────────────────────────┐
+                 ▼                                                            │
+ inspect data ─► reproduce baseline ─► select node ─► propose ─► execute ─► evaluate ─► synthesise
+   (agent's         (Requirement 1)      (sweep:      (one per    (N slots,   (recompute,   (one call
+    own EDA)                            least-        slot, told   concurrent,  blend,        per turn,
+                                        explored      what its     sandboxed)   critic)       across slots)
+                                        live node)    siblings                                    │
+                                            ▲         are doing)                                  │
+                                            └────── belief set guides the next choice ────────────┘
 ```
 
 Every iteration appends one immutable record: phase, parent node, hypothesis, full code,
@@ -166,7 +167,10 @@ Two smaller consequences of the same reading:
 
 The rendered search tree (`runs/<id>/search_tree.txt`) and the belief set
 (`runs/<id>/knowledge.md`) are deliverables in their own right: they show *where* the agent
-spent its budget and *what it concluded*, not just what it scored.
+spent its budget and *what it concluded*, not just what it scored. Both are written when the
+controller finishes normally; `r96` was halted at its declared stop before that step, so for the
+submitted run the belief set is recoverable from the prompts recorded in `llm_calls.jsonl`,
+where every turn's synthesis is carried into the next proposal verbatim.
 
 ### Robustness
 
@@ -246,7 +250,7 @@ versions is the same: **every defect was in the scaffolding, not in the model's 
 
 Official baseline (organizer-provided FM, k=16): validation primary 0.6016, hidden test 0.5946.
 
-Our submitted run (`runs/r96`, full log in `RUN_REPORT.md`):
+Our submitted run (`runs/r96`, full log in `RUN_REPORT_PURE.md`):
 
 | | GAUC | nDCG@5 | primary |
 |---|---|---|---|
@@ -276,27 +280,33 @@ are future-window information under the fixed date split and are not eligible fo
 selection or submission. The harness now excludes them and provides equivalent aggregates fit
 only on training rows.
 
-**A second contract change, and why earlier runs are not comparable to it.** Our brief used
-to say `Fit on "train" only`. The rules say no such thing -- they say teams develop on
-train + validation and the single hard rule is no external data. Validation is the week
-immediately before the test period, so that self-imposed restriction threw away the data
-closest to what is scored. Under `train-plus-valid-v2` the reported validation score still
-comes from a train-only fit, and so do the saved test scores. FAQ 2.9.2 states that training
-data is the train split only, so no model whose predictions we save is fitted on validation --
-not by refit, not by early stopping, not by feature statistics, and not by any quantity chosen
-by watching validation. `agent/critic.py` rejects an iteration that breaks this. Earlier runs of
-this project did refit on train+validation before scoring test; measured on the same harness
-that reading was worth **0.00229** of hidden-test delta, and giving it up is the difference
-between the number reported here and the one we could have claimed.
+**How we read the training-data rule, and why we changed it.** We originally read the rules as
+permitting development on train + validation, and refit the final model on both splits before
+predicting test -- validation is the week immediately before the test period, so it is the data
+closest to what is scored. FAQ 2.9.2 settled it the other way: for KuaiRand-Pure, training data
+is the train split only.
+
+We took the strict reading and rebuilt on it. Under `train-only-v3`, no model whose predictions
+we save is fitted on validation -- not by refit, not by early stopping, not by feature
+statistics, and not by any quantity chosen by watching validation. `agent/critic.py` enforces
+it: an iteration that passes the validation split to a fitting call is rejected and returned to
+the proposer. Validation is feedback and a selection signal, never a second training set.
+
+Earlier runs of this project are therefore not comparable to `r96`, and are not in this
+repository.
 
 Resources for the submitted run (`r96`): **14 iterations of 50**, **53.0 minutes** of agent
 wall-clock, **260,967 tokens**, CPU only, **0 failures**, **0 manual interventions**, and
 **316 candidate solutions compared inside those 14 scripts**.
 
-Robustness is visible in the same log: one iteration crashed on a LightGBM feature-name
-rejection, the agent read the traceback and recovered on the retry. An outage -- an expired API
-key -- is recorded separately from an experiment that failed, because they are different events
-and `report_run.py` should not report an outage as the agent failing.
+Robustness does not show up in this run's failure column, because `r96` recorded none: fourteen
+generated scripts, 316 models fitted, zero crashes and zero timeouts. It shows up in the bonus
+run instead. `r97_1k` hit three failures in 32 scripts -- a LightGBM fatal (`Number of rows
+13924 exceeds upper limit of 10000 for a query`) and two errors in generated code -- and
+recovered from all three with **0 manual interventions**: the traceback and the failing script
+go back to the proposer, which fixes them on the retry. An outage, such as an expired API key,
+is recorded separately from an experiment that failed, because they are different events and
+`report_run.py` should not report an outage as the agent failing.
 
 The agent did all of it: it wrote its own EDA script, reproduced the official baseline to 0.60201
 on the first attempt, proposed and coded every further experiment, and emitted the test

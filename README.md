@@ -79,7 +79,7 @@ is recorded with what reversing it cost.
   or feature statistics.
 - **2.9.3, test labels may not be used in any way.** Hidden by default in `pipeline/data.py` -- a
   normal test load does not open `test/y.npy` or any test auxiliary file. The harness writes the
-  submission without scoring it, and `RUN_REPORT.md` shows the hidden-test row as **unscored**.
+  submission without scoring it, and `RUN_REPORT_PURE.md` shows the hidden-test row as **unscored**.
   The test figure quoted above was produced afterwards, outside the run, scoring the submitted
   file once.
 - **2.9.1, a team may declare its own stopping rule.** We declare the organizers' defaults,
@@ -121,31 +121,38 @@ Every number in this file is recomputed from `runs/r96/ledger.jsonl`, `llm_calls
 ## The loop
 
 ```
-                 ┌──────────────────────────────────────────────────────┐
-                 ▼                                                      │
- inspect data ─► reproduce baseline ─► select node ─► propose ─► execute ─► evaluate ─► revise
-   (agent's        (Requirement 1)     (adaptive:     (LLM edits  (sandbox,   (GAUC/    beliefs
-    own EDA)                            refine or      a script)   timeout)   nDCG@5)    (LLM)
-                                        broaden)                                           │
-                                            ▲                                              │
-                                            └────── belief set guides the next choice ──────┘
+                 ┌────────────────────────────────────────────────────────────┐
+                 ▼                                                            │
+ inspect data ─► reproduce baseline ─► select node ─► propose ─► execute ─► evaluate ─► synthesise
+   (agent's         (Requirement 1)      (sweep:      (one per    (N slots,   (recompute,   (one call
+    own EDA)                            least-        slot, told   concurrent,  blend,        per turn,
+                                        explored      what its     sandboxed)   critic)       across slots)
+                                        live node)    siblings                                    │
+                                            ▲         are doing)                                  │
+                                            └────── belief set guides the next choice ────────────┘
 ```
 
 - **inspect data** — the agent writes and runs its own EDA script. What it prints is the only
   dataset knowledge it ever has; it is carried into every later prompt (`runs/<id>/eda_report.txt`).
 - **reproduce baseline** — it stands up an end-to-end FM pipeline itself and is checked against
   the organizers' published validation primary of 0.6016. That script becomes the search root.
-- **select node** — **adaptive**. While the last iteration gained, the search refines the leader;
-  once it stalls it *broadens* — same base script, but the proposer is told to change direction
-  rather than detail, with everything already tried listed. A node whose children keep failing
-  to improve on it is retired, and the next-best becomes the anchor.
+- **select node** — every improve iteration runs in **sweep** mode: the search anchors on the
+  *least-explored* live node rather than greedily on the leader (ties break toward the higher
+  score), and the proposer is asked for structurally different model families, with everything
+  already tried listed. A node whose children keep failing to improve on it is retired — two
+  non-improving children, or four crashes — and the next-best becomes the anchor. Refine, tune
+  and broaden modes remain in the code and are reachable with `--force-mode` for diagnostic runs.
 - **propose** — the LLM receives the chosen node's *actual source*. One iteration is one script,
   not one model: a script may build and compare several candidates internally and report what it
   compared (`CANDIDATES`), and may report evidence that is not its score (`FINDINGS`).
-- **revise beliefs** — after every scored iteration the agent rewrites its **belief set**: claims
-  with evidence and a status of `active` / `qualified` / `invalidated`. Later evidence can demote
-  an earlier conclusion instead of piling up beside it, and that set — not a human-authored
-  brief — is what guides the next proposal (`runs/<id>/knowledge.md`).
+- **synthesise** — the agent rewrites its **belief set**: claims with evidence and a status of
+  `active` / `qualified` / `invalidated`. Later evidence can demote an earlier conclusion instead
+  of piling up beside it, and that set — not a human-authored brief — is what guides the next
+  proposal. Running several slots, this is one cross-slot call per turn rather than one per
+  experiment: it returns the shared belief set plus a short note per slot saying what its
+  siblings already cover. The belief set the agent held at each turn is recoverable from the
+  prompts in `runs/<id>/llm_calls.jsonl`; a run that finishes normally also writes
+  `knowledge.md`.
 
 The search policy and the belief set follow the current literature rather than our intuition:
 [FML-bench](https://arxiv.org/abs/2605.17373) finds an agent that broadens on stagnation beats
