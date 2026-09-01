@@ -14,6 +14,7 @@ BASE_VALID, BASE_TEST = 0.6016, 0.5946
 BASE_VALID_GAUC, BASE_VALID_NDCG = 0.6674, 0.5357
 BASE_TEST_GAUC, BASE_TEST_NDCG = 0.6610, 0.5282
 BASE_LABEL = "official baseline"
+SEED_SIGMA = 0.0008  # the baseline's reported 5-seed std
 EPSILON = 0.002
 
 
@@ -320,10 +321,24 @@ def main() -> None:
         got = meta.get("baseline_reproduced") or (
             ok_base[-1]["metrics"]["primary"] if ok_base else None)
         if got is not None:
+            # The verdict has to be computed, not asserted. This line used to end "inside the
+            # baseline's 5-seed noise" unconditionally, which is right on Pure at the default
+            # 0.002 tolerance and false anywhere the tolerance is widened -- a 0.025 miss was
+            # being reported as noise-level agreement in a graded deliverable.
+            d = got - BASE_VALID
+            if abs(d) <= SEED_SIGMA:
+                verdict = "inside the baseline's 5-seed noise"
+            elif abs(d) <= 0.002:
+                verdict = (f"outside the 5-seed noise of {SEED_SIGMA} but within the "
+                           f"convergence epsilon")
+            else:
+                verdict = (f"{abs(d) / SEED_SIGMA:.0f}x the baseline's 5-seed std of "
+                           f"{SEED_SIGMA}; accepted as a reference point rather than enforced "
+                           f"as a gate")
             print(f"- **Reproduce official baseline (Requirement 1):** {len(base)} attempt(s); "
                   f"the agent's own pipeline reached validation primary **{got:.4f}** against "
-                  f"the official {BASE_VALID} (delta {got - BASE_VALID:+.4f}, inside the "
-                  f"baseline's 5-seed noise). That script became the root of the search tree.")
+                  f"the official {BASE_VALID} (delta {d:+.4f}, {verdict}). That script became "
+                  f"the root of the search tree.")
         else:
             print(f"- **Reproduce official baseline (Requirement 1):** {len(base)} attempt(s), "
                   f"not yet matched.")

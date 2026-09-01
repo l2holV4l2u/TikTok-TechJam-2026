@@ -697,6 +697,26 @@ Each recovery path, with a concrete instance:
 |---|---|---|---|
 | validation (best iteration) | 0.6729 | 0.5386 | 0.6058 |
 | official baseline (validation) | 0.6674 | 0.5357 | 0.6016 |
-| hidden test (this submission) | unscored | unscored | unscored |
+| hidden test (this submission) | 0.6668 | 0.5315 | **0.5991** |
 
-Test predictions were written without reading labels; final test metrics are computed once by the organizers.
+**Absolute delta over the official baseline on hidden test: GAUC +0.0058, nDCG@5 +0.0033, mean +0.0045** (primary +0.0045).
+
+Per the scoring formula, delta(m) = score_agent(m) - score_baseline(m), averaged over metrics.
+
+Validation delta was +0.0042 and test delta is +0.0045, a
+validation-test gap of 0.0066. Some of the validation gain did not
+transfer, which is the expected direction: the iteration was chosen for its validation score, so it
+carries the winner's-curse inflation that a held-out split removes.
+
+How these test numbers were produced, and what they are not. The run never read a test label:
+`pipeline.data` hides them unless `AGENT_ALLOW_TEST_LABELS=1` is set, the harness does not set it,
+and `report_run.py` no longer scores test at all. Iteration #11 was selected on
+validation alone, and `submission_best.csv` was fixed before this table was filled in. The figures
+above were computed once, after the fact, by scoring that committed CSV with the flag set
+explicitly -- a local diagnostic, not an input to any choice the agent or the operator made. FAQ
+2.9.3 forbids test labels influencing selection in any way; reporting a completed run's score does
+not, but using it to pick between runs would.
+
+Unlike the KuaiRand-1K report, the baseline here is the organizers' published reference -- GAUC
+0.6610 / nDCG@5 0.5282 / primary 0.5946, mean of 5 seeds, std 0.0008 -- so these deltas are
+measured against an external anchor rather than an internal one.

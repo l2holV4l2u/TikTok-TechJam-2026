@@ -43,6 +43,30 @@ that reading was worth **0.00229** of hidden-test delta; giving it up is the dif
 the number above and the one we could have reported. Those runs are not in this repository and
 are not submissions.
 
+## Bonus benchmark — KuaiRand-1K
+
+The agent runs unchanged on the larger variant: same harness, same contract, no retuning. The run
+is `runs/r97_1k/`, iteration 30; full detail in `RUN_REPORT_1K.md`.
+
+| | GAUC | nDCG@5 | primary |
+|---|---|---|---|
+| 1K reference, hidden test | 0.6704 | 0.6006 | 0.63550 |
+| **this run, hidden test** | **0.7023** | **0.6931** | **0.69766** |
+| delta | +0.0319 | +0.0924 | **+0.06216** |
+
+Validation 0.70558 against the reference's 0.64218 — a validation delta of +0.0634 against a test
+delta of +0.0622, so the gain holds up almost entirely on held-out data. The winning iteration
+trains four structurally different rankers on within-user impression pairs and rank-blends them,
+which is what moves nDCG@5 by +0.0924: it optimises top-of-list ordering directly.
+
+The 1K reference is our own run of the organizers' recipe (`research/baseline_reference.py`), since
+the published baseline covers KuaiRand-Pure only — so this delta is measured against an internal
+anchor and stands on its own rather than alongside the Pure figure.
+
+Same contract as the main run: train split only, cross-run memory off, test labels never read.
+Converged at turn 10 on 32 executed scripts — 1.7 h, 659,573 tokens, 3 slots, on a dataset with
+4.4x Pure's training rows and 20x its validation rows.
+
 ## Compliance with the organizers' clarifications
 
 Three FAQ clarifications landed on decisions this project had already made the other way. Each

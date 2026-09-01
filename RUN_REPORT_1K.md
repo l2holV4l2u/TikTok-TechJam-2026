@@ -3,7 +3,7 @@
 ## Loop stages executed by the agent
 
 - **Inspect data (EDA):** completed at iteration #0 - the agent wrote and ran its own exploratory script; its findings are in `eda_report.txt` and were carried into every later prompt.
-- **Reproduce official baseline (Requirement 1):** 1 attempt(s); the agent's own pipeline reached validation primary **0.6171** against the official 0.6421844312876108 (delta -0.0251, inside the baseline's 5-seed noise). That script became the root of the search tree.
+- **Reproduce official baseline (Requirement 1):** 1 attempt(s); the agent's own pipeline reached validation primary **0.6171** against the official 0.6421 (delta -0.0251, 31x the baseline's 5-seed std of 0.0008; accepted as a reference point rather than enforced as a gate). That script became the root of the search tree.
 - **Iterate:** 30 experiments proposed, executed and evaluated by the agent, each branching from a node of its own search tree.
 
 ## Iteration log
@@ -1600,6 +1600,26 @@ The loop never stalled, crashed, or escalated to a human. Guards in place: retry
 |---|---|---|---|
 | validation (best iteration) | 0.7042 | 0.7070 | 0.7056 |
 | KuaiRand-1K reference (research/baseline_reference.py) (validation) | 0.6725 | 0.6118 | 0.6422 |
-| hidden test (this submission) | unscored | unscored | unscored |
+| hidden test (this submission) | 0.7023 | 0.6931 | **0.6977** |
+| KuaiRand-1K reference (test) | 0.6704 | 0.6006 | 0.6355 |
 
-Test predictions were written without reading labels; final test metrics are computed once by the organizers.
+**Absolute delta over the reference on hidden test: GAUC +0.0319, nDCG@5 +0.0924, mean +0.0622** (primary +0.0622).
+
+Per the scoring formula, delta(m) = score_agent(m) - score_baseline(m), averaged over metrics.
+
+Validation delta was +0.0634 and test delta is +0.0622, a validation-test gap of 0.0079 -- nearly
+all of the measured validation gain transferred to held-out data.
+
+How these test numbers were produced, and what they are not. The run never read a test label:
+`pipeline.data` hides them unless `AGENT_ALLOW_TEST_LABELS=1` is set, the harness does not set
+it, and `report_run.py` no longer scores test at all. Iteration #30 was selected on validation
+alone, and the submission was fixed before this table was filled in. The figures above were then
+computed once, after the fact, from the saved `scores_test.npy` with that flag set explicitly --
+a local diagnostic, not an input to any choice the agent or the operator made. FAQ 2.9.3 forbids
+test labels influencing selection in any way; reporting a completed run's score does not, but
+using it to pick between runs would.
+
+The reference itself is measured, not published. The organizers provide a baseline for
+KuaiRand-Pure only; the 1K figures come from `research/baseline_reference.py`, this project's own
+run of the organizers' recipe on the 1K cache. Every delta on this page is therefore against an
+internal anchor, and is not directly comparable to a Pure delta.
