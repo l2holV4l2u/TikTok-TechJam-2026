@@ -2,15 +2,6 @@
 
 TikTok TechJam 2026, Track 2.
 
-## Team
-
-<!-- TODO(team): required deliverable. Replace both rows with real names and contributions. -->
-
-| Member | Contribution |
-|---|---|
-| _name_ | _what they built_ |
-| _name_ | _what they built_ |
-
 An LLM-driven agent that runs the MLE iteration loop of the problem statement's Figure 1
 unattended. It inspects the data, reproduces the official baseline, then repeatedly proposes a
 hypothesis, writes the code, trains, evaluates, **revises what it believes**, and decides what to
@@ -51,6 +42,26 @@ before predicting test. FAQ 2.9.2 settles that as out of scope. Measured on the 
 that reading was worth **0.00229** of hidden-test delta; giving it up is the difference between
 the number above and the one we could have reported. Those runs are not in this repository and
 are not submissions.
+
+## Compliance with the organizers' clarifications
+
+Three FAQ clarifications landed on decisions this project had already made the other way. Each
+is recorded with what reversing it cost.
+
+- **2.9.2, training data is the train split only.** We had been refitting the final model on
+  train+validation before predicting test. Measured on the same harness, that reading was worth
+  **0.00229** of hidden-test delta (+0.00509 with it, +0.00280 without). It is removed;
+  `agent/critic.py` rejects any iteration that fits on validation, including via early stopping
+  or feature statistics.
+- **2.9.3, test labels may not be used in any way.** Hidden by default in `pipeline/data.py` -- a
+  normal test load does not open `test/y.npy` or any test auxiliary file. The harness writes the
+  submission without scoring it, and `RUN_REPORT.md` shows the hidden-test row as **unscored**.
+  The test figure quoted above was produced afterwards, outside the run, scoring the submitted
+  file once.
+- **2.9.1, a team may declare its own stopping rule.** We declare the organizers' defaults,
+  eps = 0.002 and N = 3 with no minimum-iteration floor, fixed before the run and recorded in
+  `run_meta.json`. A floor that kept searching past the stop point was tested and dropped: it
+  bought +0.00047 of validation and nothing on test.
 
 ## Resource usage
 
@@ -151,6 +162,8 @@ research/    human analysis, clearly off the submission path.
   baseline_reference.py  runs the organizers' recipe on any variant to anchor a run
   ceiling_probe.py       in-sample vs validation probe behind the generalisation ceiling
   selector_window.py     the refuted chronological selection window (docs/BUGS.md)
+  leakage_check.py       fits one recipe train-only vs train+valid, to show the signature
+  metric_ranker.py       train-only ranking probe with fixed, predeclared epochs
 run_agent.py     drives a run
 report_run.py    renders the Run & Iteration Logs deliverable
 runs/            per-run ledger, scripts, EDA report, belief set, search tree, candidates
