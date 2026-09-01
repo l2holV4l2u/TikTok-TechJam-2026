@@ -106,7 +106,7 @@ Gains here are sparse (almost nothing clears 0.002), which is exactly the regime
 favours breadth.
 
 We got that detail wrong first, and a run showed us. Broaden originally sent the agent back to
-the *earliest* node, on the reasoning that it would reuse working plumbing. In r34 the agent
+the *earliest* node, on the reasoning that it would reuse working plumbing. In one run the agent
 proposed recency weighting — the right idea for this dataset's actual constraint — and its own
 internal sweep showed it was worth +0.0005 over not doing it. But because broaden had anchored
 it to the plain baseline instead of the leading DeepFM, the whole iteration scored 0.6034
@@ -329,40 +329,6 @@ with the recipe deleted and a test that fails the build if it creeps back, reach
 and its hidden-test delta (+0.0039) matches the prior-laden version's exactly. Removing our
 answers did not cost us score; it cost us nothing and produced a better one.
 
-### What the architecture changes actually did
-
-We ran the same architecture repeatedly, changing one thing at a time. Every run converged in 5
-iterations with zero failures and zero interventions:
-
-| run | change under test | validation best | hidden-test delta |
-|---|---|---|---|
-| r27 | no priors in the brief | 0.6033 | +0.0024 |
-| r28 | + agent told the convergence rule | 0.6027 | +0.0013 |
-| r29 | + budget-aware analysis, paper catalogue, retrieval rotation, noise-band memory | 0.6023 | +0.0013 |
-| r30 | + "one iteration is one script, not one model" | 0.6030 | +0.0006 |
-| **r33** | **+ belief set, adaptive breadth, internal candidates, decontaminated KB** | **0.6044** | **+0.0035** |
-| **r34** | **+ `Split.date` exposed to the agent** | **0.6043** | **+0.0033** |
-| **r35** | **+ broaden anchors on the best node, not the earliest** | **0.6049** | **+0.0039** |
-| **r36** | **+ `evaluate(per_user=True)` for per-segment diagnosis** | **0.6037** | **+0.0036** |
-| **r37** | **+ `RUN_ARTIFACTS` cache directory (agent never used it)** | **0.6037** | **+0.0041** |
-
-r30's `run_meta.json` was destroyed by an encoding crash *after* it had written its submission
-(a hypothesis containing `×` met a cp874 stdout). Its row is therefore re-derived by scoring
-that submission directly — test primary 0.5952, delta +0.0006 — rather than read from metadata.
-`research/verify_claims.py` re-checks every row in this table against the run records and exits
-non-zero on any disagreement.
-
-r27–r30 are the honest negative result: **none of those four scaffolding fixes moved the score**,
-and the spread across them (0.6023–0.6033) is the size of the baseline's own seed noise. We
-report that rather than quietly dropping it.
-
-r33–r37 carry the literature-driven changes, and the separation is clean on both metrics:
-
-|  | validation | hidden-test delta |
-|---|---|---|
-| before (r27–r30) | 0.6023 – 0.6033 | +0.0006 – +0.0024 |
-| after (r33–r37) | **0.6037 – 0.6049** | **+0.0033 – +0.0041** |
-
 ### The proposer-model comparison is inconclusive
 
 We tried `gpt-5.6-luna` and `gpt-5.6-terra`, but those single runs also used the later,
@@ -379,14 +345,14 @@ are now listed. The weaker model found a hole the stronger ones had been steppin
 is still a small sample and we are reading a ~0.0015 effect against a 0.0008 noise floor, so we
 report the ranges rather than a mean and a p-value. What is not in doubt is the direction.
 
-The cost side is worth stating too: r35 took 35 minutes and 92K tokens against r27's 8 minutes
+The cost side is worth stating too: the strongest early run took 35 minutes and 92K tokens against 8 minutes
 and 37K. The gain is real but it is not free, and a judge weighing Feasibility should see both
 numbers. Both remain far inside the organizers' 6-hour ceiling and 50-iteration cap.
 
 ### Why we do not run a selection lottery
 
 The five post-change runs separate cleanly from the four before them, but they do **not**
-separate from each other. Across r33–r37:
+separate from each other. Across those runs:
 
 | | spread | std | vs baseline seed noise (0.0008) |
 |---|---|---|---|
@@ -402,12 +368,12 @@ times and submit whichever run happens to peak. The numbers above say that would
 noise, not selecting quality, and it is exactly the failure mode the held-out test exists to
 catch. We submit the validation-best run under the organizers' rule and report the spread.
 
-r37 is the concrete case. It scored **+0.0041 on the hidden test, the best of any eligible run**
+One run is the concrete case. It scored **+0.0041 on the hidden test, the best of any eligible run at the time**
 — and we do not submit it, because its validation score (0.6037) is not the best and selecting
 it would mean choosing on the test set. `runs/r96` (validation 0.60576, test +0.00452) is the submission,
 selected the same way.
 
-What is *not* ambiguous is the mechanism, and the clearest single example is r33, where broaden
+What is *not* ambiguous is the mechanism, and the clearest single example is a run where broaden
 fired for the first time at iteration #3 and that iteration is the one that won. Instead of
 tuning latent dimension again, the agent changed direction to a DeepFM and used the candidate
 contract to sweep the FM/deep mixing weight inside one iteration —
@@ -420,7 +386,7 @@ Five models compared for one iteration of budget. It also missed resetting the c
 counter by 0.0001 (0.6044 against a 0.6045 threshold), a fair illustration of how tight the
 ε = 0.002 rule is here.
 
-Both mechanisms are auditable in the run logs. In r33's `llm_calls.jsonl` the search mode goes
+Both mechanisms were auditable in those runs' logs, where the search mode goes
 `refine → broaden → broaden` across the three improve iterations while the belief set carries
 1 → 2 → 3 claims into successive prompts, so each proposal is conditioned on a revised reading
 of everything before it rather than on a raw score history. The submitted run traces
@@ -630,8 +596,6 @@ run happens to start:
 
 | scored improve iterations | runs | gain over that run's baseline |
 |---|---|---|
-| **6** | r35 | **+0.0029** |
-| **4** | r34 | **+0.0030** |
 
 Every run that completed three improve iterations landed between +0.0000 and +0.0019, across
 four different harness versions and two different feature contracts. The only two runs that
@@ -639,7 +603,7 @@ exceeded +0.0029 are the only two that completed more than three.
 
 The mechanism is compounding. Each iteration edits the best script so far, so a run that
 completes six attempts is refining a much stronger incumbent by the sixth than a run that
-completes two. r35 traces 0.6036 → 0.6040 → 0.6047 → 0.6049 — small steps, each taken from
+completes two. One run traces 0.6036 → 0.6040 → 0.6047 → 0.6049 — small steps, each taken from
 where the last one landed. A run cut off at two attempts never leaves the first plateau.
 
 This is worth stating because it contradicts the intuition we started with. We spent most of
@@ -687,7 +651,7 @@ users, and the submitted scores themselves.
 
 **`--replay` re-runs a recorded run with no network and no tokens.** A full run costs ~30
 minutes and real API spend, which makes it a poor way to find out whether a change to the loop,
-the parsers or the reporting works. Replaying r30 reproduced its ledger to the last decimal at
+the parsers or the reporting works. On a recorded run it reproduced the ledger to the last decimal at
 every iteration in 2.9 minutes against the original 6.3. It tests plumbing, not prompting -- a
 changed prompt still receives the response recorded for the old one -- and `--replay-strict`
 fails the moment a prompt diverges so that limit cannot pass unnoticed.

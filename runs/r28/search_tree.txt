@@ -1,4 +1,0 @@
-#1 0.6022  Reproduce the official baseline stage by training a leakage-free rank-
-  #2 0.6016  Expand the feature-encoding stage from 5 fields to all 37 leakage-free
-  #3 0.6027  Target the training-loss stage by replacing pointwise BCE with positiv
-    #4 0.6010  Target the representation/model stage: replace the exhausted FM/BPR in

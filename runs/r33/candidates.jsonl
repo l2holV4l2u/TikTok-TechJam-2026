@@ -1,2 +1,0 @@
-{"iter_id": 3, "phase": "improve", "candidates": {"deepfm_alpha_0.00": 0.6018547385361017, "deepfm_alpha_0.25": 0.6033065536777567, "deepfm_alpha_0.50": 0.6041003214874575, "deepfm_alpha_0.75": 0.6043784707000018, "deepfm_alpha_1.00": 0.6039755134831102}}
-{"iter_id": 4, "phase": "improve", "candidates": {"click_005": 0.5999282293597075, "click_010": 0.5997497680777806, "click_010_like_005": 0.5995769414868921, "click_020": 0.5994842593479106, "click_020_like_005": 0.5992939017384543, "long_only": 0.6002094804448042}}

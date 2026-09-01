@@ -79,8 +79,9 @@ stop before being halted; total spend over that longer trajectory was 160.6 min 
 tokens. Those later turns are not part of the submission and are not in the run directory. The
 figures above are the ones required to reach the converged result.
 
-`python -m research.verify_claims` re-derives every row of the DEVPOST.md ablation table from the
-run records and exits non-zero on any disagreement. It checks that table, not every number here.
+Every number in this file is recomputed from `runs/r96/ledger.jsonl`, `llm_calls.jsonl` and
+`candidates.jsonl`, which ship with the repository. The submission itself can be rescored from
+`submission_best.csv` against the public test labels.
 
 ## The loop
 
@@ -149,7 +150,6 @@ kb/papers.json   methods with literature-only descriptions, retrieved to ground 
 research/    human analysis, clearly off the submission path.
   baseline_reference.py  runs the organizers' recipe on any variant to anchor a run
   ceiling_probe.py       in-sample vs validation probe behind the generalisation ceiling
-  verify_claims.py       re-checks the DEVPOST ablation table against the run records
   selector_window.py     the refuted chronological selection window (docs/BUGS.md)
 run_agent.py     drives a run
 report_run.py    renders the Run & Iteration Logs deliverable

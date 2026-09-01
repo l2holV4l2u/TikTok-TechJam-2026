@@ -1,5 +1,0 @@
-#1 0.6013  Reproduce the official baseline stage using a 16-factor five-field FM 
-  #2 0.6043  Target the feature-interaction representation stage by upgrading the F
-    #3 0.6033  Target the training-objective stage with train-only play-time multi-ta
-  #4 0.6034  Target temporal adaptation and score-fusion: recency-weighted, Bayesia
-  #5 0.6032  Target behavioral-history feature construction with a DIN-style candid
