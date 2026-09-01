@@ -334,6 +334,10 @@ submission, and are not in this repository.
 - **Parallel branch expansion.** The tree is explored one node at a time because scripts run
   sequentially on one CPU. Expanding several nodes concurrently would use the 6-hour budget far
   better than the ~5 minutes per iteration we currently spend.
+- **Find the optimal number of parallel lineages.** Run-to-run variation on this benchmark is
+  about the size of the differences between slot counts, so identifying the best `--slots` value
+  takes several runs at each setting rather than one. That is a few dozen runs, and we did not
+  have the time for it.
 - **Let the agent choose its own compute.** It gets a fixed 300s per script; a cheap idea and
   an expensive one are given the same budget, which biases it against methods that need time.
 - **Cross-run memory is new and mostly unproven.** It only reads runs produced by this

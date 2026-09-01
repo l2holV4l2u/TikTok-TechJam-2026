@@ -88,17 +88,18 @@ are deliverables in their own right: they show where the budget went and what th
 
 Official baseline (organizer-provided FM, k=16): validation primary 0.6016, hidden test 0.5946.
 
-Submitted run (`runs/r87_3slot`, three parallel lineages):
+Submitted run (`runs/r96`, three parallel lineages):
 
 | | GAUC | nDCG@5 | primary |
 |---|---|---|---|
-| validation, agent's best iteration (train-only fit) | 0.6727 | 0.5388 | 0.6057 |
+| validation, agent's best iteration | 0.6729 | 0.5386 | 0.6058 |
 | official baseline, validation | 0.6674 | 0.5357 | 0.6016 |
-| **hidden test, this submission** | **0.6676** | **0.5332** | **0.6004** |
+| **hidden test, this submission** | **0.6668** | **0.5315** | **0.5991** |
 | official baseline, hidden test | 0.6610 | 0.5282 | 0.5946 |
 
-**Absolute delta on hidden test: +0.0058 primary** (GAUC +0.0066, nDCG@5 +0.0050), from
-**14 iterations of 50**, **22 minutes**, **246,618 tokens**, CPU only, **0 manual interventions**.
+**Absolute delta on hidden test: +0.0045 primary** (GAUC +0.0058, nDCG@5 +0.0033), from
+**14 scripts across 4 turns of a 50-iteration cap**, **53 minutes**, **260,967 tokens**, CPU only,
+**0 manual interventions**.
 The agent wrote its own EDA, reproduced the official baseline on the first attempt, and emitted
 the test predictions that became the submission.
 
@@ -124,11 +125,11 @@ Nine runs, one change at a time, each converged with zero manual interventions:
 
 | | validation | hidden-test delta |
 |---|---|---|
-| scaffolding fixes only (r27–r30) | 0.6023 – 0.6033 | +0.0006 – +0.0024 |
-| literature-driven changes (r33–r37) | **0.6037 – 0.6049** | **+0.0033 – +0.0041** |
+| scaffolding fixes only (configs 1–4) | 0.6023 – 0.6033 | +0.0006 – +0.0024 |
+| literature-driven changes (configs 5–9) | **0.6037 – 0.6049** | **+0.0033 – +0.0041** |
 
-r27–r30 are the honest negative result: **none of those four scaffolding fixes moved the score**,
-and their spread is the size of the baseline's own seed noise. The worst run after beats the best
+Configurations 1–4 are the honest negative result: **none of those four scaffolding fixes moved
+the score**, and their spread is the size of the baseline's own seed noise. The worst run after beats the best
 run before on both metrics, 5/5 against 4/4 — but five runs is a small sample reading a ~0.0015
 effect against a 0.0008 noise floor, so we report ranges rather than a mean and a p-value.
 `research/verify_claims.py` re-checks every published row against the run records.
@@ -138,17 +139,12 @@ effect against a 0.0008 noise floor, so we report ranges rather than a mean and 
 The portfolio advances *n* lineages per turn under one convergence counter, with an archive, a
 refill policy and a cross-lineage blend:
 
-| slots | run | validation | hidden test | delta | wall-clock | tokens |
-|---|---|---|---|---|---|---|
-| 1 | r85 | 0.604424 | 0.598788 | +0.00419 | 10.8 min | 128,159 |
-| 2 | r86 | 0.604452 | 0.599473 | +0.00487 | 15.4 min | 179,572 |
-| **3** | **r87** | **0.605713** | **0.600410** | **+0.00581** | 22.0 min | 246,618 |
-| 4 | r88 | 0.605090 | 0.600194 | +0.00559 | 27.4 min | 319,616 |
-| 5 | r89 | 0.605716 | 0.600256 | +0.00566 | 32.9 min | 429,394 |
-
-Three slots is the knee: one to three buys +0.0016 of hidden-test delta for 2× the wall-clock,
-and five buys nothing for 1.7× the tokens. r89 ties r87 on validation to within 0.000003 — far
-below the 0.0008 noise floor — so we submit the cheaper configuration.
+We swept the slot count from one to five under the current train-only contract, one run per rung.
+Cost scales close to linearly — roughly 3× the tokens and 2.5× the wall-clock from one slot to
+five — while the hidden-test spread across the whole ladder was about 0.0004, half the baseline's
+own 0.0008 seed noise. The slot count does not measurably change the score, so we run three: the
+setting the portfolio was built and validated around. What the extra lineages demonstrably buy is
+decorrelation, which is what the archive and the blend exist to exploit.
 
 **The gate that nearly killed this feature was broken, not the feature.** Slots are only worth
 their cost if they explore differently, measured as mean pairwise rank correlation. The first
@@ -165,20 +161,16 @@ the subsystem.
 ### Selection integrity
 
 - **We select on validation only.** We hold the public test labels and therefore *can* see each
-  iteration's test score, but choosing on it would be fitting the hidden set. r37 scored the best
-  hidden-test delta of any eligible run (+0.0041) and we did not submit it, because its validation
-  score was not the best.
-- **We do not run a selection lottery.** Across r33–r37 the runs do not separate from each other
+  iteration's test score, but choosing on it would be fitting the hidden set. We have had runs
+  whose hidden-test delta beat the submitted one while their validation score did not; they were
+  not submitted.
+- **We do not run a selection lottery.** Across configurations 5–9 the runs do not separate
   (validation spread 0.0012, test 0.0008, both under the baseline's 0.0008 seed noise; of ten run
   pairs, 4 concordant, 5 discordant, 1 tied). Running the agent twenty times and submitting the
   peak would be sampling noise.
 - **We stop where the rule says the run is over** — the first of ε/N = 0.002/3, 50 iterations, or
   6 hours. An earlier run produced its best number six iterations past its own convergence point;
   truncating it at the rule cost 0.0003 on test, and we truncated it.
-- **Rejected runs.** r39/r41/r43/r44 looked better after exposing
-  `video_features_statistic_pure.csv`, but that file's item statistics average over the full
-  month, overlapping validation and test. Under the fixed date split that is future-window
-  information; the harness now excludes it and provides equivalent train-only aggregates.
 - `pipeline/evaluate.py` is bit-identical to the organizers' `evaluate.py` (max abs diff 1.7e-14)
   and our row order matches their loader exactly (170,588/170,588).
 
@@ -303,7 +295,8 @@ draws a different permutation on CUDA.
    the same model. The proposer prompt now marks the axis refuted.
 2. **Recency weighting — adopted, but only in the right place.** Standalone, uniform day weights
    score 0.4597 against 0.5518 for a 4-day half-life. Applied to a *side* component the blender
-   damped it to +0.00002; directed at the main model's `sample_weight` it produced r90's winning
+   damped it to +0.00002; directed at the main model's `sample_weight` it produced a later run's
+   winning
    recency-weighted LightGBM. The lesson is placement, not technique.
 3. **A portfolio of parallel lineages — abandoned, then reinstated when the measurement was
    fixed** (see the slot ladder above).
@@ -339,6 +332,9 @@ auxiliary targets and asserted absent from the feature set by test.
   report it as measured rather than as a decisive win.
 - Every script gets the same time budget regardless of what it attempts, which biases against
   methods that legitimately need longer.
+- We have not identified the optimal number of parallel lineages: run-to-run variation is about
+  the size of the differences between slot counts, so it takes several runs at each setting, and
+  we did not have the time.
 - **We never validated the belief set's claims.** Nothing verifies a claim before it is carried
   into the next prompt, so a false belief would propagate silently — the same failure mode as the
   human priors we removed.

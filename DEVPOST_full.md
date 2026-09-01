@@ -654,8 +654,10 @@ PyTorch (CPU), NumPy, LightGBM. Metrics, data loading, submission handling and t
 are stdlib + NumPy only — no pandas, no scikit-learn.
 
 ## Datasets
-KuaiRand-Pure (Zenodo 10439422), under the organizers' fixed date splits. No external training
-data. Logged outcome signals (`play_time_ms`, `is_click`, `is_like`, …) are exposed only as
+KuaiRand-Pure (Zenodo 10439422), under the organizers' fixed date splits, plus **KuaiRand-1K**
+(same Zenodo record) for the optional bonus benchmark, under the same fixed splits. The loader
+reads either release from the same cache format, so the agent runs on both unchanged. No external
+training data. Logged outcome signals (`play_time_ms`, `is_click`, `is_like`, …) are exposed only as
 auxiliary targets and are asserted absent from the feature set by test;
 `video_features_statistic_pure.csv` is excluded entirely because its counts are aggregated over
 the whole log period, including the validation and test windows.
@@ -780,6 +782,10 @@ promising unexplored direction here, and the harness change is one loader functi
   against a 35-minute run there is a lot of unused budget.
 - **Every script gets the same time budget** regardless of what it is attempting, which biases
   the agent against methods that legitimately need longer.
+- **We have not identified the optimal number of parallel lineages.** Run-to-run variation on
+  this benchmark is about the size of the differences between slot counts, so establishing the
+  best `--slots` value takes several runs at each setting rather than one — a few dozen runs in
+  total, which we did not have the time for.
 - **We never validated the belief set's claims.** The agent asserts things like "these
   components correlate above 0.94"; we checked a few by hand and they held, but nothing verifies
   a claim before it is carried into the next prompt. A false belief would propagate silently —
