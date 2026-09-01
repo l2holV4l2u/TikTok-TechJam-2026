@@ -1,0 +1,48 @@
+ROWS train=1141112 valid=124909 test=170588
+LABEL train=0.33662 valid=0.31328
+DATES train=20220409-20220421 valid=20220422-20220428 test=20220429-20220508
+TRAIN_DAY_RATE 09:0.336 10:0.341 11:0.333 12:0.332 13:0.317 14:0.319 15:0.363 16:0.377 17:0.364 18:0.331 19:0.323 20:0.311 21:0.315
+USER train n=26210 rowsQ=1/13/31/59/97/207/809 posQ=0/4/10/21/34/67/155 zero=5.1% mixed=92.7%
+USER valid n=22377 rowsQ=1/2/4/7/12/26/74 posQ=0/0/1/2/4/9/24 zero=30.3% mixed=57.8%
+ENTITY user validSeenRows=98.4% testSeenRows=96.4%
+ENTITY video trainUnique=7538 validUnique=5951 testUnique=5982 validSeenRows=100.0% testSeenRows=100.0%
+X fields=37 scalarPerRow=True ndims=[1] dtypes=['int64']
+AUX n=10 shapes=comment_stay_time:(1141112,),is_click:(1141112,),is_comment:(1141112,),is_follow:(1141112,),is_forward:(1141112,),is_hate:(1141112,),is_like:(1141112,),is_profile_enter:(1141112,),play_time_ms:(1141112,),profile_stay_time:(1141112,)
+FIELD name C Utr/Uva/Ute unseenV/T% max% varUserV% dLLx1e3
+F video_id 8000 7538/5945/5974 0.0/0.0 0.8 81.8 +53.05
+F author_id 7000 6482/5311/5333 0.0/0.0 0.8 81.7 +51.89
+F user_id 30000 26210/21956/23099 1.6/3.6 0.1 0.0 +44.99
+F tab 20 15/15/15 0.0/0.0 73.2 39.8 +41.31
+F tag 64 44/43/43 0.0/0.0 26.4 78.6 +12.28
+F onehot_feat3 1600 1436/1330/1359 0.1/0.1 4.2 0.0 +4.58
+F upload_type 20 14/11/12 0.0/0.0 43.0 74.2 +4.05
+F onehot_feat1 12 7/7/7 0.0/0.0 27.2 0.0 +2.47
+F duration_bucket 12 10/10/10 0.0/0.0 10.3 79.7 +2.14
+F onehot_feat8 512 452/438/439 0.0/0.0 2.0 0.0 +1.98
+F onehot_feat7 160 117/105/106 0.0/0.0 8.7 0.0 +1.43
+F user_active_degree 16 9/9/9 0.0/0.0 77.0 0.0 +1.39
+F music_type 12 6/6/6 0.0/0.0 88.1 33.2 +1.32
+F onehot_feat11 8 5/5/4 0.0/0.0 74.9 0.0 +0.86
+F register_days_bucket 12 10/10/10 0.0/0.0 10.0 0.0 +0.82
+F onehot_feat12 8 3/3/3 0.0/0.0 67.7 0.0 +0.73
+F register_days_range 16 7/8/8 0.0/0.0 75.1 0.0 +0.70
+F onehot_feat0 8 2/2/2 0.0/0.0 50.0 0.0 +0.64
+F is_live_streamer 4 2/2/2 0.0/0.0 77.1 0.0 +0.43
+F onehot_feat6 8 3/3/3 0.0/0.0 52.7 0.0 +0.42
+F onehot_feat2 64 50/50/49 0.0/0.0 24.8 0.0 +0.37
+F fans_user_num_range 16 9/9/9 0.0/0.0 37.9 0.0 +0.31
+F onehot_feat4 24 16/16/16 0.0/0.0 36.9 0.0 +0.15
+F hour 32 24/24/24 0.0/0.0 7.8 79.1 +0.14
+F onehot_feat9 12 7/7/7 0.0/0.0 22.8 0.0 +0.13
+F onehot_feat16 8 3/3/3 0.0/0.0 93.3 0.0 +0.13
+F friend_user_num_range 16 7/7/7 0.0/0.0 27.8 0.0 +0.12
+F follow_user_num_range 16 8/8/8 0.0/0.0 19.8 0.0 +0.12
+F onehot_feat14 8 3/3/3 0.0/0.0 88.4 0.0 +0.09
+F video_type 8 3/3/3 0.0/0.0 98.7 4.6 +0.09
+F onehot_feat10 8 5/5/5 0.0/0.0 40.0 0.0 +0.08
+F onehot_feat5 48 33/31/31 0.0/0.0 99.5 0.0 +0.06
+F onehot_feat13 8 3/3/3 0.0/0.0 93.7 0.0 +0.04
+F onehot_feat15 8 3/3/3 0.0/0.0 95.5 0.0 +0.03
+F is_lowactive_period 4 1/1/1 0.0/0.0 100.0 0.0 +0.00
+F onehot_feat17 8 3/3/3 0.0/0.0 96.8 0.0 -0.00
+F is_video_author 4 2/2/2 0.0/0.0 85.4 0.0 -0.03

@@ -1,0 +1,4 @@
+hist_only      k=  10 valid=0.5766 test=0.5655 (oracle 0.5662) 32.1s
+item           k=  35 valid=0.5894 test=0.5797 (oracle 0.5797) 55.5s
+item_ids       k=  20 valid=0.5879 test=0.5782 (oracle 0.5782) 54.2s
+item_user      k= 140 valid=0.5891 test=0.5796 (oracle 0.5806) 52.9s

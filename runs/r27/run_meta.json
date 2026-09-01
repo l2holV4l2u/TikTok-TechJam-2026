@@ -1,0 +1,35 @@
+{
+  "stop_reason": "converged",
+  "iterations": 5,
+  "iteration_cap": 50,
+  "wall_clock_s": 503.6237919999985,
+  "wall_clock_h": 0.13989549777777735,
+  "script_seconds": 315.0607586999831,
+  "gpu_hours": 0.0,
+  "proposer_tokens_in": 20614,
+  "proposer_tokens_out": 13361,
+  "tokens_in": 22927,
+  "tokens_out": 13800,
+  "tokens_total": 36727,
+  "eda_completed": true,
+  "baseline_reproduced": 0.6027947455115645,
+  "baseline_target": 0.6016,
+  "manual_interventions": 0,
+  "failures": 0,
+  "submission": {
+    "iter_id": 4,
+    "valid_primary": 0.6033144110991089,
+    "test_primary": 0.5970355065433365,
+    "test_gauc": 0.6638101928933298,
+    "test_ndcg@5": 0.5302608201933432,
+    "test_delta": 0.002435506543336463,
+    "hypothesis": "Replace pointwise BCE at the training-objective stage with vectorized within-user BPR sampling; weighting one random positive-negative comparison per positive directly matches positive-weighted GAUC and should improve each user\u2019s impression ranking."
+  },
+  "api_surface": [
+    "s.X",
+    "s.aux",
+    "s.user_id",
+    "s.video_id",
+    "s.y"
+  ]
+}

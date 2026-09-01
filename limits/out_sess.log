@@ -1,0 +1,2 @@
+no_hist_sess   k= 560 valid=0.6022 test=0.5956 (oracle 0.5958) 286.2s
+best           k= 380 valid=0.6021 test=0.5934 (oracle 0.5941) 244.2s

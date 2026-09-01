@@ -1,5 +1,12 @@
 # Bugs / design gaps found during review
 
+> **On run ids in this file.** This is the engineering log, not a deliverable. It cites runs by
+> id as the evidence for each finding, and most of those runs were removed from the repository
+> when it was trimmed to the submitted run. The measurements stand as recorded here; the raw
+> ledgers behind the ones that are gone no longer ship. Only `runs/r96` and the ablation runs
+> behind the DEVPOST table remain, and `research/verify_claims.py` checks those.
+
+
 Running log. One `##` section per finding, newest at bottom.
 
 ## Tree backtrack is dead code for scored misses

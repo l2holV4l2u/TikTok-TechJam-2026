@@ -1,0 +1,5 @@
+gbdt_s0        k= 580 valid=0.6036 test=0.5959 (oracle 0.5962) 292.6s
+gbdt_s1        k= 580 valid=0.6024 test=0.5961 (oracle 0.5961) 258.4s
+gbdt_s2        k= 580 valid=0.6034 test=0.5960 (oracle 0.5962) 277.1s
+gbdt_s3        k= 600 valid=0.6040 test=0.5964 (oracle 0.5965) 310.6s
+gbdt_s4        k= 460 valid=0.6023 test=0.5954 (oracle 0.5957) 282.2s

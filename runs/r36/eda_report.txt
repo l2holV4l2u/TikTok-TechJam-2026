@@ -1,0 +1,50 @@
+ROWS train=1141112 valid=124909 test=170588
+LABEL rate train=0.33662 valid=0.31328
+DATES train=20220409:0.336,20220410:0.341,20220411:0.333,20220412:0.332,20220413:0.317,20220414:0.319,20220415:0.363,20220416:0.377,20220417:0.364,20220418:0.331,20220419:0.323,20220420:0.311,20220421:0.315
+DATES valid=20220422:0.319,20220423:0.338,20220424:0.303,20220425:0.312,20220426:0.311,20220427:0.297,20220428:0.290
+DATES test=20220429,20220430,20220501,20220502,20220503,20220504,20220505,20220506,20220507,20220508
+USER train users=26210 zero=0.051 allpos=0.023 mixed=0.927 auc_poswt=0.996 n_q=[5, 13, 31, 59, 97, 207] p_q=[1, 4, 10, 21, 34, 67]
+USER valid users=22377 zero=0.303 allpos=0.119 mixed=0.578 auc_poswt=0.884 n_q=[1, 2, 4, 7, 12, 26] p_q=[0, 0, 1, 2, 4, 9]
+OVERLAP user train_unique=26210 valid_unique=22377 test_unique=23875 new_unique=0.019/0.033 new_rows=0.016/0.036
+OVERLAP video train_unique=7538 valid_unique=5951 test_unique=5982 new_unique=0.001/0.002 new_rows=0.000/0.000
+X fields=37 scalar_per_row=True card_sum=47784 card_max=30000
+AUX leakage_outcomes keys=comment_stay_time,is_click,is_comment,is_follow,is_forward,is_hate,is_like,is_profile_enter,play_time_ms,profile_stay_time
+AUX shape_signatures=[(1, (), 'float32'), (1, (), 'int8')]
+FIELD format: c=declared a=train/valid/test active u=valid/test unseen-row top=train-share mi=train/valid bits
+F user_id c=30000 a=26210/21956/23099 u=0.016/0.036 top=0.001 mi=0.10172/0.01581
+F video_id c=8000 a=7538/5945/5974 u=0.000/0.000 top=0.008 mi=0.08473/0.06948
+F tab c=20 a=15/15/15 u=0.000/0.000 top=0.732 mi=0.07064/0.06028
+F hour c=32 a=24/24/24 u=0.000/0.000 top=0.078 mi=0.00065/0.00028
+F user_active_degree c=16 a=9/9/9 u=0.000/0.000 top=0.770 mi=0.00255/0.00273
+F is_lowactive_period c=4 a=1/1/1 u=0.000/0.000 top=1.000 mi=0.00000/0.00000
+F is_live_streamer c=4 a=2/2/2 u=0.000/0.000 top=0.771 mi=0.00058/0.00066
+F is_video_author c=4 a=2/2/2 u=0.000/0.000 top=0.854 mi=0.00015/0.00004
+F follow_user_num_range c=16 a=8/8/8 u=0.000/0.000 top=0.198 mi=0.00030/0.00018
+F fans_user_num_range c=16 a=9/9/9 u=0.000/0.000 top=0.379 mi=0.00130/0.00072
+F friend_user_num_range c=16 a=7/7/7 u=0.000/0.000 top=0.278 mi=0.00068/0.00031
+F register_days_range c=16 a=7/8/8 u=0.000/0.000 top=0.751 mi=0.00193/0.00132
+F onehot_feat0 c=8 a=2/2/2 u=0.000/0.000 top=0.500 mi=0.00158/0.00107
+F onehot_feat1 c=12 a=7/7/7 u=0.000/0.000 top=0.272 mi=0.00314/0.00382
+F onehot_feat2 c=64 a=50/50/49 u=0.000/0.000 top=0.248 mi=0.00081/0.00081
+F onehot_feat3 c=1600 a=1436/1330/1359 u=0.001/0.001 top=0.042 mi=0.01075/0.00930
+F onehot_feat4 c=24 a=16/16/16 u=0.000/0.000 top=0.369 mi=0.00020/0.00038
+F onehot_feat5 c=48 a=33/31/31 u=0.000/0.000 top=0.995 mi=0.00016/0.00013
+F onehot_feat6 c=8 a=3/3/3 u=0.000/0.000 top=0.527 mi=0.00082/0.00063
+F onehot_feat7 c=160 a=117/105/106 u=0.000/0.000 top=0.087 mi=0.00259/0.00226
+F onehot_feat8 c=512 a=452/438/439 u=0.000/0.000 top=0.020 mi=0.00578/0.00523
+F onehot_feat9 c=12 a=7/7/7 u=0.000/0.000 top=0.228 mi=0.00045/0.00028
+F onehot_feat10 c=8 a=5/5/5 u=0.000/0.000 top=0.400 mi=0.00012/0.00017
+F onehot_feat11 c=8 a=5/5/4 u=0.000/0.000 top=0.749 mi=0.00099/0.00130
+F onehot_feat12 c=8 a=3/3/3 u=0.000/0.000 top=0.677 mi=0.00134/0.00105
+F onehot_feat13 c=8 a=3/3/3 u=0.000/0.000 top=0.937 mi=0.00008/0.00004
+F onehot_feat14 c=8 a=3/3/3 u=0.000/0.000 top=0.884 mi=0.00009/0.00011
+F onehot_feat15 c=8 a=3/3/3 u=0.000/0.000 top=0.955 mi=0.00012/0.00005
+F onehot_feat16 c=8 a=3/3/3 u=0.000/0.000 top=0.933 mi=0.00031/0.00018
+F onehot_feat17 c=8 a=3/3/3 u=0.000/0.000 top=0.968 mi=0.00000/0.00000
+F author_id c=7000 a=6482/5311/5333 u=0.000/0.000 top=0.008 mi=0.08277/0.06988
+F video_type c=8 a=3/3/3 u=0.000/0.000 top=0.987 mi=0.00007/0.00028
+F upload_type c=20 a=14/11/12 u=0.000/0.000 top=0.430 mi=0.00963/0.00610
+F music_type c=12 a=6/6/6 u=0.000/0.000 top=0.881 mi=0.00305/0.00241
+F tag c=64 a=44/43/43 u=0.000/0.000 top=0.264 mi=0.01966/0.01896
+F duration_bucket c=12 a=10/10/10 u=0.000/0.000 top=0.103 mi=0.00373/0.00362
+F register_days_bucket c=12 a=10/10/10 u=0.000/0.000 top=0.100 mi=0.00234/0.00160

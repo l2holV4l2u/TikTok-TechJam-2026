@@ -1,0 +1,38 @@
+{
+  "stop_reason": "converged",
+  "iterations": 5,
+  "iteration_cap": 50,
+  "wall_clock_s": 828.8833159000001,
+  "wall_clock_h": 0.2302453655277778,
+  "script_seconds": 534.0507036000004,
+  "gpu_hours": 0.0,
+  "proposer_tokens_in": 25948,
+  "proposer_tokens_out": 19832,
+  "tokens_in": 28986,
+  "tokens_out": 21682,
+  "tokens_total": 50668,
+  "eda_completed": true,
+  "candidates_evaluated": 14,
+  "claims_established": 4,
+  "baseline_reproduced": 0.6023588566590807,
+  "baseline_target": 0.6016,
+  "manual_interventions": 0,
+  "failures": 0,
+  "submission": {
+    "iter_id": 4,
+    "valid_primary": 0.6037081218232296,
+    "test_primary": 0.5981553999305623,
+    "test_gauc": 0.6647543165439858,
+    "test_ndcg@5": 0.5315564833171389,
+    "test_delta": 0.0035553999305623085,
+    "hypothesis": "Target the feature-interaction representation stage with a DeepFM residual over high-information context fields; nonlinear user\u2013item\u2013content crosses should distinguish impressions that the five-field second-order FM scores similarly, while validation-selected residual scaling preserves the strong FM component if the deep branch overfits."
+  },
+  "api_surface": [
+    "s.X",
+    "s.aux",
+    "s.date",
+    "s.user_id",
+    "s.video_id",
+    "s.y"
+  ]
+}

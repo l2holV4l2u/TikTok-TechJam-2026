@@ -1,0 +1,41 @@
+C:\Users\USER\Desktop\Supahotfile\competition\TikTok-TechJam-2026\limits\nn.py:45: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\torch\csrc\utils\tensor_numpy.cpp:219.)
+  return {f: torch.from_numpy(np.asarray(sp.X[f], dtype=np.int64)) for f in fields}
+  ep1 valid=0.5974 test=0.5892
+  ep2 valid=0.6003 test=0.5934
+  ep3 valid=0.5994 test=0.5941
+  ep4 valid=0.5979 test=0.5917
+  ep5 valid=0.5948 test=0.5879
+  ep6 valid=0.5917 test=0.5837
+  ep7 valid=0.5886 test=0.5795
+  ep8 valid=0.5850 test=0.5751
+fm_bce         ep=2 valid=0.6003 test=0.5934 (oracle 0.5941) 48.0s
+C:\Users\USER\Desktop\Supahotfile\competition\TikTok-TechJam-2026\limits\nn.py:45: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\torch\csrc\utils\tensor_numpy.cpp:219.)
+  return {f: torch.from_numpy(np.asarray(sp.X[f], dtype=np.int64)) for f in fields}
+  ep1 valid=0.5961 test=0.5891
+  ep2 valid=0.5827 test=0.5728
+C:\Users\USER\Desktop\Supahotfile\competition\TikTok-TechJam-2026\limits\nn.py:53: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\torch\csrc\utils\tensor_numpy.cpp:219.)
+  return {f: torch.from_numpy(np.asarray(sp.X[f], dtype=np.int64)) for f in fields}
+  ep1 valid=0.5974 test=0.5893
+  ep2 valid=0.5835 test=0.5743
+  ep3 valid=0.5769 test=0.5667
+  ep4 valid=0.5712 test=0.5596
+  ep5 valid=0.5681 test=0.5579
+  ep6 valid=0.5667 test=0.5562
+  ep7 valid=0.5658 test=0.5550
+  ep8 valid=0.5632 test=0.5528
+  ep9 valid=0.5630 test=0.5519
+  ep10 valid=0.5621 test=0.5507
+fm_bpr_wide    ep=1 valid=0.5974 test=0.5893 (oracle 0.5893) 611.7s
+C:\Users\USER\Desktop\Supahotfile\competition\TikTok-TechJam-2026\limits\nn.py:53: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\torch\csrc\utils\tensor_numpy.cpp:219.)
+  return {f: torch.from_numpy(np.asarray(sp.X[f], dtype=np.int64)) for f in fields}
+  ep1 valid=0.5902 test=0.5817
+  ep2 valid=0.5765 test=0.5675
+  ep3 valid=0.5721 test=0.5629
+  ep4 valid=0.5684 test=0.5587
+  ep5 valid=0.5660 test=0.5578
+  ep6 valid=0.5638 test=0.5566
+  ep7 valid=0.5636 test=0.5556
+  ep8 valid=0.5633 test=0.5547
+  ep9 valid=0.5619 test=0.5534
+  ep10 valid=0.5619 test=0.5537
+fm_bpr_d32     ep=1 valid=0.5902 test=0.5817 (oracle 0.5817) 155.5s

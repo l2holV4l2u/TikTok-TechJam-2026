@@ -1,0 +1,24 @@
+C:\Users\USER\Desktop\Supahotfile\competition\TikTok-TechJam-2026\limits\nn.py:53: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\torch\csrc\utils\tensor_numpy.cpp:219.)
+  return {f: torch.from_numpy(np.asarray(sp.X[f], dtype=np.int64)) for f in fields}
+  ep1 valid=0.6017 test=0.5964
+  ep2 valid=0.6027 test=0.5988
+  ep3 valid=0.6018 test=0.5970
+  ep4 valid=0.5974 test=0.5913
+deepfm_s0      ep=2 valid=0.6027 test=0.5988 (oracle 0.5988) 78.8s
+C:\Users\USER\Desktop\Supahotfile\competition\TikTok-TechJam-2026\limits\nn.py:53: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\torch\csrc\utils\tensor_numpy.cpp:219.)
+  return {f: torch.from_numpy(np.asarray(sp.X[f], dtype=np.int64)) for f in fields}
+  ep1 valid=0.6018 test=0.5962
+  ep2 valid=0.6028 test=0.5986
+  ep3 valid=0.6021 test=0.5966
+  ep4 valid=0.5961 test=0.5916
+deepfm_s1      ep=2 valid=0.6028 test=0.5986 (oracle 0.5986) 77.5s
+C:\Users\USER\Desktop\Supahotfile\competition\TikTok-TechJam-2026\limits\nn.py:53: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\torch\csrc\utils\tensor_numpy.cpp:219.)
+  return {f: torch.from_numpy(np.asarray(sp.X[f], dtype=np.int64)) for f in fields}
+  ep1 valid=0.6022 test=0.5963
+  ep2 valid=0.6026 test=0.5983
+  ep3 valid=0.6020 test=0.5970
+  ep4 valid=0.5955 test=0.5901
+deepfm_s2      ep=2 valid=0.6026 test=0.5983 (oracle 0.5983) 90.5s
+gbdt_v1        k= 800 valid=0.6022 test=0.5956 (oracle 0.5956) 975.4s
+gbdt_v2        k= 760 valid=0.6026 test=0.5962 (oracle 0.5962) 369.9s
+gbdt_v3        k= 320 valid=0.6018 test=0.5945 (oracle 0.5948) 640.6s

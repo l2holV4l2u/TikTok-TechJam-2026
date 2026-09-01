@@ -46,10 +46,11 @@ early stopping, feature statistics or any quantity chosen by watching validation
 test load does not open `test/y.npy` or any test auxiliary file. The harness writes the
 submission without scoring it. FAQ 2.9.3.
 
-Earlier runs in this repository scored higher — r79 reached +0.00509 — by refitting the final
-model on train+validation before predicting test. FAQ 2.9.2 settles that as out of scope, and
-those runs are kept as the record of what that reading was worth (0.00229 measured, r79 against
-r94 on the same harness) rather than as submissions.
+Earlier runs scored higher — up to +0.00509 — by refitting the final model on train+validation
+before predicting test. FAQ 2.9.2 settles that as out of scope. Measured on the same harness,
+that reading was worth **0.00229** of hidden-test delta; giving it up is the difference between
+the number above and the one we could have reported. Those runs are not in this repository and
+are not submissions.
 
 ## Resource usage
 
@@ -204,8 +205,8 @@ per-model and revision is ~37% of a run's requests, so a second model both halve
 on the proposer's quota and costs less for a summarising task.
 
 `--replay runs/rN/llm_calls.jsonl` re-runs a previous run against its recorded responses: no
-network, no tokens, deterministic. Replaying r30 reproduces its ledger to the last decimal at
-every iteration in 2.9 minutes against the original 6.3. It tests the loop, the parsers, the
+network, no tokens, deterministic. On a recorded run it reproduces the ledger to the last
+decimal at every iteration, in roughly half the original wall-clock. It tests the loop, the parsers, the
 ledger and the reporting -- **not** prompts, since a changed prompt still receives the response
 recorded for the old one. `--replay-strict` fails the moment a prompt diverges, so that
 limitation cannot pass unnoticed.
@@ -281,9 +282,8 @@ iteration; it now sees the full catalogue and retrieval rotates.
 and the other logged signals are outcomes of the row being scored; they are exposed as
 `Split.aux`, never as features, asserted by test. `video_features_statistic_pure.csv` is
 excluded entirely — its counts are aggregated over the whole log period, including the
-validation and test windows. Historical r39/r41/r43/r44 scores that used that file are retained as
-an audit trail but excluded from memory, comparison, and submission; `submission_best.csv` is
-restored to the strongest eligible run, r79.
+validation and test windows. Early runs that read it were withdrawn from comparison and from the
+submission, and are not in this repository.
 
 ## What we would do with more time
 
