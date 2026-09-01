@@ -1,0 +1,28 @@
+#1 0.6171  Reproduce the official baseline stage using a k=16 logistic Factorizat
+  #2 0.6547  Training-stage breadth plus drift adaptation: compare a temporally wei
+    #6 0.6763  Multi-task and metric-aligned training stage: MMoE should use click/li
+    #7 0.6767  Model-stage breadth: explicit product interactions, deep feature cross
+      #8 0.6767  Training/ranking stage: repair LambdaRank by splitting each oversized 
+      #9 0.6790  Model/training-stage breadth: compare Wide&Deep, DeepFM, NFM, FiBiNET,
+      #10 0.6824 [retired]  Counterfactual/reranking stage: inverse-exposure empirical-Bayes user–
+        #11 0.6824  Rank-aggregation stage: temporally weighted boosted trees, a linear hi
+        #12 0.6828  Slate-reranking stage: creator/video deduplication and category-covera
+        #13 0.6944 [retired]  Sequence/context stage: causal exposure-fatigue, session-hazard, and c
+          #14 0.6944  Preference-estimation and rank-fusion stage: temporally weighted hiera
+          #15 0.6944  Slate-composition stage: applying structurally different soft-MMR, har
+            #17 0.7039  Training and score-calibration stage: recency-weighted boosted trees, 
+            #18 0.7039  Auxiliary-target distributional modeling stage: duration-normalized wa
+            #19 0.7046 [retired]  Sequence/context model stage: fixing out-of-range embedding indices an
+              #20 0.7046 [retired]  Prediction-formation and calibrated-fusion stage: a drift-regularized 
+                #23 0.7046  Model-formation breadth stage: compare a generative categorical likeli
+                #24 0.7050  Model-formation and drift-weighting stage: compare an explicit hashed-
+                #25 0.7052 [retired]  Model-formation breadth stage: compare a smooth random-Fourier kernel,
+                  #26 0.7052 [retired]  I am targeting prediction formation under temporal drift by comparing 
+                    #29 0.7052  Training-weighting and prediction-formation stage: train main models u
+                    #30 0.7056  Pairwise ranking stage: training linear, low-rank quadratic, prototype
+                    #31 0.7056  Temporal target-statistics stage: entity propensities that extrapolate
+                  #27 0.7052  Model-formation breadth stage: compare a neural additive spline model,
+                  #28 0.7052  Prediction-fusion stage: a fixed, label-free disagreement/confidence g
+              #21 0.7046  Stationarity-aware prediction stage: selecting categorical signals by 
+              #22 0.7046  Cross-boundary user-state feature stage: leakage-safe, prior-day user×
+  #3 0.6547  I am testing latent collaborative filtering, learned linear item-histo

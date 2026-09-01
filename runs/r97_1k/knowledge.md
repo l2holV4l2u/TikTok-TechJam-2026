@@ -1,0 +1,15 @@
+# What the agent established
+
+- (qualified) The training-stage lineage improved from 0.6790 to 0.7039, and newer recipes reached 0.7056, but this additional 0.0017 is inside seed noise; independent-seed stability and component contributions of the leading recipes remain unidentified. [iters 2,3,4,5,8,10,11,12]
+- (qualified) No scored prediction-level fusion has measurably exceeded the leading 0.7039–0.7056 band: the latest label-free disagreement/confidence gate scored 0.7052, while earlier rank-only fusion did not improve on 0.6944. [iters 2,3,7,8,9,10,11,12]
+- (qualified) Within-user ranking similarity is strongly method-dependent: earlier correlations ranged from 0.535 to 0.712 or were identical, iteration 11 included negative correlations, and the latest pairs are -0.044, -0.077, and 0.819 despite scores differing by at most 0.0004. [iters 4,5,6,7,8,9,10,11,12]
+- (qualified) MMoE metric-aligned training at 0.6763 and interaction/cross/self-attention modeling at 0.6767 differ by only 0.0004, so neither measurably outperforms the other; both beat the older 0.6547 runs in their single evaluations. [iters 4]
+- (qualified) Time-ordered splitting of oversized user queries repaired LambdaRank but scored 0.6767, measurably below the later 0.7039–0.7056 band. [iters 5,6,7,8,9,10,11,12]
+- (qualified) Recent recency-weighted, auxiliary-target, repaired sequence/context, model-formation, fusion, pairwise-ranking, and temporal-statistics methods lie in the 0.7039–0.7056 band; its 0.0017 spread is inside seed noise, so none measurably leads. [iters 6,7,8,9,10,11,12]
+- (qualified) The latest training-weighting, pairwise-ranking, and temporal-statistics methods scored 0.7052, 0.7056, and 0.7056; these differences are not measurable, while their correlations show that pairwise and temporal rankings are similar (0.819) but both differ sharply from training-weighting (-0.044 and -0.077). [iters 12]
+- (qualified) Preference-estimation/rank fusion and slate composition produced no measurable change from the original sequence/context score of 0.6944; that score beat 0.6828 by 0.0116 but is superseded by the 0.7039–0.7056 band. [iters 6,7,8,9,10,11,12]
+- (qualified) The older rank-aggregation result at 0.6824 and slate-reranking result at 0.6828 differ by only 0.0004 and therefore have no measurable score difference. [iters 6]
+- (qualified) The failed sequence-model robustness and interaction run supplies no evidence about replication stability, additive exposure-fatigue effects, or their interactions; the leading band still lacks an explicitly identified independent-seed replication. [iters 7,8,9,10,11,12]
+Ruled out by evidence (do not revisit without a new mechanism):
+- (invalidated) Inverse-exposure empirical-Bayes reranking at 0.6824 is not the leader; newer runs reached 0.7056. [iters 5,6,7,8,9,10,11,12]
+- (invalidated) The k=16 logistic Factorization Machine is not the incumbent: its 0.6171 score is below the 0.6547 and newer 0.6763–0.7056 results, although it remains 0.0155 above the official 0.6016 baseline. [iters 1,2,3,4,5,6,7,8,9,10,11,12]
