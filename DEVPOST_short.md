@@ -215,11 +215,13 @@ but to ask whether **the agent** adapts when the problem changes underneath it.
 | **test rows on a video never seen in train** | **0.01%** | **84.94%** |
 | perfect-ranking ceiling | 0.8645 | 0.9995 |
 
-Converged in 14 iterations, 2.7 h, **0 manual interventions**, 192,900 tokens, 76 internal
-candidates. Against the organizers' recipe run by us (0.6355 primary) the agent reached
-**0.6777 (+0.0422)**. *These numbers are not comparable to the Pure result* — a 0.9995 ceiling, a
-weaker anchor, no published baseline. What makes them trustworthy is that the same script
-reproduces Pure's published 0.6016/0.5946 as 0.6022/0.5957.
+`runs/r97_1k`, three lineages: converged at turn 10 on 32 scripts, 1.7 h, **0 manual
+interventions**, 659,573 tokens. Against the organizers' recipe run by us (0.6355 primary) the
+agent reached **0.6977 (+0.0622)** on hidden test — GAUC +0.0319, nDCG@5 +0.0924 — with a
+validation delta of +0.0634, so the gain holds up on held-out data. *These numbers are not
+comparable to the Pure result* — a 0.9995 ceiling, a weaker anchor, no published baseline. What
+makes them trustworthy is that the same script reproduces Pure's published 0.6016/0.5946 as
+0.6022/0.5957.
 
 The agent named the problem itself in its first improve iteration, proposing content features to
 rank "the 74% of validation impressions whose video IDs were unseen in training" — it had

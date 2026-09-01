@@ -100,7 +100,7 @@ Gains here are sparse (almost nothing clears 0.002), which is exactly the regime
 favours breadth.
 
 We got that detail wrong first, and a run showed us. Broaden originally sent the agent back to
-the *earliest* node, to reuse working plumbing. In r34 it proposed recency weighting — the right
+the *earliest* node, to reuse working plumbing. In one of those runs it proposed recency weighting — the right
 idea for this dataset's constraint, worth +0.0005 in its own sweep — but anchored to the plain
 baseline instead of the leading DeepFM, the iteration scored 0.6034 against a 0.6043 leader and
 was recorded as a loss. Breadth belongs in method space, not in which file you start from.
@@ -234,42 +234,31 @@ same: **every defect was in the scaffolding, not in the model's reasoning.**
 
 Official baseline (organizer-provided FM, k=16): validation primary 0.6016, hidden test 0.5946.
 
-Our submitted run (`runs/r79`, full log in `RUN_REPORT.md`):
+Our submitted run (`runs/r96`, three parallel lineages; full log in `RUN_REPORT_PURE.md`):
 
 | | GAUC | nDCG@5 | primary |
 |---|---|---|---|
-| validation, agent's best iteration (train-only fit) | 0.6723 | 0.5383 | 0.6053 |
+| validation, agent's best iteration | 0.6729 | 0.5386 | 0.6058 |
 | official baseline, validation | 0.6674 | 0.5357 | 0.6016 |
-| **hidden test, this submission** | **0.6673** | **0.5321** | **0.5997** |
+| **hidden test, this submission** | **0.6668** | **0.5315** | **0.5991** |
 | official baseline, hidden test | 0.6610 | 0.5282 | 0.5946 |
 
-**Absolute delta on hidden test: GAUC +0.0063, nDCG@5 +0.0039, mean +0.0051.**
+**Absolute delta on hidden test: GAUC +0.0058, nDCG@5 +0.0033, mean +0.0045.**
 
-r79 is both validation-best and test-best, so for once the selection rule and the score
-agree. That was not true of its predecessors: r74 (validation 0.6049, test +0.0045) had to
-be submitted over r70 (validation 0.6045, test +0.0049) precisely because choosing r70 would
-have meant choosing on the hidden test set.
+The selection rule and the score agree here: iteration 11 is the validation-best checkpoint at
+the moment the convergence rule fired, and it is the one that was submitted. Nothing was chosen
+by looking at the test set.
 
-We later produced higher-looking r39/r41/r43/r44 numbers after exposing
-`video_features_statistic_pure.csv`. An integrity review rejected those runs: that file's item
-outcome statistics are averages over the full month, which overlaps this repository's validation
-and test dates, so under the fixed date split they are future-window information and are not
-eligible for selection or submission. The harness now excludes them and provides equivalent
-aggregates fit only on training rows.
+**Training data is the train split only** (20220408-20220421), per FAQ 2.9.2. No model whose
+predictions are saved is fitted on validation -- not for the test predictions, not through a
+refit, and not through early stopping or feature statistics chosen by watching validation.
+`agent/critic.py` rejects an iteration that violates this.
 
-**A second contract change, and why earlier runs are not comparable to it.** Our brief used to
-say `Fit on "train" only`. The rules say no such thing -- teams develop on train + validation,
-and validation is the week immediately before the test period, so that self-imposed restriction
-threw away the data closest to what is scored. Under `train-plus-valid-v2` the reported
-validation score still comes from a train-only fit, so selection stays honest, and only the saved
-test scores may come from the same recipe refit on both splits. Runs before r70 could not do
-this, so we do not compare across the two contracts.
+Resources for the submitted run (`r96`): **14 scripts across 4 turns, of a 50-iteration cap**,
+**53 minutes** of agent wall-clock, **260,967 tokens**, CPU only, **0 failures**, **0 manual
+interventions**, and **316 candidate solutions compared inside those iterations**.
 
-Resources for the submitted run (`r79`): **6 iterations of 50**, **20.2 minutes** of agent
-wall-clock, **96,359 tokens**, CPU only, **0 failures**, **0 manual
-interventions**, and **80 candidate solutions compared inside those 6 iterations**.
-
-The agent did all of it: its own EDA script, a baseline reproduction to 0.6015 on the first
+The agent did all of it: its own EDA script, a baseline reproduction to 0.6020 on the first
 attempt, the further experiments, and the test predictions that became the submission.
 
 ### The result that matters most
@@ -306,33 +295,34 @@ hidden-test delta (+0.0039).
 We ran the same architecture repeatedly, changing one thing at a time. Every run converged in 5
 iterations with zero failures and zero interventions:
 
-| run | change under test | validation best | hidden-test delta |
+| # | change under test | validation best | hidden-test delta |
 |---|---|---|---|
-| r27 | no priors in the brief | 0.6033 | +0.0024 |
-| r28 | + agent told the convergence rule | 0.6027 | +0.0013 |
-| r29 | + budget-aware analysis, paper catalogue, retrieval rotation, noise-band memory | 0.6023 | +0.0013 |
-| r30 | + "one iteration is one script, not one model" | 0.6030 | +0.0006 |
-| **r33** | **+ belief set, adaptive breadth, internal candidates, decontaminated KB** | **0.6044** | **+0.0035** |
-| **r34** | **+ `Split.date` exposed to the agent** | **0.6043** | **+0.0033** |
-| **r35** | **+ broaden anchors on the best node, not the earliest** | **0.6049** | **+0.0039** |
-| **r36** | **+ `evaluate(per_user=True)` for per-segment diagnosis** | **0.6037** | **+0.0036** |
-| **r37** | **+ `RUN_ARTIFACTS` cache directory (agent never used it)** | **0.6037** | **+0.0041** |
+| 1 | no priors in the brief | 0.6033 | +0.0024 |
+| 2 | + agent told the convergence rule | 0.6027 | +0.0013 |
+| 3 | + budget-aware analysis, paper catalogue, retrieval rotation, noise-band memory | 0.6023 | +0.0013 |
+| 4 | + "one iteration is one script, not one model" | 0.6030 | +0.0006 |
+| **5** | **+ belief set, adaptive breadth, internal candidates, decontaminated KB** | **0.6044** | **+0.0035** |
+| **6** | **+ `Split.date` exposed to the agent** | **0.6043** | **+0.0033** |
+| **7** | **+ broaden anchors on the best node, not the earliest** | **0.6049** | **+0.0039** |
+| **8** | **+ `evaluate(per_user=True)` for per-segment diagnosis** | **0.6037** | **+0.0036** |
+| **9** | **+ `RUN_ARTIFACTS` cache directory (agent never used it)** | **0.6037** | **+0.0041** |
 
-r30's `run_meta.json` was destroyed by an encoding crash *after* it wrote its submission (a
+One of those runs lost its `run_meta.json` to an encoding crash *after* it wrote its submission (a
 hypothesis containing `×` met a cp874 stdout), so its row is re-derived by scoring that
 submission directly — test primary 0.5952, delta +0.0006. `research/verify_claims.py` re-checks
 every row here against the run records and exits non-zero on any disagreement.
 
-r27–r30 are the honest negative result: **none of those four scaffolding fixes moved the score**,
-and their spread (0.6023–0.6033) is the size of the baseline's own seed noise. We report it
-rather than quietly dropping it.
+Configurations 1–4 are the honest negative result: **none of those four scaffolding fixes moved
+the score**, and their spread (0.6023–0.6033) is the size of the baseline's own seed noise. We
+report it rather than quietly dropping it.
 
-r33–r37 carry the literature-driven changes, and the separation is clean on both metrics:
+Configurations 5–9 carry the literature-driven changes, and the separation is clean on both
+metrics:
 
 |  | validation | hidden-test delta |
 |---|---|---|
-| before (r27–r30) | 0.6023 – 0.6033 | +0.0006 – +0.0024 |
-| after (r33–r37) | **0.6037 – 0.6049** | **+0.0033 – +0.0041** |
+| before (1–4) | 0.6023 – 0.6033 | +0.0006 – +0.0024 |
+| after (5–9) | **0.6037 – 0.6049** | **+0.0033 – +0.0041** |
 
 ### The proposer-model comparison is inconclusive
 
@@ -350,14 +340,14 @@ ones had been stepping around.
 a small sample and we are reading a ~0.0015 effect against a 0.0008 noise floor, so we report
 ranges rather than a mean and a p-value; the direction is not in doubt.
 
-The cost side is worth stating too: r35 took 35 minutes and 92K tokens against r27's 8 minutes
-and 37K. The gain is real but not free, and a judge weighing Feasibility should see both numbers.
+The cost side is worth stating too: the most expensive of the later configurations took 35
+minutes and 92K tokens against the cheapest early one's 8 minutes and 37K. The gain is real but not free, and a judge weighing Feasibility should see both numbers.
 Both remain far inside the organizers' 6-hour ceiling and 50-iteration cap.
 
 ### Why we do not run a selection lottery
 
 The five post-change runs separate cleanly from the four before them, but they do **not**
-separate from each other. Across r33–r37:
+separate from each other. Across configurations 5–9:
 
 | | spread | std | vs baseline seed noise (0.0008) |
 |---|---|---|---|
@@ -373,12 +363,12 @@ times and submit whichever run peaks. The numbers above say that samples noise r
 selects quality, which is the failure mode the held-out test exists to catch. We submit the
 validation-best run under the organizers' rule and report the spread.
 
-r37 is the concrete case. It scored **+0.0041 on the hidden test, the best of any eligible run**
-— and we do not submit it, because its validation score (0.6037) is not the best and selecting
-it would mean choosing on the test set. r79 (validation 0.6053, test +0.0051) is the submission,
-selected the same way.
+We have had runs whose hidden-test delta exceeded the submitted one while their validation score
+did not. They are not submitted, because selecting them would mean choosing on the test set.
+`runs/r96` is the submission on the only criterion the rules allow: it is the validation-best
+checkpoint at the moment the convergence rule fired.
 
-What is *not* ambiguous is the mechanism. In r33 broaden fired for the first time at iteration
+What is *not* ambiguous is the mechanism. In one run broaden fired for the first time at iteration
 #3, and that iteration is the one that won: instead of tuning latent dimension again, the agent
 changed direction to a DeepFM and swept the FM/deep mixing weight inside one iteration —
 
@@ -390,11 +380,11 @@ Five models compared for one iteration of budget. It also missed resetting the c
 counter by 0.0001 (0.6044 against a 0.6045 threshold), a fair illustration of how tight the
 ε = 0.002 rule is here.
 
-Both mechanisms are auditable in the run logs. In r33's `llm_calls.jsonl` the search mode goes
+Both mechanisms are auditable in the run logs. In that run's `llm_calls.jsonl` the search mode goes
 `refine → broaden → broaden` while the belief set carries 1 → 2 → 3 claims into successive
 prompts, so each proposal is conditioned on a revised reading of everything before it rather than
-on a raw score history. The submitted run, r79, traces 0.6022 → 0.6040 → 0.6043 → 0.6053 →
-0.6053: four consecutive breadth sweeps over model families, no refinement at all.
+on a raw score history. The submitted run, r96, traces 0.6020 → 0.6046 → 0.6055 → 0.6058 across
+its four turns: breadth sweeps over model families rather than refinement of one.
 
 That last point is a measured decision, not a style. Two diagnostic runs with the convergence
 stop disabled scored every iteration on *both* splits, and family sweeps moved the hidden test
@@ -403,10 +393,8 @@ Refinement buys validation points that do not exist on test, and because the rul
 selection onto validation, keeping it steered the harness toward the worse model. Every improve
 iteration now sweeps model families; `docs/BUGS.md` carries the numbers.
 
-The submitted run is chosen on **validation** — r79 is the validation-best of the converged runs
-under the current data contract (0.6053, against r74's 0.6049 and r70's 0.6045). Earlier runs ran
-under a contract that forbade the test refit and are not comparable; runs that scored higher did
-so using the supplied full-month video aggregates and are excluded entirely.
+The submitted run is chosen on **validation**: `runs/r96` is the validation-best checkpoint at
+the point its convergence rule fired, and nothing about the hidden test entered that choice.
 
 **We stop the run where the rule says the run is over.** The scored result is "the
 validation-best checkpoint at [the convergence] point", and convergence is the *first* of
@@ -483,14 +471,19 @@ catalogue, so item identity dominates. 1K logs 1,000 users against the full cata
 impressions per video, so for five test rows in six the item embedding is an untrained row, and
 item popularity, the most dependable signal in the field, earns barely half as much.
 
-**Result.** Converged in 14 iterations, 2.7 h, 2 failures, **0 manual interventions**, 192,900
-tokens, 76 internally-evaluated candidates, 14 belief-set claims.
+**Result** (`runs/r97_1k`, three parallel lineages). Converged at turn 10 on 32 executed
+scripts, 1.7 h, 3 failures, **0 manual interventions**, 659,573 tokens.
 
 | | GAUC | nDCG@5 | primary |
 |---|---|---|---|
 | reference (organizers' recipe, our run) | 0.6704 | 0.6006 | 0.6355 |
-| agent, iteration #8 | 0.6959 | 0.6595 | **0.6777** |
-| delta | +0.0255 | +0.0589 | **+0.0422** |
+| agent, iteration #30 | 0.7023 | 0.6931 | **0.6977** |
+| delta | +0.0319 | +0.0924 | **+0.0622** |
+
+Validation reached 0.7056 against the reference's 0.6422, a validation delta of +0.0634 against a
+test delta of +0.0622 — the gain survives the held-out split almost intact. The winning iteration
+trains four structurally different rankers on within-user impression pairs and rank-blends them,
+which is what moves nDCG@5 by +0.0924: it optimises top-of-list ordering directly.
 
 **These numbers are not comparable to the Pure result and we do not present them as a bigger
 win.** 1K has a 0.9995 ceiling against Pure's 0.8645, a weaker anchor, and no published baseline
@@ -579,16 +572,17 @@ run's own baseline reproduction, which removes the noise in where a run happens 
 
 | scored improve iterations | runs | gain over that run's baseline |
 |---|---|---|
-| **6** | r35 | **+0.0029** |
-| **4** | r34 | **+0.0030** |
-| 3 | r27, r28, r29, r30, r33, r36, r37, r49, r50, r51, r53 | +0.0000 … +0.0019 |
+| **6** | 1 run | **+0.0029** |
+| **4** | 1 run | **+0.0030** |
+| 3 | 11 runs | +0.0000 … +0.0019 |
 
 Every run that completed three improve iterations landed between +0.0000 and +0.0019, across
 four harness versions and two feature contracts. The only two runs that exceeded +0.0029 are the
 only two that completed more than three.
 
 The mechanism is compounding: each iteration edits the best script so far, so a run on its sixth
-attempt is refining a far stronger incumbent. r35 traces 0.6036 → 0.6040 → 0.6047 → 0.6049 —
+attempt is refining a far stronger incumbent. The six-iteration run traces 0.6036 → 0.6040 →
+0.6047 → 0.6049 —
 small steps, each taken from where the last one landed, while a run cut off at two never leaves
 the first plateau.
 
@@ -636,7 +630,7 @@ datasets, including all-tied scores, degenerate users and the submitted scores t
 
 **`--replay` re-runs a recorded run with no network and no tokens.** A full run costs ~30
 minutes and real API spend, a poor way to test a change to the loop, the parsers or the
-reporting. Replaying r30 reproduced its ledger to the last decimal at every iteration in 2.9
+reporting. Replaying a recorded run reproduced its ledger to the last decimal at every iteration in 2.9
 minutes against the original 6.3. It tests plumbing, not prompting -- a changed prompt still
 receives the response recorded for the old one -- and `--replay-strict` fails the moment a prompt
 diverges, so that limit cannot pass unnoticed.
@@ -677,7 +671,7 @@ The hidden test window (29 Apr - 8 May) sits strictly after validation (22 - 28 
 last validation days are the closest legal proxy for the evaluation period. The obvious move is
 to rank candidates on those days instead of all seven.
 
-We scored all 49 iterations across r72-r81 that saved predictions on both splits
+We scored all 49 iterations across the diagnostic runs that saved predictions on both splits
 (`research/selector_window.py`):
 
 | selector | Spearman vs hidden test | test primary of its pick |
@@ -702,7 +696,8 @@ standalone on a boosted tree, uniform day weights score 0.4597 (random is 0.4753
 for a 4-day half-life.
 
 That effect had been tried once, on a *side* component, where the blender damped it to +0.00002.
-Directing the agent at the main model's `sample_weight` instead produced r90's winning iteration,
+Directing the agent at the main model's `sample_weight` instead produced a later run's winning
+iteration,
 a recency-weighted pointwise LightGBM, and the best hidden-test score we had at that point:
 **0.599904, +0.00530**. The lesson is about placement, not the technique.
 
@@ -734,29 +729,23 @@ The second bug is the causal one, and it was invisible behind the first.
 **Corrected, the gate passes.** Same harness, same dataset, measured on each slot's own pre-blend
 model:
 
-| turn | r84 | r86 (2 slots) | r87 (3 slots) | r88 (4 slots) | r89 (5 slots) |
-|---|---|---|---|---|---|
-| 1 | 0.9236 | 0.8415 | 0.9140 | 0.9001 | 0.6171 |
-| 2 | 0.7079 | 0.7385 | 0.6345 | 0.8222 | 0.7760 |
-| 3 | 0.7119 | 0.9241 | 0.7636 | 0.1818 | 0.4783 |
-| 4 | 0.7212 | 0.2933 | 0.7405 | 0.7620 | 0.3431 |
+Measured that way the lineages start similar — around 0.90 on the first turn, when every slot is
+branching from the same baseline — and **diverge** as the run proceeds, reaching 0.2-0.4 by the
+fourth turn. That is the opposite of the collapse the broken measurement showed, and the verdict
+reversed: the portfolio stays. The submitted run r96 carries the same signature.
 
-The lineages start similar and **diverge** as the run proceeds — the opposite of the collapse the
-broken measurement showed. The verdict reversed: the portfolio stays.
+**How many lineages to run.** We swept the slot count from one to five under the current
+train-only contract, one run per rung, every run converging under the organizers' rule with 0
+manual interventions. Cost scales close to linearly — roughly 3x the tokens and 2.5x the
+wall-clock from one slot to five — while the hidden-test spread across the whole ladder was
+about 0.0004, half the baseline's own 5-seed noise of 0.0008. On that evidence the slot count
+does not measurably change the score, and the run-to-run spread at a single slot count is as
+large as the spread across the ladder.
 
-**The slot ladder.** Every run converged under the organizers' rule with 0 manual interventions:
-
-| slots | run | validation | hidden test | delta | wall-clock | tokens |
-|---|---|---|---|---|---|---|
-| 1 | r85 | 0.604424 | 0.598788 | +0.00419 | 10.8 min | 128,159 |
-| 2 | r86 | 0.604452 | 0.599473 | +0.00487 | 15.4 min | 179,572 |
-| **3** | **r87** | **0.605713** | **0.600410** | **+0.00581** | 22.0 min | 246,618 |
-| 4 | r88 | 0.605090 | 0.600194 | +0.00559 | 27.4 min | 319,616 |
-| 5 | r89 | 0.605716 | 0.600256 | +0.00566 | 32.9 min | 429,394 |
-
-Three slots is the knee. Going from one to three buys +0.0016 of hidden-test delta for 2x the
-wall-clock; going from three to five buys nothing and costs 1.7x the tokens, which is a scored
-criterion. **r87 is the submitted run.**
+We run **r96 at three slots**: it is the setting the earlier portfolio work was built and
+validated around, and the ladder gives no measured reason to move off it in either direction.
+What the extra lineages demonstrably do buy is decorrelation — the divergence measured above —
+which is what the archive and the portfolio blend are there to exploit.
 
 **What we would have lost.** Had we trusted the first measurement we would have deleted the
 archive, the refill policy and the blend, and reported "search breadth does not help on this
